@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Calctoa is an AI-powered calculus teaching assistant that combines natural language processing with symbolic mathematics engines. It provides step-by-step problem-solving, concept explanations, and interactive tutoring through a CLI interface.
+Claire ("Making Calculus Clear") is an AI-powered calculus teaching assistant that combines natural language processing with SymPy symbolic mathematics. It provides step-by-step problem-solving, concept explanations, and interactive tutoring through a CLI interface.
 
 ## Commands
 
@@ -13,29 +13,27 @@ Calctoa is an AI-powered calculus teaching assistant that combines natural langu
 # Activate virtual environment first
 source venv/bin/activate
 
-# Run the CLI
+# Run Web UI (recommended)
+streamlit run app.py
+
+# Or run CLI
 python3 main.py
 ```
 
 ### Installing Dependencies
 ```bash
 pip install -r requirements.txt
-
-# For full Mathics support (Wolfram-compatible engine)
-pip install mathics
 ```
 
 ### Configuration
 Edit `.env` file to configure:
 - `OPENAI_API_KEY` - Required for AI-powered explanations
-- `DEFAULT_ENGINE` - `mathics` (default) or `sympy`
 - `DEFAULT_LEVEL` - `beginner`, `intermediate`, or `advanced`
-- `LOG_LEVEL` - Logging verbosity
 
 ## Architecture
 
 ```
-User Input → main.py (CLI) → CalctoaAgent.process_query()
+User Input → main.py (CLI) → ClaireAgent.process_query()
                                     ↓
                             Query Type Classification
                             (math_calculation, concept_explanation,
@@ -44,17 +42,16 @@ User Input → main.py (CLI) → CalctoaAgent.process_query()
                     ┌───────────────┴───────────────┐
                     ↓                               ↓
             Math Calculations               Concepts/Teaching
-            MathicsEngine                   OpenAI GPT-3.5-turbo
-                 ↓ (fallback)               (KnowledgeLoader fallback)
-            SymPyBackupEngine
+            SymPyBackupEngine               OpenAI GPT-3.5-turbo
+                                            (KnowledgeLoader fallback)
 ```
 
 ### Core Files
 
-- **main.py** - CLI entry point, interactive loop, user interface
-- **calctoa_agent.py** - Core AI agent, query routing, session management, OpenAI integration
-- **mathics_engine.py** - Wolfram syntax engine, natural language → Mathics conversion
-- **sympy_backup.py** - Fallback symbolic math engine using SymPy
+- **app.py** - Streamlit web UI (recommended)
+- **main.py** - CLI entry point (alternative)
+- **claire_agent.py** - Core AI agent, query routing, session management, OpenAI integration
+- **sympy_backup.py** - Symbolic math engine using SymPy
 - **knowledge_loader.py** - Embedded knowledge base for calculus concepts and examples
 
 ### Query Type Detection
@@ -67,14 +64,15 @@ The agent classifies queries by keywords:
 
 ### Math Engine Pattern Matching
 
-MathicsEngine converts natural language to Wolfram syntax:
-- "derivative of x²" → `D[x^2, x]`
-- "integral of sin(x)" → `Integrate[Sin[x], x]`
-- "limit of sin(x)/x as x→0" → `Limit[Sin[x]/x, x -> 0]`
+`_convert_to_sympy()` converts natural language to SymPy syntax:
+- "derivative of x^2" → `diff(x**2, x)`
+- "integral of sin(x)" → `integrate(sin(x), x)`
+- "limit of sin(x)/x as x->0" → `limit(sin(x)/x, x, 0)`
 
 ## Key Implementation Details
 
-- Session history maintained for last 10 messages in `CalctoaAgent._conversation_history`
-- Math engines return structured dicts with `success`, `result`, `latex`, `steps` keys
+- Session history maintained for last 10 messages in `ClaireAgent.conversation_history`
+- Math engine returns structured dicts with `success`, `result`, `latex`, `engine` keys
 - KnowledgeLoader provides fallback when OpenAI API unavailable
-- System commands: `help`, `examples`, `capabilities`, `status`, `level`, `engine`, `clear`, `reset`
+- System commands: `help`, `examples`, `capabilities`, `status`, `level`, `clear`, `reset`, `/study`
+- **Guided Learning Mode** (`/study`): When enabled, math questions trigger Socratic-style prompts instead of direct answers. Uses `_handle_guided_learning()` method.

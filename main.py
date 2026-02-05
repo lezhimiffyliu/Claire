@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Calctoa - AI Calculus Teaching Assistant
+Claire - Making Calculus Clear
 Main entry point
 """
 import os
 import sys
-from calctoa_agent import CalctoaAgent
+from claire_agent import ClaireAgent
 
 def clear_screen():
     """Clear screen"""
@@ -15,9 +15,9 @@ def print_banner():
     """Print banner"""
     banner = """
     ╔═══════════════════════════════════════════════════════╗
-    ║                    CALCTOA v1.0                       ║
-    ║      AI-Powered Calculus Teaching Assistant           ║
-    ║      Powered by Mathics + OpenAI GPT                  ║
+    ║                     CLAIRE v1.0                       ║
+    ║            Making Calculus Clear ✨                   ║
+    ║         Powered by SymPy + OpenAI GPT                 ║
     ╚═══════════════════════════════════════════════════════╝
     """
     print(banner)
@@ -25,7 +25,7 @@ def print_banner():
 def print_welcome():
     """Print welcome message"""
     print("\n" + "="*60)
-    print("🎓 Welcome to Calctoa - Your Intelligent Calculus Tutor!")
+    print("🎓 Welcome to Claire - Making Calculus Clear!")
     print("="*60)
     
     print("\n🤖 **What I can do:**")
@@ -39,7 +39,7 @@ def print_welcome():
     print("• Type 'help' for commands")
     print("• Type 'examples' for question ideas")
     print("• Type 'capabilities' to see what I can do")
-    print("• Use Mathics/Wolfram syntax for precise calculations")
+    print("• Type '/study' to toggle guided learning mode")
     
     print("\n" + "="*60)
 
@@ -58,15 +58,14 @@ def main():
             f.write("# Other configuration\n")
         print("✅ Created .env file. Add your OpenAI API key for AI capabilities.")
     
-    print("\n🔄 Initializing Calctoa Agent...")
+    print("\n🔄 Initializing Claire Agent...")
     try:
-        agent = CalctoaAgent()
+        agent = ClaireAgent()
     except Exception as e:
         print(f"❌ Failed to initialize agent: {e}")
         print("\nPlease check:")
         print("1. Install dependencies: pip install -r requirements.txt")
-        print("2. For Mathics: pip install mathics")
-        print("3. For AI: Add OpenAI API key to .env")
+        print("2. For AI: Add OpenAI API key to .env")
         return
     
     print_welcome()
@@ -83,13 +82,13 @@ def main():
                 continue
             
             if user_input.lower() in ['quit', 'exit', 'bye']:
-                print("\n👋 Thank you for using Calctoa! Happy learning! 🎓")
+                print("\n👋 Thank you for using Claire! Happy learning! 🎓")
                 break
-            
+
             response = agent.process_query(user_input)
-            
+
             print("\n" + "="*60)
-            print("📚 Calctoa:")
+            print("📚 Claire:")
             print(response)
             print("="*60)
             
