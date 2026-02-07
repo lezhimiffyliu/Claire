@@ -1,114 +1,242 @@
 """
-Claire AI Agent Core
-Using OpenAI GPT as brain, SymPy as math engine
+Claire AI Agent Core - LangChain ReAct Agent Version
+Using Claude Sonnet as reasoning core, SymPy as math engine
 """
 import os
-import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
-from sympy_backup import SymPyBackupEngine
 
 load_dotenv()
 
+
 class ClaireAgent:
-    """Claire AI Agent - Making Calculus Clear"""
+    """Claire AI Agent - Making Calculus Clear (LangChain ReAct Version)"""
 
-    # Base system prompt with LaTeX formatting instructions
-    SYSTEM_PROMPT_BASE = """You are Claire, an expert calculus teaching assistant. Your name comes from "Making Calculus Clear".
+    # Socratic System Prompt with ReAct instructions
+    SYSTEM_PROMPT = """You are Claire, a wise and patient Socratic calculus tutor.
+Your name comes from "Making Calculus Clear."
 
-CRITICAL LaTeX formatting rules - you MUST follow these exactly:
-- For inline math, wrap with DOLLAR SIGNS: $x^2 + 1$
-- For display equations, use DOUBLE DOLLAR SIGNS: $$\\frac{d}{dx}(x^2) = 2x$$
+=== CORE IDENTITY ===
+You are NOT a calculator. You are a TEACHER. Your goal is to help students UNDERSTAND, not just get answers.
+Slogan: "Claire - Making Calculus Clear."
+
+=== CRITICAL RULE: GUIDE, DON'T GIVE DIRECT ANSWERS ===
+When a student asks a math question:
+1. You MAY use tools to calculate the correct answer (for your reference)
+2. But you must NOT simply report the numerical result
+3. Instead, use the result to craft guiding questions that lead the student toward understanding
+
+=== LaTeX FORMATTING (MANDATORY) ===
+- For inline math, use single dollar signs: $x^2 + 1$
+- For display equations, use double dollar signs: $$\\frac{{d}}{{dx}}(x^2) = 2x$$
 - NEVER use parentheses ( ) or brackets [ ] as LaTeX delimiters
-- ALWAYS use $ or $$ as delimiters, nothing else
-- Use LaTeX commands: \\frac{}{}, \\sqrt{}, \\int, \\lim, \\sin, \\cos, etc.
+- Use LaTeX commands: \\frac{{}}{{}}, \\sqrt{{}}, \\int, \\lim, \\sin, \\cos, etc.
 
-Example of CORRECT formatting:
-The derivative of $f(x) = x^2$ is $f'(x) = 2x$.
+=== RESPONSE STRUCTURE ===
+Your final response to the student should:
+1. **Acknowledge** - Warmly acknowledge their question
+2. **Identify** - Name the relevant concept/technique (e.g., "This involves the chain rule...")
+3. **Guide** - Ask 1-2 thought-provoking questions to help them think about the approach
+4. **Hint** - Optionally provide a small hint (without revealing the answer)
+5. **Encourage** - End with encouragement to try and share their thinking
 
-For a complex equation:
-$$\\frac{dy}{dx} = \\frac{1}{2\\sqrt{x}}$$"""
+=== EXAMPLE OF GOOD RESPONSE ===
+Student: "What is the derivative of x^3?"
+
+Good response:
+"Great question! You're looking at a polynomial function $f(x) = x^3$.
+
+When we take derivatives of polynomial terms, there's a specific rule that applies here.
+Looking at the exponent 3, what operation do you think we need to perform with it?
+
+💡 Hint: Think about what the power rule says about exponents...
+
+Give it a try and let me know what you get! I'm here to help if you get stuck."
+
+=== STUDENT CONTEXT ===
+Student level: {user_level}
+Guided mode: {guided_mode}
+
+Adjust your language complexity and hint specificity based on the student's level.
+
+=== LANGUAGE ===
+Respond in the same language as the student's question. If they ask in Chinese, respond in Chinese. If they ask in English, respond in English.
+
+=== TOOLS ===
+You have access to symbolic math tools. Use them to:
+- Verify your understanding of the problem
+- Get the correct answer so you can guide toward it
+- Check student work when they share their attempts
+
+Remember: Tools give you the ANSWER, but your job is to help students DISCOVER it themselves.
+"""
 
     def __init__(self):
-        self.ai_client = self._init_ai_client()
-        self.sympy_engine = SymPyBackupEngine()
-        self.conversation_history = []
+        """Initialize Claire Agent with LangChain components"""
+        self.conversation_history: List[Dict[str, str]] = []
         self.user_level = "beginner"
-        self.guided_mode = False
+        self.guided_mode = True  # Default ON for Socratic teaching
 
-        print("\n" + "="*60)
-        print("🤖 Claire AI Agent Initialized")
-        print("="*60)
-        print("✅ Math Engine: READY (SymPy)")
+        # Initialize LangChain components
+        self.llm = None
+        self.tools = None
+        self.agent = None
+        self.executor = None
 
-        if self.ai_client:
-            print("✅ AI Brain: READY (OpenAI GPT)")
-        else:
-            print("⚠️  AI Brain: LIMITED (No API key)")
-    
-    def _init_ai_client(self):
-        """Initialize AI client"""
-        api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
-            try:
-                from openai import OpenAI
-                return OpenAI(api_key=api_key)
-            except ImportError:
-                print("⚠️ OpenAI package not installed. Run: pip install openai")
-        return None
-    
-    def process_query(self, user_input: str) -> str:
-        """Process user input - main entry point"""
-        self.conversation_history.append({"role": "user", "content": user_input})
-        
+        self._initialize_agent()
+
+    def _initialize_agent(self):
+        """Initialize LangChain ReAct agent with tools"""
+        print("\n" + "=" * 60)
+        print("🤖 Claire AI Agent Initializing...")
+        print("=" * 60)
+
+        # Check for Anthropic API key
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            print("⚠️  ANTHROPIC_API_KEY not found in environment")
+            print("   Please add it to your .env file")
+            print("   Claire will have limited functionality")
+            return
+
+        try:
+            # Import LangChain components (LangChain 1.x uses langgraph)
+            from langchain_anthropic import ChatAnthropic
+            from langgraph.prebuilt import create_react_agent
+
+            # Import our custom tools
+            from sympy_tools import CLAIRE_TOOLS
+
+            # Initialize Claude Sonnet
+            self.llm = ChatAnthropic(
+                model="claude-sonnet-4-20250514",
+                api_key=api_key,
+                temperature=0.7,
+                max_tokens=1024
+            )
+            print("✅ AI Brain: READY (Claude Sonnet)")
+
+            # Set up tools
+            self.tools = CLAIRE_TOOLS
+            print(f"✅ Math Tools: READY ({len(self.tools)} tools loaded)")
+
+            # Create ReAct agent using langgraph (LangChain 1.x)
+            # The system prompt is passed via the 'prompt' parameter
+            self.executor = create_react_agent(
+                model=self.llm,
+                tools=self.tools,
+                prompt=self.SYSTEM_PROMPT
+            )
+            print("✅ ReAct Agent: READY")
+
+        except ImportError as e:
+            print(f"⚠️  Missing dependency: {e}")
+            print("   Run: pip install -r requirements.txt")
+        except Exception as e:
+            print(f"❌ Agent initialization error: {e}")
+
+        print("=" * 60)
+
+    def process_query(self, user_input: str) -> Dict[str, Any]:
+        """
+        Process user input through ReAct agent.
+
+        Args:
+            user_input: The user's question or command
+
+        Returns:
+            Dict with keys:
+            - 'output': Final response string
+            - 'intermediate_steps': List of (AgentAction, observation) tuples
+        """
+        # Check system commands first
         system_response = self._check_system_commands(user_input)
         if system_response:
+            self.conversation_history.append({"role": "user", "content": user_input})
             self.conversation_history.append({"role": "assistant", "content": system_response})
-            return system_response
-        
-        query_type = self._analyze_query_type(user_input)
-        
-        if query_type == "math_calculation":
-            response = self._handle_math_calculation(user_input)
-        elif query_type == "concept_explanation":
-            response = self._handle_concept_explanation(user_input)
-        elif query_type == "problem_solving":
-            response = self._handle_problem_solving(user_input)
-        elif query_type == "teaching_request":
-            response = self._handle_teaching_request(user_input)
-        else:
-            response = self._handle_general_query(user_input)
-        
-        self.conversation_history.append({"role": "assistant", "content": response})
-        
-        if len(self.conversation_history) > 10:
-            self.conversation_history = self.conversation_history[-10:]
-        
-        return response
-    
+            return {'output': system_response, 'intermediate_steps': []}
+
+        # If agent not initialized, return error
+        if not self.executor:
+            error_msg = ("⚠️ Claire is not fully initialized. "
+                        "Please add ANTHROPIC_API_KEY to your .env file and restart.")
+            return {'output': error_msg, 'intermediate_steps': []}
+
+        # Invoke the agent (langgraph API)
+        try:
+            # Add context about student level and guided mode to the query
+            context_info = f"\n[Student level: {self.user_level}, Guided mode: {'ON' if self.guided_mode else 'OFF'}]"
+            enhanced_input = user_input + context_info
+
+            # Invoke using langgraph's message-based API
+            from langchain_core.messages import HumanMessage
+
+            result = self.executor.invoke({
+                "messages": [HumanMessage(content=enhanced_input)]
+            })
+
+            # Extract the final response from langgraph result
+            messages = result.get('messages', [])
+            final_output = ""
+            intermediate_steps = []
+
+            for msg in messages:
+                if hasattr(msg, 'content') and msg.content:
+                    # The last AI message is the final output
+                    if hasattr(msg, 'type') and msg.type == 'ai':
+                        final_output = msg.content
+                    # Tool messages are intermediate steps
+                    if hasattr(msg, 'type') and msg.type == 'tool':
+                        intermediate_steps.append(msg)
+
+            # Update conversation history
+            self.conversation_history.append({"role": "user", "content": user_input})
+            self.conversation_history.append({"role": "assistant", "content": final_output})
+
+            # Trim history to last 10 messages
+            if len(self.conversation_history) > 10:
+                self.conversation_history = self.conversation_history[-10:]
+
+            return {
+                'output': final_output,
+                'intermediate_steps': intermediate_steps
+            }
+
+        except Exception as e:
+            error_msg = f"❌ Error processing query: {str(e)}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            return {'output': error_msg, 'intermediate_steps': []}
+
     def _check_system_commands(self, user_input: str) -> Optional[str]:
-        """Check system commands"""
+        """Check and handle system commands"""
         user_input_lower = user_input.lower().strip()
 
         # Simple string responses
         if user_input_lower == "clear":
             self.conversation_history = []
             return "Conversation history cleared."
+
         if user_input_lower == "reset":
             self.conversation_history = []
             self.user_level = "beginner"
-            self.guided_mode = False
+            self.guided_mode = True
             return "Agent reset to initial state."
 
-        # Commands that call methods (only call when matched)
+        # Commands that call methods
         if user_input_lower == "help":
             return self._show_help()
+
         if user_input_lower == "examples":
             return self._show_examples()
+
         if user_input_lower == "capabilities":
             return self._show_capabilities()
+
         if user_input_lower == "status":
             return self._show_status()
+
         if user_input_lower == "/study":
             return self._toggle_guided_mode()
 
@@ -132,367 +260,11 @@ When you're ready, ask me a math question!"""
         else:
             return """📖 **Guided Learning Mode: OFF**
 
-Switched back to normal mode. I'll calculate and explain answers directly."""
-    
-    def _analyze_query_type(self, query: str) -> str:
-        """Analyze query type"""
-        query_lower = query.lower()
-        
-        math_keywords = ["calculate", "compute", "solve", "find", "evaluate", 
-                        "=", "+", "-", "*", "/", "^", "**", "sin(", "cos(", "exp("]
-        
-        concept_keywords = ["what is", "explain", "define", "meaning of", 
-                          "how does", "why is", "difference between"]
-        
-        teaching_keywords = ["teach me", "show me", "demonstrate", "how to",
-                           "step by step", "example of", "walk me through"]
-        
-        if any(keyword in query_lower for keyword in math_keywords):
-            return "math_calculation"
-        elif any(keyword in query_lower for keyword in concept_keywords):
-            return "concept_explanation"
-        elif any(keyword in query_lower for keyword in teaching_keywords):
-            return "teaching_request"
-        elif any(word in query_lower for word in ["problem", "exercise", "question"]):
-            return "problem_solving"
-        else:
-            return "general_query"
-    
-    def _handle_math_calculation(self, query: str) -> str:
-        """Handle mathematical calculation"""
-        # Check if guided mode is enabled
-        if self.guided_mode:
-            return self._handle_guided_learning(query)
+Switched back to direct mode. I'll provide more straightforward explanations.
+Note: I'll still focus on teaching, but with more explicit guidance."""
 
-        print(f"🔧 Processing math calculation: {query}")
-
-        try:
-            sympy_expr = self._convert_to_sympy(query)
-            print(f"🔧 Converted to SymPy: {sympy_expr}")
-            result = self.sympy_engine.evaluate(sympy_expr)
-
-            if result['success']:
-                if self.ai_client:
-                    explanation = self._get_ai_explanation(query, result['result'])
-                    return self._format_math_response(result, explanation)
-                else:
-                    return self._format_math_response(result)
-            else:
-                return self._ask_ai_directly(query)
-
-        except Exception as e:
-            return f"❌ Calculation error: {str(e)}\n\nPlease try rephrasing your question."
-    
-    def _handle_concept_explanation(self, query: str) -> str:
-        """Handle concept explanation"""
-        if self.ai_client:
-            return self._explain_concept_with_ai(query)
-        else:
-            return self._explain_concept_basic(query)
-    
-    def _handle_problem_solving(self, query: str) -> str:
-        """Handle problem solving"""
-        if self.ai_client:
-            return self._solve_problem_with_ai(query)
-        else:
-            return self._handle_math_calculation(query)
-    
-    def _handle_teaching_request(self, query: str) -> str:
-        """Handle teaching request"""
-        if self.ai_client:
-            return self._teach_with_ai(query)
-        else:
-            return "I need AI capabilities for teaching. Please add your OpenAI API key to .env file."
-    
-    def _handle_general_query(self, query: str) -> str:
-        """Handle general query"""
-        if self.ai_client:
-            return self._ask_ai_directly(query)
-        else:
-            return f"I understand you're asking: '{query}'\n\nFor calculus help, try:\n- 'What is a derivative?'\n- 'Calculate integral of x^2'\n- 'Solve x^2 - 4 = 0'"
-
-    def _handle_guided_learning(self, query: str) -> str:
-        """Handle math query in guided learning mode using Socratic method"""
-        if not self.ai_client:
-            return "⚠️ Guided learning mode requires AI capabilities. Please add your OpenAI API key to .env file."
-
-        # Build context from conversation history for continuity
-        recent_context = ""
-        if len(self.conversation_history) > 1:
-            recent_msgs = self.conversation_history[-4:]  # Last 2 exchanges
-            recent_context = "\n".join([f"{m['role']}: {m['content']}" for m in recent_msgs])
-
-        prompt = f"""You are a calculus tutor using the Socratic method. A student asked a math question. Your task is to guide them to think, NOT to give the answer directly.
-
-Student question: {query}
-Student level: {self.user_level}
-{f"Recent conversation context:{chr(10)}{recent_context}" if recent_context else ""}
-
-Respond in this Guided Learning style:
-
-1. **Acknowledge & Restate** (1 sentence)
-   - Briefly affirm the student's question
-   - Restate the problem in your own words
-
-2. **Guiding Questions** (core part)
-   - Ask 1-2 thought-provoking questions to help them think about the first step
-   - Questions should point toward key concepts or methods
-   - Examples: "Looking at this expression, what rule do you think we should apply?"
-   - Or: "What does the structure of this problem remind you of?"
-
-3. **Hint** (optional)
-   - If the problem is difficult, give a small hint that doesn't reveal the answer
-   - Use format: "💡 Hint: ..."
-
-4. **Encourage**
-   - End with one sentence encouraging them to try
-   - Let them know they can share their thoughts and you'll continue guiding
-
-Important:
-- NEVER give the final answer or complete solution steps
-- Be friendly, patient, and inspiring
-- For beginner level, ask simpler and more specific questions
-- For advanced level, guide toward deeper thinking
-- Keep response concise, under 150 words"""
-
-        try:
-            response = self.ai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT_BASE + " You are skilled in Socratic teaching. Your goal is to help students discover answers themselves, not to tell them the answers."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.8,
-                max_tokens=300
-            )
-            return "🎓 **Guided Learning**\n\n" + response.choices[0].message.content
-        except Exception as e:
-            return f"❌ AI Error: {str(e)}"
-    
-    def _get_ai_explanation(self, query: str, math_result: str) -> str:
-        """Use AI to explain mathematical result"""
-        if not self.ai_client:
-            return ""
-        
-        prompt = f"""As a calculus teacher, explain this mathematical result:
-
-Student's question: {query}
-Mathematical result: {math_result}
-
-Explain in a {self.user_level}-friendly way:
-1. What this calculation means
-2. Key steps involved
-3. Important concepts to remember
-4. Real-world applications (if relevant)
-
-Keep it clear and educational."""
-        
-        try:
-            response = self.ai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT_BASE},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=400
-            )
-            return response.choices[0].message.content
-        except:
-            return ""
-    
-    def _explain_concept_with_ai(self, query: str) -> str:
-        """Use AI to explain concept"""
-        prompt = f"""Explain this calculus concept to a {self.user_level} student:
-
-Question: {query}
-
-Provide:
-1. Clear definition
-2. Simple analogy or example
-3. Mathematical notation
-4. Common applications
-5. Related concepts to explore
-
-Make it engaging and educational!"""
-        
-        try:
-            response = self.ai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT_BASE + " You make complex ideas simple."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=500
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"AI Error: {str(e)}"
-    
-    def _solve_problem_with_ai(self, query: str) -> str:
-        """Use AI to solve problem"""
-        math_result = self._handle_math_calculation(query)
-        
-        if "Result:" in math_result:
-            return math_result
-        
-        prompt = f"""Solve this calculus problem and explain step-by-step:
-
-Problem: {query}
-
-Provide a complete solution for a {self.user_level} student:
-1. Understand the problem
-2. Show step-by-step solution
-3. Explain key concepts used
-4. Verify the answer
-5. Suggest similar practice problems"""
-        
-        try:
-            response = self.ai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT_BASE + " You are patient and show all working."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.5,
-                max_tokens=600
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"AI Error: {str(e)}"
-    
-    def _ask_ai_directly(self, query: str) -> str:
-        """Ask AI directly"""
-        try:
-            response = self.ai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT_BASE},
-                    {"role": "user", "content": query}
-                ],
-                temperature=0.7
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"AI Error: {str(e)}"
-    
-    def _teach_with_ai(self, query: str) -> str:
-        """Use AI for teaching"""
-        prompt = f"""Teach this calculus topic to a {self.user_level} student:
-
-Topic: {query}
-
-Structure your teaching:
-1. Introduction and motivation
-2. Core concepts explained simply
-3. Worked examples
-4. Common mistakes to avoid
-5. Practice exercises
-6. Summary and next steps
-
-Make it interactive and engaging!"""
-        
-        try:
-            response = self.ai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT_BASE + " You are inspiring and engaging."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.8,
-                max_tokens=700
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"AI Error: {str(e)}"
-    
-    def _convert_to_sympy(self, query: str) -> str:
-        """Convert natural language to SymPy expression"""
-        query_lower = query.lower().strip()
-
-        # Pattern-based conversions (order matters - more specific patterns first)
-        patterns = [
-            # Derivatives
-            (r'(?:what is the |find |calculate |compute )?derivative of (.+?)(?:\s+with respect to \w+)?$',
-             lambda m: f"diff({self._clean_expr(m.group(1))}, x)"),
-            (r'differentiate (.+)',
-             lambda m: f"diff({self._clean_expr(m.group(1))}, x)"),
-            (r'd/dx\s*(.+)',
-             lambda m: f"diff({self._clean_expr(m.group(1))}, x)"),
-
-            # Integrals
-            (r'(?:what is the |find |calculate |compute )?integral of (.+?)(?:\s+dx)?$',
-             lambda m: f"integrate({self._clean_expr(m.group(1))}, x)"),
-            (r'integrate (.+)',
-             lambda m: f"integrate({self._clean_expr(m.group(1))}, x)"),
-
-            # Limits
-            (r'limit of (.+) as x\s*(?:->|→|approaches)\s*(.+)',
-             lambda m: f"limit({self._clean_expr(m.group(1))}, x, {m.group(2).strip()})"),
-
-            # Solve
-            (r'solve (.+?)(?:\s*=\s*0)?(?:\s+for \w+)?$',
-             lambda m: f"solve({self._clean_expr(m.group(1))}, x)"),
-            (r'find roots of (.+)',
-             lambda m: f"solve({self._clean_expr(m.group(1))}, x)"),
-
-            # Simplify
-            (r'simplify (.+)',
-             lambda m: f"simplify({self._clean_expr(m.group(1))})"),
-        ]
-
-        for pattern, converter in patterns:
-            match = re.search(pattern, query_lower, re.IGNORECASE)
-            if match:
-                return converter(match)
-
-        # If no pattern matches, return cleaned query as-is
-        return self._clean_expr(query)
-
-    def _clean_expr(self, expr: str) -> str:
-        """Clean and normalize math expression for SymPy"""
-        expr = expr.strip()
-        # Convert common notations
-        expr = expr.replace('^', '**')
-        expr = expr.replace('sin(', 'sin(').replace('cos(', 'cos(')
-        expr = expr.replace('e^', 'exp(').rstrip() + ')' if 'e^' in expr else expr
-        # Handle x squared, x cubed
-        expr = re.sub(r'x\s*squared', 'x**2', expr)
-        expr = re.sub(r'x\s*cubed', 'x**3', expr)
-        return expr
-    
-    def _format_math_response(self, result: Dict[str, Any], explanation: str = "") -> str:
-        """Format mathematical response"""
-        response = f"🧮 **Mathematical Result** (via {result['engine']}):\n"
-        response += f"```\n{result['result']}\n```\n"
-        
-        if explanation:
-            response += f"\n📝 **Explanation**:\n{explanation}\n"
-        
-        return response
-    
-    def _explain_concept_basic(self, concept: str) -> str:
-        """Basic concept explanation (without AI)"""
-        concepts = {
-            "derivative": """Derivative measures rate of change.
-Notation: f'(x) or df/dx
-Example: d/dx(x²) = 2x""",
-            "integral": """Integral finds area under curve.
-Notation: ∫f(x)dx
-Example: ∫2x dx = x² + C""",
-            "limit": """Limit is value function approaches.
-Notation: lim_{x→a} f(x)
-Example: lim_{x→0} sin(x)/x = 1"""
-        }
-        
-        for key, value in concepts.items():
-            if key in concept.lower():
-                return value
-        
-        return f"I can explain: derivative, integral, limit. Ask specifically."
-    
     def _show_help(self) -> str:
+        """Show help information"""
         return """**Claire Help Commands:**
 - `help` - Show this help
 - `examples` - Show example questions
@@ -502,47 +274,80 @@ Example: lim_{x→0} sin(x)/x = 1"""
 - `level [beginner|intermediate|advanced]` - Set your level
 - `/study` - Toggle guided learning mode (Socratic method)
 
-**Ask me anything about calculus!**"""
-    
+**Claire - Making Calculus Clear** ✨
+Ask me anything about calculus!"""
+
     def _show_examples(self) -> str:
+        """Show example questions"""
         return """**Example Questions:**
-- `What is a derivative?`
-- `Calculate the integral of sin(x)`
-- `Find the derivative of x^3 + 2x`
-- `Explain the chain rule`
-- `Solve x^2 - 5x + 6 = 0`
-- `What is L'Hopital's rule?`
-- `Teach me about integration by parts`
-- `Limit of sin(x)/x as x->0`
 
-**SymPy syntax:**
-- `diff(sin(x), x)`
-- `integrate(x**2, x)`
-- `limit(sin(x)/x, x, 0)`
-- `solve(x**2 - 4, x)`"""
-    
+📐 **Derivatives:**
+- What is the derivative of x^3 + 2x?
+- Find d/dx of sin(x)*cos(x)
+- Differentiate e^(2x)
+
+∫ **Integrals:**
+- Calculate the integral of x^2
+- What is ∫sin(x)dx?
+- Integrate 1/(1+x^2)
+
+📊 **Limits:**
+- Find the limit of sin(x)/x as x approaches 0
+- What is lim(x→∞) of 1/x?
+
+🔢 **Equations:**
+- Solve x^2 - 5x + 6 = 0
+- Find the roots of x^3 - 8
+
+💡 **Concepts:**
+- What is the chain rule?
+- Explain integration by parts
+- What is L'Hôpital's rule?
+
+**Claire - Making Calculus Clear** ✨"""
+
     def _show_capabilities(self) -> str:
-        caps = ["✅ SymPy Engine: Symbolic mathematics (derivatives, integrals, limits, solving)"]
+        """Show capabilities"""
+        caps = []
 
-        if self.ai_client:
-            caps.append("✅ AI Brain: Natural language understanding")
+        if self.executor:
+            caps.append("✅ ReAct Agent: Active (Claude Sonnet)")
+            caps.append(f"✅ Math Tools: {len(self.tools) if self.tools else 0} tools available")
+            caps.append("   - calculate_derivative")
+            caps.append("   - calculate_integral")
+            caps.append("   - calculate_limit")
+            caps.append("   - solve_equation")
+            caps.append("   - simplify_expression")
         else:
-            caps.append("⚠️  AI Brain: Limited (add API key for full power)")
+            caps.append("⚠️  Agent: Not initialized (missing API key)")
+
+        caps.append("\n**Teaching Modes:**")
+        caps.append(f"📖 Guided Learning: {'ON' if self.guided_mode else 'OFF'}")
+        caps.append(f"📊 Student Level: {self.user_level}")
 
         return "\n".join(caps)
-    
+
     def _show_status(self) -> str:
+        """Show system status"""
         status = [
-            f"User Level: {self.user_level}",
+            "**Claire System Status**",
+            f"",
+            f"Student Level: {self.user_level}",
             f"Guided Mode: {'ON 📖' if self.guided_mode else 'OFF'}",
             f"Conversation History: {len(self.conversation_history)} messages",
-            f"Math Engine: SymPy",
-            f"AI Available: {self.ai_client is not None}"
+            f"",
+            f"**Backend:**",
+            f"AI Engine: {'Claude Sonnet ✅' if self.llm else 'Not initialized ⚠️'}",
+            f"Math Tools: {len(self.tools) if self.tools else 0} loaded",
+            f"ReAct Agent: {'Active ✅' if self.executor else 'Inactive ⚠️'}",
+            f"",
+            f"**Claire - Making Calculus Clear** ✨"
         ]
         return "\n".join(status)
-    
+
     def _set_level(self, level: str) -> str:
+        """Set student level"""
         if level in ["beginner", "intermediate", "advanced"]:
             self.user_level = level
-            return f"✅ User level set to: {level}"
-        return "❌ Invalid level. Use: beginner, intermediate, advanced"
+            return f"✅ Student level set to: {level}"
+        return "❌ Invalid level. Use: beginner, intermediate, or advanced"

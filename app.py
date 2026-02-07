@@ -1,5 +1,5 @@
 """
-Claire Streamlit Web Interface
+Claire Streamlit Web Interface - LangChain ReAct Version
 """
 import streamlit as st
 from claire_agent import ClaireAgent
@@ -22,7 +22,7 @@ agent = st.session_state.agent
 
 # Sidebar
 with st.sidebar:
-    st.markdown("## ∫ Claire: Your Clear Calculus Companion")
+    st.markdown("## ∫ Claire")
     st.caption("Making Calculus Clear")
 
     st.divider()
@@ -31,7 +31,7 @@ with st.sidebar:
     study_mode = st.toggle(
         "📖 Guided Learning",
         value=agent.guided_mode,
-        help="Socratic method - I'll guide you with questions"
+        help="Socratic method - I'll guide you with questions instead of giving direct answers"
     )
     if study_mode != agent.guided_mode:
         agent.guided_mode = study_mode
@@ -51,7 +51,7 @@ with st.sidebar:
     st.caption("System Status")
     col1, col2 = st.columns(2)
     col1.metric("Math", "SymPy ✓", delta=None)
-    col2.metric("AI", "GPT ✓" if agent.ai_client else "Limited", delta=None)
+    col2.metric("AI", "Claude ✓" if agent.executor else "Limited", delta=None)
 
     st.divider()
 
@@ -60,6 +60,51 @@ with st.sidebar:
         st.session_state.messages = []
         agent.conversation_history = []
         st.rerun()
+
+
+def format_tool_name(tool_name: str) -> str:
+    """Format tool name for display"""
+    name_map = {
+        "calculate_derivative": "📐 Derivative Calculator",
+        "calculate_integral": "∫ Integral Calculator",
+        "calculate_limit": "📊 Limit Calculator",
+        "solve_equation": "🔢 Equation Solver",
+        "simplify_expression": "✨ Expression Simplifier"
+    }
+    return name_map.get(tool_name, tool_name)
+
+
+def process_with_thinking(query: str):
+    """Process query and display thinking process"""
+    with st.status("🧠 Claire is thinking...", expanded=True) as status:
+        # Invoke the agent
+        result = agent.process_query(query)
+
+        # Display intermediate steps (thinking process)
+        steps = result.get('intermediate_steps', [])
+        if steps:
+            for i, step in enumerate(steps):
+                # Handle langgraph tool messages
+                if hasattr(step, 'name') and hasattr(step, 'content'):
+                    tool_name = format_tool_name(step.name)
+                    st.write(f"**Step {i + 1}:** Using {tool_name}")
+                    with st.expander("View calculation result"):
+                        st.code(step.content, language="text")
+                # Handle old format (AgentAction, observation) tuples
+                elif isinstance(step, tuple) and len(step) == 2:
+                    if hasattr(step[0], 'tool'):
+                        tool_name = format_tool_name(step[0].tool)
+                        st.write(f"**Step {i + 1}:** Using {tool_name}")
+                        st.code(f"Input: {step[0].tool_input}", language="text")
+                        with st.expander("View calculation result"):
+                            st.code(step[1], language="text")
+        else:
+            st.write("💭 Reasoning directly without tools...")
+
+        status.update(label="✅ Response ready!", state="complete", expanded=False)
+
+    return result
+
 
 # Main area
 if not st.session_state.messages:
@@ -131,9 +176,12 @@ if not st.session_state.messages:
         with cols[i % 3]:
             if st.button(label, key=f"example_{i}", use_container_width=True):
                 st.session_state.messages.append({"role": "user", "content": query})
-                with st.spinner("Thinking..."):
-                    response = agent.process_query(query)
-                st.session_state.messages.append({"role": "assistant", "content": response})
+                result = process_with_thinking(query)
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": result.get('output', ''),
+                    "thoughts": result.get('intermediate_steps', [])
+                })
                 st.rerun()
 
 else:
@@ -142,7 +190,27 @@ else:
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"], unsafe_allow_html=True)
+            # Display the main content
+            content = message.get("content", "")
+            if isinstance(content, dict):
+                content = content.get('output', str(content))
+            st.markdown(content, unsafe_allow_html=True)
+
+            # Show thinking process for assistant messages
+            if message["role"] == "assistant" and message.get("thoughts"):
+                with st.expander("🧠 View Claire's thinking process"):
+                    for i, step in enumerate(message["thoughts"]):
+                        # Handle langgraph tool messages
+                        if hasattr(step, 'name') and hasattr(step, 'content'):
+                            tool_name = format_tool_name(step.name)
+                            st.write(f"**Step {i + 1}:** {tool_name}")
+                            st.code(f"Result: {step.content}", language="text")
+                        # Handle old format
+                        elif isinstance(step, tuple) and len(step) == 2 and hasattr(step[0], 'tool'):
+                            tool_name = format_tool_name(step[0].tool)
+                            st.write(f"**Step {i + 1}:** {tool_name}")
+                            st.code(f"Input: {step[0].tool_input}", language="text")
+                            st.code(f"Result: {step[1]}", language="text")
 
 # Chat input
 with st.form(key="chat_form", clear_on_submit=True):
@@ -157,8 +225,11 @@ with st.form(key="chat_form", clear_on_submit=True):
 if submit and user_input.strip():
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    with st.spinner("Calculating..."):
-        response = agent.process_query(user_input)
+    result = process_with_thinking(user_input)
 
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": result.get('output', ''),
+        "thoughts": result.get('intermediate_steps', [])
+    })
     st.rerun()
