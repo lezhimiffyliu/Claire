@@ -3,14 +3,14 @@
 Claire - Making Calculus Clear
 CLI Entry Point (LangChain ReAct Version)
 """
+
 import os
-import sys
 from claire_agent import ClaireAgent
 
 
 def clear_screen():
     """Clear the terminal screen"""
-    os.system('cls' if os.name == 'nt' else 'clear')
+    os.system("cls" if os.name == "nt" else "clear")
 
 
 def print_banner():
@@ -48,10 +48,10 @@ def print_welcome():
 
 def create_env_file():
     """Create a sample .env file if it doesn't exist"""
-    if not os.path.exists('.env'):
+    if not os.path.exists(".env"):
         print("\n⚠️  Notice: No .env file found")
         print("Creating sample .env file...")
-        with open('.env', 'w') as f:
+        with open(".env", "w") as f:
             f.write("# Anthropic API Key (required for Claire)\n")
             f.write("# Get one from: https://console.anthropic.com/\n")
             f.write("# ANTHROPIC_API_KEY=your_key_here\n\n")
@@ -90,7 +90,7 @@ def main():
             if not user_input:
                 continue
 
-            if user_input.lower() in ['quit', 'exit', 'bye']:
+            if user_input.lower() in ["quit", "exit", "bye"]:
                 print("\n👋 Thank you for using Claire! Happy learning! 🎓")
                 print("   Claire - Making Calculus Clear ✨")
                 break
@@ -100,15 +100,15 @@ def main():
 
             # Extract the output (handle both dict and string returns)
             if isinstance(result, dict):
-                output = result.get('output', '')
-                steps = result.get('intermediate_steps', [])
+                output = result.get("output", "")
+                steps = result.get("intermediate_steps", [])
 
                 # Optionally show tool usage in verbose mode
-                if steps and os.getenv('CLAIRE_VERBOSE', '').lower() == 'true':
+                if steps and os.getenv("CLAIRE_VERBOSE", "").lower() == "true":
                     print("\n" + "-" * 40)
                     print("🧠 Thinking process:")
                     for i, step in enumerate(steps):
-                        if hasattr(step[0], 'tool'):
+                        if hasattr(step[0], "tool"):
                             print(f"   Step {i + 1}: Used {step[0].tool}")
                     print("-" * 40)
             else:

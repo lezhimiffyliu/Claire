@@ -1,26 +1,46 @@
 """
 Claire SymPy Tools - LangChain tool wrappers for symbolic mathematics
 """
-import re
+
 from langchain_core.tools import tool
 import sympy as sp
-from sympy import symbols, diff, integrate, limit, solve, simplify, series, Eq
-from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+from sympy import symbols, diff, integrate, limit, solve, simplify, Eq
+from sympy.parsing.sympy_parser import (
+    parse_expr,
+    standard_transformations,
+    implicit_multiplication_application,
+)
 
 # Define symbolic variables
-x, y, z = symbols('x y z')
+x, y, z = symbols("x y z")
 
 # Safe namespace for expression parsing
 SAFE_NAMESPACE = {
-    'x': x, 'y': y, 'z': z,
-    'sin': sp.sin, 'cos': sp.cos, 'tan': sp.tan,
-    'sec': sp.sec, 'csc': sp.csc, 'cot': sp.cot,
-    'asin': sp.asin, 'acos': sp.acos, 'atan': sp.atan,
-    'sinh': sp.sinh, 'cosh': sp.cosh, 'tanh': sp.tanh,
-    'exp': sp.exp, 'log': sp.log, 'ln': sp.log,
-    'sqrt': sp.sqrt, 'abs': sp.Abs,
-    'pi': sp.pi, 'e': sp.E, 'E': sp.E,
-    'oo': sp.oo, 'inf': sp.oo,
+    "x": x,
+    "y": y,
+    "z": z,
+    "sin": sp.sin,
+    "cos": sp.cos,
+    "tan": sp.tan,
+    "sec": sp.sec,
+    "csc": sp.csc,
+    "cot": sp.cot,
+    "asin": sp.asin,
+    "acos": sp.acos,
+    "atan": sp.atan,
+    "sinh": sp.sinh,
+    "cosh": sp.cosh,
+    "tanh": sp.tanh,
+    "exp": sp.exp,
+    "log": sp.log,
+    "ln": sp.log,
+    "sqrt": sp.sqrt,
+    "abs": sp.Abs,
+    "pi": sp.pi,
+    "e": sp.E,
+    "E": sp.E,
+    "oo": sp.oo,
+    "inf": sp.oo,
 }
 
 
@@ -33,14 +53,16 @@ def parse_expression(expr_str: str) -> sp.Expr:
     expr_str = expr_str.strip()
 
     # Convert common notations
-    expr_str = expr_str.replace('^', '**')
-    expr_str = expr_str.replace('ln(', 'log(')
+    expr_str = expr_str.replace("^", "**")
+    expr_str = expr_str.replace("ln(", "log(")
 
     # Handle implicit multiplication (e.g., 2x -> 2*x)
     transformations = standard_transformations + (implicit_multiplication_application,)
 
     try:
-        return parse_expr(expr_str, local_dict=SAFE_NAMESPACE, transformations=transformations)
+        return parse_expr(
+            expr_str, local_dict=SAFE_NAMESPACE, transformations=transformations
+        )
     except Exception:
         # Fallback to eval with safe namespace
         return eval(expr_str, {"__builtins__": {}}, SAFE_NAMESPACE)
@@ -76,7 +98,12 @@ def calculate_derivative(expression: str, variable: str = "x", order: int = 1) -
 
 
 @tool
-def calculate_integral(expression: str, variable: str = "x", lower_bound: str = None, upper_bound: str = None) -> str:
+def calculate_integral(
+    expression: str,
+    variable: str = "x",
+    lower_bound: str = None,
+    upper_bound: str = None,
+) -> str:
     """
     Calculate the integral (antiderivative) of a mathematical expression.
 
@@ -113,11 +140,15 @@ def calculate_integral(expression: str, variable: str = "x", lower_bound: str = 
             latex_result = sp.latex(result)
             return f"Indefinite integral:\nResult: {result} + C\nLaTeX: ${latex_result} + C$\n(Don't forget the constant of integration!)"
     except Exception as e:
-        return f"Error calculating integral: {str(e)}. Please check the expression format."
+        return (
+            f"Error calculating integral: {str(e)}. Please check the expression format."
+        )
 
 
 @tool
-def calculate_limit(expression: str, variable: str, approaching: str, direction: str = None) -> str:
+def calculate_limit(
+    expression: str, variable: str, approaching: str, direction: str = None
+) -> str:
     """
     Calculate the limit of an expression as a variable approaches a value.
 
@@ -142,19 +173,19 @@ def calculate_limit(expression: str, variable: str, approaching: str, direction:
         var = symbols(variable)
 
         # Parse the approaching value
-        if approaching in ['oo', 'inf', 'infinity']:
+        if approaching in ["oo", "inf", "infinity"]:
             approach_val = sp.oo
-        elif approaching in ['-oo', '-inf', '-infinity']:
+        elif approaching in ["-oo", "-inf", "-infinity"]:
             approach_val = -sp.oo
         else:
             approach_val = parse_expression(approaching)
 
         # Calculate limit with optional direction
-        if direction == '+':
-            result = limit(expr, var, approach_val, '+')
+        if direction == "+":
+            result = limit(expr, var, approach_val, "+")
             dir_str = "from the right (x → {}⁺)".format(approaching)
-        elif direction == '-':
-            result = limit(expr, var, approach_val, '-')
+        elif direction == "-":
+            result = limit(expr, var, approach_val, "-")
             dir_str = "from the left (x → {}⁻)".format(approaching)
         else:
             result = limit(expr, var, approach_val)
@@ -189,8 +220,8 @@ def solve_equation(equation: str, variable: str = "x") -> str:
         var = symbols(variable)
 
         # Check if equation contains '='
-        if '=' in equation:
-            parts = equation.split('=')
+        if "=" in equation:
+            parts = equation.split("=")
             lhs = parse_expression(parts[0].strip())
             rhs = parse_expression(parts[1].strip())
             eq = Eq(lhs, rhs)
@@ -208,7 +239,12 @@ def solve_equation(equation: str, variable: str = "x") -> str:
             else:
                 solutions = [f"{variable} = {sol}" for sol in result]
                 latex_solutions = [f"${variable} = {sp.latex(sol)}$" for sol in result]
-                return f"Solutions:\n" + "\n".join(solutions) + "\n\nLaTeX:\n" + "\n".join(latex_solutions)
+                return (
+                    "Solutions:\n"
+                    + "\n".join(solutions)
+                    + "\n\nLaTeX:\n"
+                    + "\n".join(latex_solutions)
+                )
         else:
             return f"Solution: {result}"
     except Exception as e:

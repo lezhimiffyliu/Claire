@@ -2,6 +2,7 @@
 Claire AI Agent Core - LangChain ReAct Agent Version
 Using Claude Sonnet as reasoning core, SymPy as math engine
 """
+
 import os
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
@@ -112,7 +113,7 @@ Remember: Tools give you the ANSWER, but your job is to help students DISCOVER i
                 model="claude-sonnet-4-20250514",
                 api_key=api_key,
                 temperature=0.7,
-                max_tokens=1024
+                max_tokens=1024,
             )
             print("✅ AI Brain: READY (Claude Sonnet)")
 
@@ -123,9 +124,7 @@ Remember: Tools give you the ANSWER, but your job is to help students DISCOVER i
             # Create ReAct agent using langgraph (LangChain 1.x)
             # The system prompt is passed via the 'prompt' parameter
             self.executor = create_react_agent(
-                model=self.llm,
-                tools=self.tools,
-                prompt=self.SYSTEM_PROMPT
+                model=self.llm, tools=self.tools, prompt=self.SYSTEM_PROMPT
             )
             print("✅ ReAct Agent: READY")
 
@@ -153,14 +152,18 @@ Remember: Tools give you the ANSWER, but your job is to help students DISCOVER i
         system_response = self._check_system_commands(user_input)
         if system_response:
             self.conversation_history.append({"role": "user", "content": user_input})
-            self.conversation_history.append({"role": "assistant", "content": system_response})
-            return {'output': system_response, 'intermediate_steps': []}
+            self.conversation_history.append(
+                {"role": "assistant", "content": system_response}
+            )
+            return {"output": system_response, "intermediate_steps": []}
 
         # If agent not initialized, return error
         if not self.executor:
-            error_msg = ("⚠️ Claire is not fully initialized. "
-                        "Please add ANTHROPIC_API_KEY to your .env file and restart.")
-            return {'output': error_msg, 'intermediate_steps': []}
+            error_msg = (
+                "⚠️ Claire is not fully initialized. "
+                "Please add ANTHROPIC_API_KEY to your .env file and restart."
+            )
+            return {"output": error_msg, "intermediate_steps": []}
 
         # Invoke the agent (langgraph API)
         try:
@@ -171,43 +174,43 @@ Remember: Tools give you the ANSWER, but your job is to help students DISCOVER i
             # Invoke using langgraph's message-based API
             from langchain_core.messages import HumanMessage
 
-            result = self.executor.invoke({
-                "messages": [HumanMessage(content=enhanced_input)]
-            })
+            result = self.executor.invoke(
+                {"messages": [HumanMessage(content=enhanced_input)]}
+            )
 
             # Extract the final response from langgraph result
-            messages = result.get('messages', [])
+            messages = result.get("messages", [])
             final_output = ""
             intermediate_steps = []
 
             for msg in messages:
-                if hasattr(msg, 'content') and msg.content:
+                if hasattr(msg, "content") and msg.content:
                     # The last AI message is the final output
-                    if hasattr(msg, 'type') and msg.type == 'ai':
+                    if hasattr(msg, "type") and msg.type == "ai":
                         final_output = msg.content
                     # Tool messages are intermediate steps
-                    if hasattr(msg, 'type') and msg.type == 'tool':
+                    if hasattr(msg, "type") and msg.type == "tool":
                         intermediate_steps.append(msg)
 
             # Update conversation history
             self.conversation_history.append({"role": "user", "content": user_input})
-            self.conversation_history.append({"role": "assistant", "content": final_output})
+            self.conversation_history.append(
+                {"role": "assistant", "content": final_output}
+            )
 
             # Trim history to last 10 messages
             if len(self.conversation_history) > 10:
                 self.conversation_history = self.conversation_history[-10:]
 
-            return {
-                'output': final_output,
-                'intermediate_steps': intermediate_steps
-            }
+            return {"output": final_output, "intermediate_steps": intermediate_steps}
 
         except Exception as e:
             error_msg = f"❌ Error processing query: {str(e)}"
             print(error_msg)
             import traceback
+
             traceback.print_exc()
-            return {'output': error_msg, 'intermediate_steps': []}
+            return {"output": error_msg, "intermediate_steps": []}
 
     def _check_system_commands(self, user_input: str) -> Optional[str]:
         """Check and handle system commands"""
@@ -312,7 +315,9 @@ Ask me anything about calculus!"""
 
         if self.executor:
             caps.append("✅ ReAct Agent: Active (Claude Sonnet)")
-            caps.append(f"✅ Math Tools: {len(self.tools) if self.tools else 0} tools available")
+            caps.append(
+                f"✅ Math Tools: {len(self.tools) if self.tools else 0} tools available"
+            )
             caps.append("   - calculate_derivative")
             caps.append("   - calculate_integral")
             caps.append("   - calculate_limit")
@@ -331,17 +336,17 @@ Ask me anything about calculus!"""
         """Show system status"""
         status = [
             "**Claire System Status**",
-            f"",
+            "",
             f"Student Level: {self.user_level}",
             f"Guided Mode: {'ON 📖' if self.guided_mode else 'OFF'}",
             f"Conversation History: {len(self.conversation_history)} messages",
-            f"",
-            f"**Backend:**",
+            "",
+            "**Backend:**",
             f"AI Engine: {'Claude Sonnet ✅' if self.llm else 'Not initialized ⚠️'}",
             f"Math Tools: {len(self.tools) if self.tools else 0} loaded",
             f"ReAct Agent: {'Active ✅' if self.executor else 'Inactive ⚠️'}",
-            f"",
-            f"**Claire - Making Calculus Clear** ✨"
+            "",
+            "**Claire - Making Calculus Clear** ✨",
         ]
         return "\n".join(status)
 
