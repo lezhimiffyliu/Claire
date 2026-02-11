@@ -127,3 +127,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Claire project - personal/runtime files
+LEARNING_NOTES.md
+usage.db
+api.log
