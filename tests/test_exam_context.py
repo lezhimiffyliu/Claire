@@ -1,6 +1,6 @@
 """Tests for exam_context module."""
 
-from exam_context import analyze_materials, ExamContext, add_material, clear_context
+from exam_context import analyze_materials, analyze_files, ExamContext, add_material, clear_context
 
 
 def test_analyze_materials_detects_patterns():
@@ -79,3 +79,34 @@ def test_pattern_priority():
         p = context.detected_patterns[0]
         assert p.priority  # Should have a priority hint
         assert len(p.evidence) > 0  # Should have evidence
+
+
+def test_analyze_files():
+    """Test analyzing file bytes including question extraction."""
+    content = b"""
+    Problem 1. Find the derivative of x^3
+    Problem 2. Maximize f(x,y) subject to x + y = 10
+    """
+
+    files = [("exam.txt", content)]
+    context = analyze_files(files)
+
+    assert context.has_context()
+    assert len(context.materials) == 1
+    # Should have question bank
+    assert context.question_bank is not None
+
+
+def test_has_questions():
+    """Test question bank integration."""
+    content = b"""
+    Problem 1. Find the derivative of sin(x)
+    Problem 2. Evaluate the integral of cos(x) dx
+    """
+
+    files = [("test.txt", content)]
+    context = analyze_files(files)
+
+    # Check question-related methods
+    if context.has_questions():
+        assert context.get_question_count() > 0

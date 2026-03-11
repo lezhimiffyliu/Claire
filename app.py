@@ -5,7 +5,7 @@ Unified Exam Preparation: Upload Materials → Detect Patterns → Guided Practi
 
 import streamlit as st
 from claire_agent import ClaireAgent
-from exam_context import analyze_materials, ExamContext
+from exam_context import analyze_files, ExamContext
 
 # Page config
 st.set_page_config(
@@ -38,14 +38,14 @@ with st.sidebar:
 
     # Course Materials Section
     st.markdown("### Course Materials")
-    st.caption("Upload notes, review sheets, or past exams")
+    st.caption("Upload notes, exams, or paste text")
 
     uploaded_files = st.file_uploader(
         "Upload files",
-        type=["txt", "md"],
+        type=["pdf", "txt", "md"],
         accept_multiple_files=True,
         label_visibility="collapsed",
-        help="Lecture notes, review sheets, practice exams (txt/md)"
+        help="PDF, TXT, or MD files (lecture notes, practice exams, etc.)"
     )
 
     pasted_notes = st.text_area(
@@ -56,41 +56,52 @@ with st.sidebar:
     )
 
     if st.button("Analyze Materials", use_container_width=True):
-        texts = []
-        names = []
+        files = []
 
         # Process uploaded files
         for f in uploaded_files or []:
             try:
-                content = f.getvalue().decode("utf-8", errors="ignore")
-                texts.append(content)
-                names.append(f.name)
+                file_bytes = f.getvalue()
+                files.append((f.name, file_bytes))
             except Exception:
                 pass
 
         # Process pasted notes
         if pasted_notes.strip():
-            texts.append(pasted_notes)
-            names.append("pasted_notes")
+            files.append(("pasted_notes.txt", pasted_notes.encode("utf-8")))
 
-        if texts:
-            context = analyze_materials(texts, names)
-            st.session_state.exam_context = context
-            agent.set_exam_context(context)
-            st.success(f"Analyzed {len(texts)} materials")
+        if files:
+            with st.spinner("Analyzing..."):
+                context = analyze_files(files)
+                st.session_state.exam_context = context
+                agent.set_exam_context(context)
+
+            q_count = context.get_question_count()
+            if q_count > 0:
+                st.success(f"Found {q_count} questions")
+            else:
+                st.success(f"Analyzed {len(files)} files")
             st.rerun()
         else:
             st.warning("Add materials first")
 
-    # Show detected patterns if context exists
+    # Show detected patterns and questions if context exists
     exam_context = st.session_state.exam_context
     if exam_context.has_context():
         st.divider()
-        st.markdown("### Detected Patterns")
-        for p in exam_context.detected_patterns[:4]:
-            with st.container():
-                st.markdown(f"**{p.name.replace('_', ' ').title()}**")
-                st.caption(f"Score: {p.score} | {', '.join(p.evidence[:3])}")
+
+        # Show question count
+        if exam_context.has_questions():
+            st.markdown(f"### {exam_context.get_question_count()} Questions")
+            counts = exam_context.question_bank.get_pattern_counts()
+            for pattern, count in sorted(counts.items(), key=lambda x: -x[1])[:4]:
+                st.caption(f"{pattern.replace('_', ' ').title()}: {count}")
+        else:
+            st.markdown("### Detected Patterns")
+            for p in exam_context.detected_patterns[:4]:
+                with st.container():
+                    st.markdown(f"**{p.name.replace('_', ' ').title()}**")
+                    st.caption(f"{', '.join(p.evidence[:3])}")
 
         if st.button("Clear Materials", use_container_width=True):
             st.session_state.exam_context = ExamContext()
@@ -178,45 +189,82 @@ if not st.session_state.messages:
 
     # Different welcome based on whether context is loaded
     if exam_context.has_context():
-        st.markdown("### Your Exam Focus Areas")
-        st.markdown("Based on your uploaded materials, focus on these patterns:")
+        # Check if we have extracted questions
+        if exam_context.has_questions():
+            st.markdown("### Your Question Bank")
+            st.markdown(f"**{exam_context.get_question_count()}** questions extracted from your materials")
 
-        cols = st.columns(min(3, len(exam_context.detected_patterns[:3])))
-        for i, p in enumerate(exam_context.detected_patterns[:3]):
-            with cols[i]:
-                st.markdown(f"**{p.name.replace('_', ' ').title()}**")
-                st.caption(p.priority)
+            # Show questions grouped by pattern
+            bank = exam_context.question_bank
+            for pattern in bank.get_patterns()[:4]:
+                questions = bank.get_by_pattern(pattern)
+                with st.expander(f"**{pattern.replace('_', ' ').title()}** ({len(questions)} questions)", expanded=False):
+                    for i, q in enumerate(questions[:5]):
+                        st.markdown(f"{i+1}. {q.text[:150]}..." if len(q.text) > 150 else f"{i+1}. {q.text}")
 
-        st.markdown("---")
-        st.markdown("### Practice These Patterns")
-        st.caption("Click to start guided practice")
+            st.markdown("---")
+            st.markdown("### Practice from Your Materials")
+            st.caption("Click a pattern to practice with questions from your course")
 
-        # Generate example problems for detected patterns
-        pattern_examples = {
-            "optimization": "Find the dimensions of a rectangle with perimeter 100 that has maximum area",
-            "constrained_optimization": "Maximize f(x,y) = xy subject to x + 2y = 10",
-            "related_rates": "A ladder 10 ft long rests against a wall. The bottom slides away at 2 ft/s. How fast is the top sliding down when the bottom is 6 ft from the wall?",
-            "derivatives": "Find the derivative of ln(x^2 + 1)",
-            "integration": "Find the integral of x*e^x dx",
-            "limits": "Find the limit of (sin x)/x as x approaches 0",
-        }
+            cols = st.columns(2)
+            for i, pattern in enumerate(bank.get_patterns()[:4]):
+                questions = bank.get_by_pattern(pattern)
+                if questions:
+                    with cols[i % 2]:
+                        if st.button(f"{pattern.replace('_', ' ').title()} ({len(questions)})", key=f"bank_{i}", use_container_width=True):
+                            # Use actual question from bank
+                            q = questions[0]
+                            st.session_state.messages.append({"role": "user", "content": q.text})
+                            result = process_and_display(q.text)
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": result.get("output", ""),
+                                "pattern": result.get("pattern"),
+                                "heuristic": result.get("heuristic"),
+                                "steps": result.get("intermediate_steps", []),
+                                "is_continuation": result.get("is_continuation", False),
+                            })
+                            st.rerun()
 
-        cols = st.columns(2)
-        for i, p in enumerate(exam_context.detected_patterns[:4]):
-            example = pattern_examples.get(p.name, f"Practice {p.name} problem")
-            with cols[i % 2]:
-                if st.button(p.name.replace('_', ' ').title(), key=f"pattern_{i}", use_container_width=True):
-                    st.session_state.messages.append({"role": "user", "content": example})
-                    result = process_and_display(example)
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": result.get("output", ""),
-                        "pattern": result.get("pattern"),
-                        "heuristic": result.get("heuristic"),
-                        "steps": result.get("intermediate_steps", []),
-                        "is_continuation": result.get("is_continuation", False),
-                    })
-                    st.rerun()
+        else:
+            # No questions extracted, show pattern-based view
+            st.markdown("### Your Exam Focus Areas")
+            st.markdown("Based on your uploaded materials, focus on these patterns:")
+
+            cols = st.columns(min(3, len(exam_context.detected_patterns[:3])))
+            for i, p in enumerate(exam_context.detected_patterns[:3]):
+                with cols[i]:
+                    st.markdown(f"**{p.name.replace('_', ' ').title()}**")
+                    st.caption(p.priority)
+
+            st.markdown("---")
+            st.markdown("### Practice These Patterns")
+
+            pattern_examples = {
+                "optimization": "Find the dimensions of a rectangle with perimeter 100 that has maximum area",
+                "constrained_optimization": "Maximize f(x,y) = xy subject to x + 2y = 10",
+                "related_rates": "A ladder 10 ft long rests against a wall. The bottom slides away at 2 ft/s. How fast is the top sliding down when the bottom is 6 ft from the wall?",
+                "derivatives": "Find the derivative of ln(x^2 + 1)",
+                "integration": "Find the integral of x*e^x dx",
+                "limits": "Find the limit of (sin x)/x as x approaches 0",
+            }
+
+            cols = st.columns(2)
+            for i, p in enumerate(exam_context.detected_patterns[:4]):
+                example = pattern_examples.get(p.name, f"Practice {p.name} problem")
+                with cols[i % 2]:
+                    if st.button(p.name.replace('_', ' ').title(), key=f"pattern_{i}", use_container_width=True):
+                        st.session_state.messages.append({"role": "user", "content": example})
+                        result = process_and_display(example)
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": result.get("output", ""),
+                            "pattern": result.get("pattern"),
+                            "heuristic": result.get("heuristic"),
+                            "steps": result.get("intermediate_steps", []),
+                            "is_continuation": result.get("is_continuation", False),
+                        })
+                        st.rerun()
 
     else:
         # No context - show general welcome

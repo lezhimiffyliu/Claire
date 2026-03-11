@@ -2,10 +2,14 @@
 Exam Context Module - Analyzes course materials to detect exam patterns.
 
 This provides CONTEXT for guided practice, not a separate mode.
+Integrates with QuestionBank for problem extraction.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from question_bank import QuestionBank
 
 
 # Pattern keywords for detection
@@ -69,10 +73,21 @@ class ExamContext:
     material_names: list[str] = field(default_factory=list)  # File names
     detected_patterns: list[PatternInfo] = field(default_factory=list)
     total_chars: int = 0
+    question_bank: Optional["QuestionBank"] = None  # Extracted questions
 
     def has_context(self) -> bool:
         """Check if any materials have been loaded."""
         return len(self.materials) > 0
+
+    def has_questions(self) -> bool:
+        """Check if question bank has questions."""
+        return self.question_bank is not None and len(self.question_bank) > 0
+
+    def get_question_count(self) -> int:
+        """Get number of extracted questions."""
+        if self.question_bank:
+            return len(self.question_bank)
+        return 0
 
     def get_top_patterns(self, n: int = 3) -> list[PatternInfo]:
         """Get top N patterns by score."""
@@ -82,6 +97,12 @@ class ExamContext:
         """Get names of all detected patterns."""
         return [p.name for p in self.detected_patterns]
 
+    def get_questions_for_pattern(self, pattern: str) -> list:
+        """Get questions for a specific pattern."""
+        if self.question_bank:
+            return self.question_bank.get_by_pattern(pattern)
+        return []
+
     def format_for_prompt(self) -> str:
         """Format context for inclusion in agent prompt."""
         if not self.has_context():
@@ -89,6 +110,9 @@ class ExamContext:
 
         lines = ["[EXAM CONTEXT FROM UPLOADED MATERIALS]"]
         lines.append(f"Materials loaded: {len(self.materials)}")
+
+        if self.question_bank:
+            lines.append(f"Questions extracted: {len(self.question_bank)}")
 
         if self.detected_patterns:
             lines.append("Likely exam patterns (by frequency):")
@@ -173,3 +197,41 @@ def add_material(context: ExamContext, text: str, name: str = "pasted") -> ExamC
 def clear_context() -> ExamContext:
     """Return an empty context."""
     return ExamContext()
+
+
+def analyze_files(files: list[tuple[str, bytes]]) -> ExamContext:
+    """
+    Analyze uploaded files (supports PDF, TXT, MD).
+
+    Args:
+        files: List of (filename, file_bytes) tuples
+
+    Returns:
+        ExamContext with detected patterns and extracted questions
+    """
+    from question_bank import extract_text_from_file, build_question_bank
+
+    texts = []
+    names = []
+
+    # Extract text from each file
+    for filename, file_bytes in files:
+        try:
+            text = extract_text_from_file(file_bytes, filename)
+            texts.append(text)
+            names.append(filename)
+        except Exception as e:
+            print(f"Error processing {filename}: {e}")
+            continue
+
+    if not texts:
+        return ExamContext()
+
+    # Analyze patterns from text
+    context = analyze_materials(texts, names)
+
+    # Build question bank
+    question_bank = build_question_bank(files)
+    context.question_bank = question_bank
+
+    return context
