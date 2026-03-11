@@ -75,6 +75,12 @@ When you retrieve a heuristic:
 3. Point out the most common mistake for this pattern
 4. Guide the student to apply Step 1 to their specific problem
 
+=== EXAM CONTEXT ===
+
+If exam context is provided (from uploaded course materials), prioritize patterns
+that appear in the student's course materials. Mention when a problem type is
+"likely on your exam" based on the context.
+
 === LaTeX FORMATTING ===
 - Inline math: $x^2 + 1$
 - Display equations: $$\\frac{d}{dx}(x^2) = 2x$$
@@ -89,6 +95,9 @@ Respond in the same language as the student's question.
         self.user_level = "intermediate"
         self.current_pattern: Optional[str] = None
         self.current_heuristic: Optional[str] = None
+
+        # Exam context from uploaded materials
+        self.exam_context = None
 
         # LangChain components
         self.llm = None
@@ -312,9 +321,17 @@ Remember: Continue teaching, step by step."""
         # Extract key parts of heuristic for the prompt
         heuristic_summary = self._summarize_heuristic(heuristic)
 
+        # Check if this pattern is in exam context
+        exam_relevance = ""
+        if self.exam_context and self.exam_context.has_context():
+            exam_patterns = self.exam_context.get_pattern_names()
+            if pattern in exam_patterns:
+                exam_relevance = f"\n[EXAM RELEVANCE: This pattern ({pattern}) was detected in the student's course materials. Mention that this is likely exam content.]"
+
         return f"""[TEACHING MODE - DO NOT SOLVE DIRECTLY]
 
 DETECTED PATTERN: {pattern.replace('_', ' ').title()}
+{exam_relevance}
 
 HEURISTIC TEMPLATE (already loaded - do NOT call get_heuristic again):
 {heuristic_summary}
@@ -451,3 +468,30 @@ Tools: {len(self.tools) if self.tools else 0} loaded
             self.user_level = level
             return f"Level set to: {level}"
         return "Invalid level. Use: beginner, intermediate, or advanced"
+
+    def set_exam_context(self, context) -> None:
+        """Set exam context from analyzed course materials."""
+        self.exam_context = context
+
+    def clear_exam_context(self) -> None:
+        """Clear exam context."""
+        self.exam_context = None
+
+    def get_exam_patterns(self) -> list:
+        """Get patterns detected from exam context."""
+        if self.exam_context and self.exam_context.has_context():
+            return self.exam_context.detected_patterns
+        return []
+
+    def suggest_practice(self) -> Optional[str]:
+        """Suggest a pattern to practice based on exam context."""
+        if not self.exam_context or not self.exam_context.has_context():
+            return None
+
+        top_patterns = self.exam_context.get_top_patterns(3)
+        if not top_patterns:
+            return None
+
+        # Suggest the top pattern
+        top = top_patterns[0]
+        return f"Based on your course materials, **{top.name.replace('_', ' ').title()}** appears frequently. {top.priority}"
