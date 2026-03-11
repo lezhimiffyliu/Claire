@@ -1,169 +1,177 @@
-# ∫ Claire — Making Calculus Clear
+# Claire 2.0 — Calculus Exam Preparation Agent
 
-> An AI-powered Socratic calculus tutor built with LangChain ReAct agents, Claude Sonnet, and SymPy.
+> AI-powered exam prep that teaches problem-solving **patterns**, not just solutions.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![LangChain](https://img.shields.io/badge/LangChain-ReAct_Agent-green.svg)](https://langchain.com/)
 [![Claude](https://img.shields.io/badge/Claude-Sonnet-orange.svg)](https://www.anthropic.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-<!-- <p align="center">
-  <img src="docs/demo.gif" alt="Claire Demo" width="700"/>
-</p> -->
+## The Problem
 
-## 🎯 The Problem
+Most AI tutors work like this:
+```
+Student asks problem → AI gives answer
+```
 
-Traditional calculus tutoring tools fall into two extremes:
-- **Calculators** (Wolfram Alpha, Symbolab): Give answers instantly, but students don't learn
-- **Static tutorials**: Explain concepts, but can't adapt to individual questions
+This doesn't help students **learn**. On exam day, they're stuck.
 
-**Claire bridges this gap** — an AI tutor that *guides* students through problems using the Socratic method, never giving direct answers but asking the right questions to build understanding.
+**Claire works differently:**
+```
+Problem → Pattern Detection → Heuristic Template → Step-by-step Guidance
+```
 
-## ✨ Key Features
+Claire teaches **reusable solving strategies**, so students can tackle any problem of the same type.
+
+## Core Concept
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  "Maximize xy subject to x + 2y = 10"                   │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  Pattern: Constrained Optimization                       │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  Heuristic Template:                                     │
+│  1. Identify objective f(x,y) and constraint g(x,y)=c   │
+│  2. Set up Lagrange system: ∇f = λ∇g                    │
+│  3. Solve 3 equations for x, y, λ                       │
+│  4. Evaluate and compare                                │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  "Let's start with Step 1.                               │
+│   What is the objective function in your problem?"       │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Features
 
 | Feature | Description |
 |---------|-------------|
-| 🎓 **Socratic Teaching** | Guides with questions instead of giving answers |
-| 🧠 **ReAct Reasoning** | Visible thought process: Thought → Action → Observation |
-| 📐 **Symbolic Math** | Exact calculus via SymPy (derivatives, integrals, limits) |
-| 🎚️ **Adaptive Levels** | Beginner / Intermediate / Advanced difficulty |
-| 🌐 **Bilingual** | Responds in English or Chinese based on input |
+| **Pattern Detection** | Automatically classifies problems (optimization, related rates, etc.) |
+| **Heuristic Library** | Markdown-based solving templates for each pattern |
+| **Guided Teaching** | Step-by-step guidance with questions, not direct answers |
+| **SymPy Verification** | Exact symbolic math when computation is needed |
 
-## 🏗️ Architecture
+## Supported Patterns
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        User Interface                        │
-│              (Streamlit Web UI / CLI)                        │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    ClaireAgent                               │
-│         LangGraph ReAct Agent + Socratic Prompt              │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-          ┌───────────────┼───────────────┐
-          ▼               ▼               ▼
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│   Claude    │   │   SymPy     │   │  Knowledge  │
-│   Sonnet    │   │   Tools     │   │    Base     │
-│ (Reasoning) │   │   (Math)    │   │ (Concepts)  │
-└─────────────┘   └─────────────┘   └─────────────┘
-```
+| Pattern | Example |
+|---------|---------|
+| `optimization` | "Find dimensions that maximize area" |
+| `constrained_optimization` | "Maximize f(x,y) subject to g(x,y)=c" |
+| `related_rates` | "How fast is the water level rising?" |
+| `derivatives` | "Find the derivative of ln(x²+1)" |
+| `integration` | "Integrate x·eˣ dx" |
+| `limits` | "Find lim(sin x / x) as x→0" |
 
-### Why This Architecture?
-
-| Decision | Reasoning |
-|----------|-----------|
-| **LangChain ReAct** | Separates reasoning (LLM) from computation (tools) — more reliable than pure LLM math |
-| **Claude Sonnet** | Best balance of reasoning quality and cost; excels at following complex prompts |
-| **SymPy Tools** | Symbolic computation guarantees mathematical correctness |
-| **Socratic Prompt** | Pedagogically proven method; forces guidance over answers |
-
-## 🛠️ Tech Stack
-
-- **Agent Framework**: LangChain + LangGraph (ReAct pattern)
-- **LLM**: Claude Sonnet (Anthropic)
-- **Math Engine**: SymPy (symbolic computation)
-- **Web UI**: Streamlit
-- **Language**: Python 3.11+
-
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
-# Clone the repository
+# Clone
 git clone https://github.com/lezhimiffyliu/Claire.git
 cd Claire
 
-# Set up virtual environment
+# Setup
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
 
-# Configure API key
-echo "ANTHROPIC_API_KEY=your_key_here" > .env
+# Configure
+echo "ANTHROPIC_API_KEY=your_key" > .env
 
-# Run the app
+# Run
 streamlit run app.py
 ```
 
-## 💡 How It Works
-
-### Example Interaction
-
-**Student**: "What is the derivative of x³?"
-
-**Claire** (internally uses `calculate_derivative` tool, gets `3x²`):
-
-> Great question! You're looking at a polynomial function $f(x) = x^3$.
->
-> When we take derivatives of polynomial terms, there's a specific rule that applies here. Looking at the exponent 3, what operation do you think we need to perform with it?
->
-> 💡 Hint: Think about what the power rule says about exponents...
->
-> Give it a try and let me know what you get!
-
-### The ReAct Loop
+## Architecture
 
 ```
-Question: "Find the integral of sin(x)"
-    │
-    ▼
-Thought: "I should calculate this integral to guide the student"
-    │
-    ▼
-Action: calculate_integral("sin(x)", "x")
-    │
-    ▼
-Observation: "Result: -cos(x) + C"
-    │
-    ▼
-Thought: "Now I'll guide the student toward this answer"
-    │
-    ▼
-Final Answer: [Socratic guidance without revealing -cos(x)]
+Problem Input
+      │
+      ▼
+┌─────────────────┐
+│ detect_pattern()│  ← Rule-based keyword matching
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ get_heuristic() │  ← Load markdown template
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   ReAct Agent   │  ← Claude + SymPy tools
+│  (Teaching Mode)│
+└────────┬────────┘
+         │
+         ▼
+   Guided Response
+   (Pattern → Template → Steps → Questions)
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 claire/
-├── app.py              # Streamlit web interface
-├── main.py             # CLI entry point
-├── claire_agent.py     # LangChain ReAct agent core
-├── sympy_tools.py      # @tool decorated math functions
-├── knowledge_loader.py # Embedded calculus knowledge base
-├── requirements.txt    # Dependencies
-└── tests/              # Unit tests (pytest)
+├── app.py              # Streamlit web UI
+├── claire_agent.py     # ReAct agent with teaching prompt
+├── pattern_tools.py    # Pattern detection + heuristic retrieval
+├── sympy_tools.py      # SymPy math tools
+├── heuristics/         # Markdown solving templates
+│   ├── optimization.md
+│   ├── constrained_optimization.md
+│   ├── related_rates.md
+│   ├── derivatives.md
+│   ├── integration.md
+│   └── limits.md
+└── main.py             # CLI entry point
 ```
 
-## 🎓 Learning Outcomes
+## Example Interaction
 
-Building Claire taught me:
+**Student:** "Find the maximum area of a rectangle with perimeter 20"
 
-1. **LLM Agent Design** — How to architect systems where LLMs reason and tools execute
-2. **Prompt Engineering** — Crafting prompts that enforce specific behaviors (Socratic method)
-3. **Symbolic Math** — Integrating SymPy for reliable mathematical computation
-4. **Tool Abstraction** — Designing clean interfaces between LLM reasoning and external tools
+**Claire:**
+> **Pattern:** Optimization
+>
+> **Heuristic Template:**
+> - Set up objective function to maximize
+> - Find derivative, set equal to zero
+> - Solve for critical points
+> - Use second derivative test
+>
+> **Let's Begin:**
+> We need to set up our objective function first. Let's call the sides x and y.
+>
+> **Your Turn:**
+> What expression represents the area A in terms of x and y?
 
-## 📈 Future Roadmap
+**Student:** "A = xy"
 
-- [ ] Multi-step problem solving with memory
-- [ ] Step-by-step solution visualization
-- [ ] Practice problem generation
-- [ ] Learning progress tracking
-- [ ] PDF export of solutions
+**Claire:**
+> Good! Now we need to use the constraint. The perimeter is 20, so 2x + 2y = 20.
+>
+> **Your Turn:**
+> Can you solve for y in terms of x, so we can write A as a function of one variable?
 
-## 📄 License
+## Tech Stack
 
-MIT License — see [LICENSE](LICENSE) for details.
+- **Agent**: LangChain + LangGraph (ReAct)
+- **LLM**: Claude Sonnet
+- **Math**: SymPy
+- **UI**: Streamlit
+- **Language**: Python 3.11+
+
+## License
+
+MIT License
 
 ---
 
-<p align="center">
-  <b>Claire — Making Calculus Clear</b><br>
-  Built using LangChain, Claude, and SymPy
-</p>
+**Claire 2.0** — Teaching patterns, not just solutions.

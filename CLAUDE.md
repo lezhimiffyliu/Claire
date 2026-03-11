@@ -1,117 +1,133 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-Claire ("Making Calculus Clear") is an AI-powered calculus teaching assistant built on LangChain's ReAct agent framework. It uses Claude Sonnet for reasoning and SymPy for symbolic mathematics, providing Socratic-style tutoring through both Web UI and CLI interfaces.
+Claire 2.0 is an AI-powered calculus **exam preparation agent**. It teaches problem-solving **patterns** and **heuristics**, not just solutions. Built on LangChain ReAct agents with Claude Sonnet and SymPy.
+
+**Key difference from generic tutors:**
+- Generic tutor: problem → answer
+- Claire: problem → pattern → heuristic → guided steps → understanding
 
 ## Commands
 
-### Running the Application
 ```bash
-# Activate virtual environment first
+# Activate virtual environment
 source venv/bin/activate
 
-# Run Web UI (recommended)
+# Run Web UI
 streamlit run app.py
 
-# Or run CLI
+# Run CLI
 python3 main.py
 ```
-
-### Installing Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### Configuration
-Edit `.env` file to configure:
-- `ANTHROPIC_API_KEY` - Required for Claire's AI capabilities (Claude Sonnet)
 
 ## Architecture
 
 ```
-User Input → main.py (CLI) / app.py (Web)
-                    ↓
-            ClaireAgent.process_query()
-                    ↓
-            System Command Check
-                    ↓
-            AgentExecutor.invoke()
-                    ↓
-            ┌───────────────────────────────────────┐
-            │         ReAct Loop                    │
-            │  Thought → Action → Observation → ... │
-            └───────────────────────────────────────┘
-                    ↓                    ↓
-            LangChain Tools          Claude Reasoning
-            (SymPy-based)           (Socratic guidance)
-                    ↓
-            Final Response (dict)
-            {output, intermediate_steps}
+Problem Input
+      │
+      ▼
+detect_pattern()        ← Rule-based classification
+      │
+      ▼
+get_heuristic()         ← Load markdown template
+      │
+      ▼
+ReAct Agent             ← Teaching-first prompt
+      │
+      ▼
+Guided Response
+(Pattern → Heuristic → Step 1 → Question)
 ```
 
-### Core Files
+## Core Files
 
-- **app.py** - Streamlit web UI with thought visualization
-- **main.py** - CLI entry point
-- **claire_agent.py** - LangChain ReAct agent, Socratic prompt, session management
-- **sympy_tools.py** - LangChain @tool decorated SymPy functions
-- **sympy_backup.py** - Legacy SymPy engine (reference)
-- **knowledge_loader.py** - Embedded knowledge base (fallback)
+| File | Purpose |
+|------|---------|
+| `claire_agent.py` | ReAct agent with teaching-first prompt |
+| `pattern_tools.py` | Pattern detection + heuristic retrieval |
+| `sympy_tools.py` | SymPy math tools (5 tools) |
+| `heuristics/*.md` | Markdown solving templates |
+| `app.py` | Streamlit web UI |
+| `main.py` | CLI entry point |
 
-### LangChain Tools
+## Tools (6 total)
 
-Five math tools available to the ReAct agent:
+| Tool | Source | Purpose |
+|------|--------|---------|
+| `calculate_derivative` | sympy_tools.py | Differentiation |
+| `calculate_integral` | sympy_tools.py | Integration |
+| `calculate_limit` | sympy_tools.py | Limits |
+| `solve_equation` | sympy_tools.py | Equations |
+| `simplify_expression` | sympy_tools.py | Simplification |
+| `get_heuristic` | pattern_tools.py | Load solving template |
 
-| Tool | Function | Description |
-|------|----------|-------------|
-| `calculate_derivative` | `diff()` | Differentiate expressions |
-| `calculate_integral` | `integrate()` | Indefinite/definite integrals |
-| `calculate_limit` | `limit()` | Limits with direction support |
-| `solve_equation` | `solve()` | Solve equations for variables |
-| `simplify_expression` | `simplify()` | Algebraic simplification |
+## Pattern Detection
 
-### Agent Configuration
+`detect_pattern()` classifies problems into 6 types:
 
-```python
-AgentExecutor(
-    agent=create_react_agent(llm, tools, prompt),
-    tools=CLAIRE_TOOLS,
-    verbose=True,
-    handle_parsing_errors=True,
-    max_iterations=5,
-    return_intermediate_steps=True
-)
+| Pattern | Keywords |
+|---------|----------|
+| `optimization` | maximize, minimize, largest, smallest |
+| `constrained_optimization` | subject to, constraint, Lagrange |
+| `related_rates` | rate of change, how fast, per second |
+| `derivatives` | derivative, d/dx, differentiate |
+| `integration` | integral, antiderivative, ∫ |
+| `limits` | limit, approaches, L'Hopital |
+
+## Heuristic Files
+
+Located in `heuristics/` directory:
+
+```
+heuristics/
+├── optimization.md
+├── constrained_optimization.md
+├── related_rates.md
+├── derivatives.md
+├── integration.md
+└── limits.md
 ```
 
-### Socratic System Prompt
+Each file contains:
+- Pattern recognition tips
+- Decision tree
+- Solving template (numbered steps)
+- Common mistakes
 
-The agent is configured with a Socratic teaching prompt that:
-- Never gives direct numerical answers
-- Uses tools to verify calculations internally
-- Guides students with questions based on tool observations
-- Adapts language to student level (beginner/intermediate/advanced)
-- Responds in the same language as the student's question
+## Agent Behavior
+
+The system prompt enforces:
+
+1. **Show pattern first** - Always start with detected pattern
+2. **Show heuristic** - Present the solving template
+3. **Guide step by step** - Only guide through Step 1
+4. **Ask questions** - End with a question for the student
+5. **Minimize tool calls** - Only use SymPy for verification
+6. **No direct answers** - Teach the method, not the result
 
 ## Key Implementation Details
 
 - **LLM**: Claude Sonnet via `langchain-anthropic`
-- **Session history**: Last 10 messages in `ClaireAgent.conversation_history`
-- **Return type**: `process_query()` returns `dict` with `output` and `intermediate_steps`
-- **System commands**: `help`, `examples`, `capabilities`, `status`, `level`, `clear`, `reset`, `/study`
-- **Guided Learning Mode** (`/study`): Default ON - enables Socratic teaching style
-- **Thought visualization**: Streamlit UI shows agent's thinking process via `st.status`
+- **Session history**: Last 20 messages
+- **Continuation detection**: `_is_student_answer()` detects follow-up answers
+- **Return type**: `process_query()` returns dict with `output`, `pattern`, `heuristic`, `is_continuation`
+
+## System Commands
+
+| Command | Action |
+|---------|--------|
+| `help` | Show help |
+| `patterns` | List available patterns |
+| `status` | System status |
+| `clear` | Clear conversation |
+| `level <level>` | Set beginner/intermediate/advanced |
 
 ## Dependencies
 
-Core LangChain stack:
-- `langchain>=0.2.0`
-- `langchain-core>=0.2.0`
-- `langchain-anthropic>=0.1.0`
-
-Math and utilities:
-- `sympy>=1.12`
-- `streamlit>=1.28.0`
-- `python-dotenv>=1.0.0`
+- `langchain`, `langchain-anthropic`, `langgraph`
+- `sympy`
+- `streamlit`
+- `python-dotenv`
