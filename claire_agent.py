@@ -1,6 +1,7 @@
 """
-Claire AI Agent Core - LangChain ReAct Agent Version
-Using Claude Sonnet as reasoning core, SymPy as math engine
+Claire 2.0 - Calculus Exam Preparation Agent
+
+Architecture: Pattern Detection → Heuristic Teaching → Guided Learning
 """
 
 import os
@@ -11,77 +12,87 @@ load_dotenv()
 
 
 class ClaireAgent:
-    """Claire AI Agent - Making Calculus Clear (LangChain ReAct Version)"""
+    """Claire 2.0 - Calculus Exam Preparation Agent"""
 
-    # Socratic System Prompt with ReAct instructions
-    SYSTEM_PROMPT = """You are Claire, a wise and patient Socratic calculus tutor.
-Your name comes from "Making Calculus Clear."
+    SYSTEM_PROMPT = """You are Claire, a calculus exam preparation teaching assistant.
+Your mission: Teach students to recognize problem PATTERNS and apply solving HEURISTICS.
 
-=== CORE IDENTITY ===
-You are NOT a calculator. You are a TEACHER. Your goal is to help students UNDERSTAND, not just get answers.
-Slogan: "Claire - Making Calculus Clear."
+=== CRITICAL RULES ===
 
-=== CRITICAL RULE: GUIDE, DON'T GIVE DIRECT ANSWERS ===
-When a student asks a math question:
-1. You MAY use tools to calculate the correct answer (for your reference)
-2. But you must NOT simply report the numerical result
-3. Instead, use the result to craft guiding questions that lead the student toward understanding
+1. You are a TEACHER, not a solver. NEVER jump directly to the final answer.
 
-=== LaTeX FORMATTING (MANDATORY) ===
-- For inline math, use single dollar signs: $x^2 + 1$
-- For display equations, use double dollar signs: $$\\frac{{d}}{{dx}}(x^2) = 2x$$
-- NEVER use parentheses ( ) or brackets [ ] as LaTeX delimiters
-- Use LaTeX commands: \\frac{{}}{{}}, \\sqrt{{}}, \\int, \\lim, \\sin, \\cos, etc.
+2. ALWAYS structure your response in this exact order:
+   a) Acknowledge the detected pattern
+   b) Present the relevant heuristic template
+   c) Guide the student through the FIRST step only
+   d) Ask the student a question to check understanding
 
-=== RESPONSE STRUCTURE ===
-Your final response to the student should:
-1. **Acknowledge** - Warmly acknowledge their question
-2. **Identify** - Name the relevant concept/technique (e.g., "This involves the chain rule...")
-3. **Guide** - Ask 1-2 thought-provoking questions to help them think about the approach
-4. **Hint** - Optionally provide a small hint (without revealing the answer)
-5. **Encourage** - End with encouragement to try and share their thinking
+3. DO NOT compute the final answer immediately. Guide step by step.
 
-=== EXAMPLE OF GOOD RESPONSE ===
-Student: "What is the derivative of x^3?"
+4. DO NOT use SymPy tools until the student needs verification or is stuck.
+   - First, teach the method
+   - Then, guide them to try it
+   - Only use tools to CHECK their work, not to do it for them
 
-Good response:
-"Great question! You're looking at a polynomial function $f(x) = x^3$.
+=== RESPONSE STRUCTURE (MANDATORY) ===
 
-When we take derivatives of polynomial terms, there's a specific rule that applies here.
-Looking at the exponent 3, what operation do you think we need to perform with it?
+Your response MUST follow this format:
 
-💡 Hint: Think about what the power rule says about exponents...
+**Pattern:** [pattern name from the detection]
 
-Give it a try and let me know what you get! I'm here to help if you get stuck."
+**Heuristic Template:**
+[Summarize the key steps from the heuristic - 3-5 bullet points max]
 
-=== STUDENT CONTEXT ===
-Student level: {user_level}
-Guided mode: {guided_mode}
+**Let's Begin:**
+[Guide the student through Step 1 of the template]
 
-Adjust your language complexity and hint specificity based on the student's level.
+**Your Turn:**
+[Ask the student to identify or compute something specific]
+
+=== TOOL USAGE POLICY ===
+
+- Call get_heuristic() ONCE at the start to load the template
+- DO NOT call SymPy tools (derivative, integral, etc.) unless:
+  - The student provides an answer that needs verification
+  - The student is stuck and needs a hint
+  - You are at the FINAL step and need to confirm the result
+- NEVER call the same tool twice for the same expression
+- Prefer teaching over computing
+
+=== SOCRATIC METHOD ===
+
+Instead of: "The derivative is 2x"
+Say: "What rule would you use to differentiate x²?"
+
+Instead of: "The maximum is at x=5"
+Say: "Now that we have f'(x)=0, what value of x solves this equation?"
+
+=== HEURISTIC TEACHING ===
+
+When you retrieve a heuristic:
+1. Summarize the decision tree (when to use which approach)
+2. List the key steps (not all details, just the template)
+3. Point out the most common mistake for this pattern
+4. Guide the student to apply Step 1 to their specific problem
+
+=== LaTeX FORMATTING ===
+- Inline math: $x^2 + 1$
+- Display equations: $$\\frac{d}{dx}(x^2) = 2x$$
 
 === LANGUAGE ===
-Respond in the same language as the student's question. If they ask in Chinese, respond in Chinese. If they ask in English, respond in English.
-
-=== TOOLS ===
-You have access to symbolic math tools. Use them to:
-- Verify your understanding of the problem
-- Get the correct answer so you can guide toward it
-- Check student work when they share their attempts
-
-Remember: Tools give you the ANSWER, but your job is to help students DISCOVER it themselves.
+Respond in the same language as the student's question.
 """
 
     def __init__(self):
-        """Initialize Claire Agent with LangChain components"""
+        """Initialize Claire 2.0 Agent"""
         self.conversation_history: List[Dict[str, str]] = []
-        self.user_level = "beginner"
-        self.guided_mode = True  # Default ON for Socratic teaching
+        self.user_level = "intermediate"
+        self.current_pattern: Optional[str] = None
+        self.current_heuristic: Optional[str] = None
 
-        # Initialize LangChain components
+        # LangChain components
         self.llm = None
         self.tools = None
-        self.agent = None
         self.executor = None
 
         self._initialize_agent()
@@ -89,270 +100,354 @@ Remember: Tools give you the ANSWER, but your job is to help students DISCOVER i
     def _initialize_agent(self):
         """Initialize LangChain ReAct agent with tools"""
         print("\n" + "=" * 60)
-        print("🤖 Claire AI Agent Initializing...")
+        print("Claire 2.0 - Exam Preparation Agent")
         print("=" * 60)
 
-        # Check for Anthropic API key
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
-            print("⚠️  ANTHROPIC_API_KEY not found in environment")
-            print("   Please add it to your .env file")
-            print("   Claire will have limited functionality")
+            print("ANTHROPIC_API_KEY not found in environment")
+            print("Please add it to your .env file")
             return
 
         try:
-            # Import LangChain components (LangChain 1.x uses langgraph)
             from langchain_anthropic import ChatAnthropic
             from langgraph.prebuilt import create_react_agent
 
-            # Import our custom tools
+            # Import tools
             from sympy_tools import CLAIRE_TOOLS
+            from pattern_tools import PATTERN_TOOLS
 
-            # Initialize Claude Sonnet
+            # Initialize Claude
             self.llm = ChatAnthropic(
                 model="claude-sonnet-4-20250514",
                 api_key=api_key,
                 temperature=0.7,
-                max_tokens=1024,
+                max_tokens=2048,
             )
-            print("✅ AI Brain: READY (Claude Sonnet)")
+            print("AI Engine: Claude Sonnet")
 
-            # Set up tools
-            self.tools = CLAIRE_TOOLS
-            print(f"✅ Math Tools: READY ({len(self.tools)} tools loaded)")
+            # Combine all tools
+            self.tools = CLAIRE_TOOLS + PATTERN_TOOLS
+            print(f"Tools loaded: {len(self.tools)}")
+            for tool in self.tools:
+                print(f"  - {tool.name}")
 
-            # Create ReAct agent using langgraph (LangChain 1.x)
-            # The system prompt is passed via the 'prompt' parameter
+            # Create ReAct agent
             self.executor = create_react_agent(
-                model=self.llm, tools=self.tools, prompt=self.SYSTEM_PROMPT
+                model=self.llm,
+                tools=self.tools,
+                prompt=self.SYSTEM_PROMPT
             )
-            print("✅ ReAct Agent: READY")
+            print("ReAct Agent: Ready")
 
         except ImportError as e:
-            print(f"⚠️  Missing dependency: {e}")
-            print("   Run: pip install -r requirements.txt")
+            print(f"Missing dependency: {e}")
+            print("Run: pip install -r requirements.txt")
         except Exception as e:
-            print(f"❌ Agent initialization error: {e}")
+            print(f"Initialization error: {e}")
 
         print("=" * 60)
 
+    def _is_student_answer(self, user_input: str) -> bool:
+        """
+        Detect if user input is a student answer to a previous question,
+        rather than a new problem.
+        """
+        text = user_input.strip().lower()
+
+        # If no conversation history, it's a new question
+        if not self.conversation_history:
+            return False
+
+        # If no current pattern, it's a new question
+        if not self.current_pattern:
+            return False
+
+        # Short responses are likely answers
+        if len(text) < 100:
+            return True
+
+        # Starts with answer-like words
+        answer_starters = ['yes', 'no', 'i think', 'the answer', 'it is', 'that would be',
+                          'so', 'because', 'since', 'we get', 'this gives']
+        if any(text.startswith(s) for s in answer_starters):
+            return True
+
+        # Does NOT start with question words (likely an answer)
+        question_starters = ['what', 'how', 'why', 'find', 'calculate', 'solve',
+                            'compute', 'determine', 'evaluate', 'prove', 'show',
+                            'maximize', 'minimize', 'integrate', 'differentiate']
+        if not any(text.startswith(q) for q in question_starters):
+            # Short-ish text without question words = likely answer
+            if len(text) < 200:
+                return True
+
+        return False
+
     def process_query(self, user_input: str) -> Dict[str, Any]:
         """
-        Process user input through ReAct agent.
-
-        Args:
-            user_input: The user's question or command
+        Process user input through the exam preparation agent.
 
         Returns:
-            Dict with keys:
-            - 'output': Final response string
-            - 'intermediate_steps': List of (AgentAction, observation) tuples
+            Dict with 'output', 'intermediate_steps', 'pattern', 'heuristic'
         """
         # Check system commands first
         system_response = self._check_system_commands(user_input)
         if system_response:
-            self.conversation_history.append({"role": "user", "content": user_input})
-            self.conversation_history.append(
-                {"role": "assistant", "content": system_response}
-            )
-            return {"output": system_response, "intermediate_steps": []}
+            self._add_to_history(user_input, system_response)
+            return {
+                "output": system_response,
+                "intermediate_steps": [],
+                "pattern": None,
+                "heuristic": None
+            }
 
-        # If agent not initialized, return error
         if not self.executor:
             error_msg = (
-                "⚠️ Claire is not fully initialized. "
-                "Please add ANTHROPIC_API_KEY to your .env file and restart."
+                "Claire is not initialized. "
+                "Please add ANTHROPIC_API_KEY to your .env file."
             )
-            return {"output": error_msg, "intermediate_steps": []}
+            return {
+                "output": error_msg,
+                "intermediate_steps": [],
+                "pattern": None,
+                "heuristic": None
+            }
 
-        # Invoke the agent (langgraph API)
         try:
-            # Add context about student level and guided mode to the query
-            context_info = f"\n[Student level: {self.user_level}, Guided mode: {'ON' if self.guided_mode else 'OFF'}]"
-            enhanced_input = user_input + context_info
+            from pattern_tools import detect_pattern, get_heuristic
 
-            # Invoke using langgraph's message-based API
-            from langchain_core.messages import HumanMessage
+            # Check if this is a student answer or a new question
+            is_continuation = self._is_student_answer(user_input)
 
-            result = self.executor.invoke(
-                {"messages": [HumanMessage(content=enhanced_input)]}
-            )
+            if is_continuation and self.current_pattern and self.current_heuristic:
+                # Continue with existing pattern - don't re-detect
+                detected_pattern = self.current_pattern
+                heuristic_content = self.current_heuristic
 
-            # Extract the final response from langgraph result
-            messages = result.get("messages", [])
+                # Build continuation input
+                enhanced_input = self._build_continuation_input(user_input)
+            else:
+                # New question - detect pattern and load heuristic
+                is_continuation = False
+                detected_pattern = detect_pattern(user_input)
+                self.current_pattern = detected_pattern
+
+                heuristic_content = get_heuristic.invoke({"pattern": detected_pattern})
+                self.current_heuristic = heuristic_content
+
+                # Build teaching input
+                enhanced_input = self._build_teaching_input(
+                    user_input, detected_pattern, heuristic_content
+                )
+
+            # Step 4: Invoke agent
+            from langchain_core.messages import HumanMessage, AIMessage
+
+            messages = []
+            for msg in self.conversation_history:
+                if msg["role"] == "user":
+                    messages.append(HumanMessage(content=msg["content"]))
+                else:
+                    messages.append(AIMessage(content=msg["content"]))
+
+            messages.append(HumanMessage(content=enhanced_input))
+
+            result = self.executor.invoke({"messages": messages})
+
+            # Extract response
             final_output = ""
             intermediate_steps = []
 
-            for msg in messages:
-                if hasattr(msg, "content") and msg.content:
-                    # The last AI message is the final output
-                    if hasattr(msg, "type") and msg.type == "ai":
+            for msg in result.get("messages", []):
+                if hasattr(msg, "type"):
+                    if msg.type == "ai" and msg.content:
                         final_output = msg.content
-                    # Tool messages are intermediate steps
-                    if hasattr(msg, "type") and msg.type == "tool":
+                    elif msg.type == "tool":
                         intermediate_steps.append(msg)
 
-            # Update conversation history
-            self.conversation_history.append({"role": "user", "content": user_input})
-            self.conversation_history.append(
-                {"role": "assistant", "content": final_output}
-            )
+            self._add_to_history(user_input, final_output)
 
-            # Trim history to last 10 messages
-            if len(self.conversation_history) > 10:
-                self.conversation_history = self.conversation_history[-10:]
-
-            return {"output": final_output, "intermediate_steps": intermediate_steps}
+            return {
+                "output": final_output,
+                "intermediate_steps": intermediate_steps,
+                "pattern": detected_pattern,
+                "heuristic": heuristic_content,
+                "is_continuation": is_continuation
+            }
 
         except Exception as e:
-            error_msg = f"❌ Error processing query: {str(e)}"
-            print(error_msg)
+            error_msg = f"Error: {str(e)}"
             import traceback
-
             traceback.print_exc()
-            return {"output": error_msg, "intermediate_steps": []}
+            return {
+                "output": error_msg,
+                "intermediate_steps": [],
+                "pattern": None,
+                "heuristic": None
+            }
+
+    def _build_continuation_input(self, user_input: str) -> str:
+        """Build input for when student is answering a previous question."""
+        return f"""[CONTINUATION - STUDENT IS ANSWERING]
+
+The student is responding to your previous question.
+Current pattern: {self.current_pattern.replace('_', ' ').title()}
+
+STUDENT'S RESPONSE:
+{user_input}
+
+YOUR TASK:
+1. Evaluate if the student's answer is correct
+2. If correct: Acknowledge briefly, then guide to the NEXT step
+3. If incorrect: Point out the specific error, give a hint
+4. Ask a follow-up question for the next step
+5. Still avoid giving final answers directly
+6. Only use SymPy tools if you need to verify their calculation
+
+Remember: Continue teaching, step by step."""
+
+    def _build_teaching_input(self, user_input: str, pattern: str, heuristic: str) -> str:
+        """Build input that enforces teaching behavior."""
+        # Extract key parts of heuristic for the prompt
+        heuristic_summary = self._summarize_heuristic(heuristic)
+
+        return f"""[TEACHING MODE - DO NOT SOLVE DIRECTLY]
+
+DETECTED PATTERN: {pattern.replace('_', ' ').title()}
+
+HEURISTIC TEMPLATE (already loaded - do NOT call get_heuristic again):
+{heuristic_summary}
+
+STUDENT'S PROBLEM:
+{user_input}
+
+STUDENT LEVEL: {self.user_level}
+
+YOUR TASK:
+1. Start your response with "**Pattern:** {pattern.replace('_', ' ').title()}"
+2. Show the heuristic template (summarized)
+3. Guide the student through Step 1 ONLY
+4. Ask them a question to check understanding
+5. DO NOT compute the final answer
+6. DO NOT use SymPy tools unless absolutely necessary for verification
+
+Remember: You are teaching the METHOD, not solving the problem."""
+
+    def _summarize_heuristic(self, heuristic: str) -> str:
+        """Extract the solving template section from heuristic."""
+        lines = heuristic.split('\n')
+        in_template = False
+        template_lines = []
+
+        for line in lines:
+            if 'Solving Template' in line or 'Template' in line:
+                in_template = True
+                continue
+            if in_template:
+                if line.startswith('##') and 'Template' not in line:
+                    break
+                if line.strip():
+                    template_lines.append(line)
+
+        if template_lines:
+            return '\n'.join(template_lines[:10])  # Limit to first 10 lines
+
+        # Fallback: return first 15 lines
+        return '\n'.join(lines[:15])
+
+    def _add_to_history(self, user_input: str, response: str):
+        """Add exchange to conversation history."""
+        self.conversation_history.append({"role": "user", "content": user_input})
+        self.conversation_history.append({"role": "assistant", "content": response})
+
+        if len(self.conversation_history) > 20:
+            self.conversation_history = self.conversation_history[-20:]
 
     def _check_system_commands(self, user_input: str) -> Optional[str]:
-        """Check and handle system commands"""
-        user_input_lower = user_input.lower().strip()
+        """Handle system commands."""
+        cmd = user_input.lower().strip()
 
-        # Simple string responses
-        if user_input_lower == "clear":
+        if cmd == "clear":
             self.conversation_history = []
-            return "Conversation history cleared."
+            return "Conversation cleared."
 
-        if user_input_lower == "reset":
+        if cmd == "reset":
             self.conversation_history = []
-            self.user_level = "beginner"
-            self.guided_mode = True
-            return "Agent reset to initial state."
+            self.user_level = "intermediate"
+            self.current_pattern = None
+            self.current_heuristic = None
+            return "Agent reset."
 
-        # Commands that call methods
-        if user_input_lower == "help":
+        if cmd == "help":
             return self._show_help()
 
-        if user_input_lower == "examples":
-            return self._show_examples()
+        if cmd == "patterns":
+            return self._show_patterns()
 
-        if user_input_lower == "capabilities":
-            return self._show_capabilities()
-
-        if user_input_lower == "status":
+        if cmd == "status":
             return self._show_status()
 
-        if user_input_lower == "/study":
-            return self._toggle_guided_mode()
-
-        # Level commands
-        if user_input_lower.startswith("level "):
-            level = user_input_lower.split("level ")[1].strip()
+        if cmd.startswith("level "):
+            level = cmd.split("level ")[1].strip()
             return self._set_level(level)
 
         return None
 
-    def _toggle_guided_mode(self) -> str:
-        """Toggle guided learning mode"""
-        self.guided_mode = not self.guided_mode
-        if self.guided_mode:
-            return """📖 **Guided Learning Mode: ON**
-
-I'll now guide you through problems using the Socratic method instead of giving direct answers.
-This approach helps you develop deeper understanding and independent problem-solving skills.
-
-When you're ready, ask me a math question!"""
-        else:
-            return """📖 **Guided Learning Mode: OFF**
-
-Switched back to direct mode. I'll provide more straightforward explanations.
-Note: I'll still focus on teaching, but with more explicit guidance."""
-
     def _show_help(self) -> str:
-        """Show help information"""
-        return """**Claire Help Commands:**
+        return """**Claire 2.0 - Exam Preparation Agent**
+
+**Commands:**
 - `help` - Show this help
-- `examples` - Show example questions
-- `capabilities` - Show what I can do
+- `patterns` - Show available problem patterns
 - `status` - Show system status
-- `clear` - Clear conversation history
-- `level [beginner|intermediate|advanced]` - Set your level
-- `/study` - Toggle guided learning mode (Socratic method)
+- `clear` - Clear conversation
+- `level [beginner|intermediate|advanced]` - Set difficulty
 
-**Claire - Making Calculus Clear** ✨
-Ask me anything about calculus!"""
+**How Claire teaches:**
+1. You enter a calculus problem
+2. Claire detects the problem pattern
+3. Claire shows you the solving heuristic
+4. Claire guides you through step by step
+5. You practice applying the method
 
-    def _show_examples(self) -> str:
-        """Show example questions"""
-        return """**Example Questions:**
+Claire will NOT give you the answer directly.
+Claire teaches you HOW to solve it yourself.
+"""
 
-📐 **Derivatives:**
-- What is the derivative of x^3 + 2x?
-- Find d/dx of sin(x)*cos(x)
-- Differentiate e^(2x)
+    def _show_patterns(self) -> str:
+        from pattern_tools import get_available_patterns
+        patterns = get_available_patterns()
 
-∫ **Integrals:**
-- Calculate the integral of x^2
-- What is ∫sin(x)dx?
-- Integrate 1/(1+x^2)
+        pattern_descriptions = {
+            "optimization": "Maximize/minimize without constraints",
+            "constrained_optimization": "Optimize with constraint equations (Lagrange)",
+            "related_rates": "Rates of change with respect to time",
+            "derivatives": "Differentiation (chain, product, quotient rules)",
+            "integration": "Antiderivatives and definite integrals",
+            "limits": "Limit evaluation and L'Hopital's rule",
+        }
 
-📊 **Limits:**
-- Find the limit of sin(x)/x as x approaches 0
-- What is lim(x→∞) of 1/x?
+        lines = ["**Available Problem Patterns:**\n"]
+        for p in patterns:
+            desc = pattern_descriptions.get(p, "")
+            lines.append(f"- **{p}**: {desc}")
 
-🔢 **Equations:**
-- Solve x^2 - 5x + 6 = 0
-- Find the roots of x^3 - 8
-
-💡 **Concepts:**
-- What is the chain rule?
-- Explain integration by parts
-- What is L'Hôpital's rule?
-
-**Claire - Making Calculus Clear** ✨"""
-
-    def _show_capabilities(self) -> str:
-        """Show capabilities"""
-        caps = []
-
-        if self.executor:
-            caps.append("✅ ReAct Agent: Active (Claude Sonnet)")
-            caps.append(
-                f"✅ Math Tools: {len(self.tools) if self.tools else 0} tools available"
-            )
-            caps.append("   - calculate_derivative")
-            caps.append("   - calculate_integral")
-            caps.append("   - calculate_limit")
-            caps.append("   - solve_equation")
-            caps.append("   - simplify_expression")
-        else:
-            caps.append("⚠️  Agent: Not initialized (missing API key)")
-
-        caps.append("\n**Teaching Modes:**")
-        caps.append(f"📖 Guided Learning: {'ON' if self.guided_mode else 'OFF'}")
-        caps.append(f"📊 Student Level: {self.user_level}")
-
-        return "\n".join(caps)
+        return "\n".join(lines)
 
     def _show_status(self) -> str:
-        """Show system status"""
-        status = [
-            "**Claire System Status**",
-            "",
-            f"Student Level: {self.user_level}",
-            f"Guided Mode: {'ON 📖' if self.guided_mode else 'OFF'}",
-            f"Conversation History: {len(self.conversation_history)} messages",
-            "",
-            "**Backend:**",
-            f"AI Engine: {'Claude Sonnet ✅' if self.llm else 'Not initialized ⚠️'}",
-            f"Math Tools: {len(self.tools) if self.tools else 0} loaded",
-            f"ReAct Agent: {'Active ✅' if self.executor else 'Inactive ⚠️'}",
-            "",
-            "**Claire - Making Calculus Clear** ✨",
-        ]
-        return "\n".join(status)
+        return f"""**Claire 2.0 Status**
+
+Student Level: {self.user_level}
+Current Pattern: {self.current_pattern or "None"}
+History: {len(self.conversation_history)} messages
+
+AI Engine: {"Ready" if self.llm else "Not initialized"}
+Tools: {len(self.tools) if self.tools else 0} loaded
+"""
 
     def _set_level(self, level: str) -> str:
-        """Set student level"""
         if level in ["beginner", "intermediate", "advanced"]:
             self.user_level = level
-            return f"✅ Student level set to: {level}"
-        return "❌ Invalid level. Use: beginner, intermediate, or advanced"
+            return f"Level set to: {level}"
+        return "Invalid level. Use: beginner, intermediate, or advanced"
