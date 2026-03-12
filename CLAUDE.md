@@ -4,11 +4,13 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-Claire 2.0 is an AI-powered calculus **exam preparation agent**. It teaches problem-solving **patterns** and **heuristics**, not just solutions. Built on LangChain ReAct agents with Claude Sonnet and SymPy.
+**Claire** is an AI calculus tutor that learns from students' course materials. It extracts problems from uploaded PDFs, detects patterns, and teaches solving strategies step-by-step.
 
-**Key difference from generic tutors:**
-- Generic tutor: problem → answer
-- Claire: problem → pattern → heuristic → guided steps → understanding
+**Key features:**
+- PDF upload → auto-extract problems with source citations
+- Smart labels: categories (Double Integral, Lagrange, etc.) + difficulty
+- Pattern-based teaching with heuristic templates
+- Socratic guidance, not direct answers
 
 ## Commands
 
@@ -19,50 +21,83 @@ source venv/bin/activate
 # Run Web UI
 streamlit run app.py
 
-# Run CLI
+# Run tests
+pytest tests/
+
+# Run CLI (legacy)
 python3 main.py
 ```
 
 ## Architecture
 
 ```
-Problem Input
-      │
-      ▼
-detect_pattern()        ← Rule-based classification
-      │
-      ▼
-get_heuristic()         ← Load markdown template
-      │
-      ▼
-ReAct Agent             ← Teaching-first prompt
-      │
-      ▼
-Guided Response
-(Pattern → Heuristic → Step 1 → Question)
+PDF Upload
+     │
+     ▼
+┌─────────────────┐
+│ question_bank.py│  ← Extract problems, detect categories/difficulty
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ exam_context.py │  ← Analyze materials, build question bank
+└────────┬────────┘
+         │
+         ▼
+User selects problem
+         │
+         ▼
+┌─────────────────┐
+│ detect_pattern()│  ← Classify problem type
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ get_heuristic() │  ← Load solving template
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   ReAct Agent   │  ← Claude + SymPy tools
+└────────┬────────┘
+         │
+         ▼
+   Guided Response
 ```
 
 ## Core Files
 
 | File | Purpose |
 |------|---------|
-| `claire_agent.py` | ReAct agent with teaching-first prompt |
+| `app.py` | Streamlit web UI with problem browser |
+| `claire_agent.py` | ReAct agent with teaching prompt |
+| `question_bank.py` | Problem extraction, categories, difficulty |
+| `exam_context.py` | Course material analysis |
 | `pattern_tools.py` | Pattern detection + heuristic retrieval |
-| `sympy_tools.py` | SymPy math tools (5 tools) |
+| `sympy_tools.py` | SymPy math tools |
 | `heuristics/*.md` | Markdown solving templates |
-| `app.py` | Streamlit web UI |
-| `main.py` | CLI entry point |
 
-## Tools (6 total)
+## Question Bank
 
-| Tool | Source | Purpose |
-|------|--------|---------|
-| `calculate_derivative` | sympy_tools.py | Differentiation |
-| `calculate_integral` | sympy_tools.py | Integration |
-| `calculate_limit` | sympy_tools.py | Limits |
-| `solve_equation` | sympy_tools.py | Equations |
-| `simplify_expression` | sympy_tools.py | Simplification |
-| `get_heuristic` | pattern_tools.py | Load solving template |
+`question_bank.py` handles:
+
+- **PDF extraction**: PyMuPDF for text extraction
+- **Problem parsing**: Regex patterns for "Problem 1", "Q2", etc.
+- **Category detection**: Auto-detect topics like "Double Integral", "Lagrange Multipliers"
+- **Difficulty estimation**: Easy/Medium/Hard based on text analysis
+
+Key class:
+```python
+@dataclass
+class Question:
+    id: str                 # Hash ID
+    text: str               # Full problem text
+    source: str             # Filename
+    problem_id: str         # "Problem 1", "Q2"
+    pattern: str            # optimization, integration, etc.
+    categories: list        # ["Double Integral", "Polar Coordinates"]
+    difficulty: str         # easy, medium, hard
+```
 
 ## Pattern Detection
 
@@ -75,23 +110,23 @@ Guided Response
 | `related_rates` | rate of change, how fast, per second |
 | `derivatives` | derivative, d/dx, differentiate |
 | `integration` | integral, antiderivative, ∫ |
-| `limits` | limit, approaches, L'Hopital |
+| `limits` | limit, approaches, L'Hôpital |
+
+## Category Labels
+
+User-friendly labels detected from problem text:
+
+- Double Integral, Triple Integral
+- Polar Coordinates, Spherical Coordinates
+- Lagrange Multipliers
+- Chain Rule, Product Rule, Quotient Rule
+- Partial Derivatives, Gradient
+- Taylor Series, U-Substitution, Integration by Parts
+- And more...
 
 ## Heuristic Files
 
-Located in `heuristics/` directory:
-
-```
-heuristics/
-├── optimization.md
-├── constrained_optimization.md
-├── related_rates.md
-├── derivatives.md
-├── integration.md
-└── limits.md
-```
-
-Each file contains:
+Located in `heuristics/` directory. Each contains:
 - Pattern recognition tips
 - Decision tree
 - Solving template (numbered steps)
@@ -101,33 +136,30 @@ Each file contains:
 
 The system prompt enforces:
 
-1. **Show pattern first** - Always start with detected pattern
-2. **Show heuristic** - Present the solving template
-3. **Guide step by step** - Only guide through Step 1
-4. **Ask questions** - End with a question for the student
-5. **Minimize tool calls** - Only use SymPy for verification
-6. **No direct answers** - Teach the method, not the result
+1. **Use loaded materials** - Access problems directly, cite sources
+2. **Pattern teaching** - Explain problem type and strategy
+3. **Step-by-step guidance** - Guide through each step
+4. **Socratic questions** - Ask student to try each step
+5. **No direct answers** - Teach the method, not the result
+
+## UI Components
+
+- **Sidebar**: File upload, problem list with View buttons
+- **Problem dialog**: Full text, categories, difficulty, Practice button
+- **Chat**: Main conversation area
+- **IME handling**: JavaScript for Chinese input composition
 
 ## Key Implementation Details
 
 - **LLM**: Claude Sonnet via `langchain-anthropic`
+- **PDF**: PyMuPDF (`fitz`)
 - **Session history**: Last 20 messages
 - **Continuation detection**: `_is_student_answer()` detects follow-up answers
-- **Return type**: `process_query()` returns dict with `output`, `pattern`, `heuristic`, `is_continuation`
-
-## System Commands
-
-| Command | Action |
-|---------|--------|
-| `help` | Show help |
-| `patterns` | List available patterns |
-| `status` | System status |
-| `clear` | Clear conversation |
-| `level <level>` | Set beginner/intermediate/advanced |
 
 ## Dependencies
 
 - `langchain`, `langchain-anthropic`, `langgraph`
 - `sympy`
 - `streamlit`
+- `pymupdf`
 - `python-dotenv`

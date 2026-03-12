@@ -1,74 +1,41 @@
-# Claire 2.0 — Calculus Exam Preparation Agent
+# Claire — Making Calculus Clear
 
-> AI-powered exam prep that teaches problem-solving **patterns**, not just solutions.
+> Upload your course materials. Practice with AI guidance. Ace your exam.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![LangChain](https://img.shields.io/badge/LangChain-ReAct_Agent-green.svg)](https://langchain.com/)
 [![Claude](https://img.shields.io/badge/Claude-Sonnet-orange.svg)](https://www.anthropic.com/)
 
-## The Problem
+## What is Claire?
 
-Most AI tutors work like this:
-```
-Student asks problem → AI gives answer
-```
-
-This doesn't help students **learn**. On exam day, they're stuck.
-
-**Claire works differently:**
-```
-Problem → Pattern Detection → Heuristic Template → Step-by-step Guidance
-```
-
-Claire teaches **reusable solving strategies**, so students can tackle any problem of the same type.
-
-## Core Concept
+**Claire** is an AI calculus tutor that learns from *your* course materials.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  "Maximize xy subject to x + 2y = 10"                   │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│  Pattern: Constrained Optimization                       │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│  Heuristic Template:                                     │
-│  1. Identify objective f(x,y) and constraint g(x,y)=c   │
-│  2. Set up Lagrange system: ∇f = λ∇g                    │
-│  3. Solve 3 equations for x, y, λ                       │
-│  4. Evaluate and compare                                │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│  "Let's start with Step 1.                               │
-│   What is the objective function in your problem?"       │
-└─────────────────────────────────────────────────────────┘
+Upload past exams, notes, syllabus
+         │
+         ▼
+┌─────────────────────────────────┐
+│  Claire extracts problems       │
+│  Detects patterns & difficulty  │
+│  Links to solving strategies    │
+└─────────────────────────────────┘
+         │
+         ▼
+"Let's practice SP18 Midterm 2 Problem 5..."
 ```
+
+Unlike generic tutors, Claire knows exactly what's on *your* exam.
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Pattern Detection** | Automatically classifies problems (optimization, related rates, etc.) |
-| **Heuristic Library** | Markdown-based solving templates for each pattern |
-| **Guided Teaching** | Step-by-step guidance with questions, not direct answers |
-| **SymPy Verification** | Exact symbolic math when computation is needed |
-
-## Supported Patterns
-
-| Pattern | Example |
-|---------|---------|
-| `optimization` | "Find dimensions that maximize area" |
-| `constrained_optimization` | "Maximize f(x,y) subject to g(x,y)=c" |
-| `related_rates` | "How fast is the water level rising?" |
-| `derivatives` | "Find the derivative of ln(x²+1)" |
-| `integration` | "Integrate x·eˣ dx" |
-| `limits` | "Find lim(sin x / x) as x→0" |
+| **PDF Upload** | Upload past exams, practice sets, lecture notes |
+| **Smart Extraction** | Auto-extracts problems with source citations |
+| **Category Labels** | Double Integral, Lagrange Multipliers, Chain Rule, etc. |
+| **Difficulty Rating** | Easy / Medium / Hard based on problem analysis |
+| **Pattern Teaching** | Teaches reusable solving strategies, not just answers |
+| **Step-by-Step Guidance** | Socratic method — guides you through each step |
 
 ## Quick Start
 
@@ -89,84 +56,73 @@ echo "ANTHROPIC_API_KEY=your_key" > .env
 streamlit run app.py
 ```
 
-## Architecture
+## How It Works
+
+### 1. Upload Materials
+Upload your PDFs (past exams, practice problems, notes). Claire extracts all calculus problems.
+
+### 2. Browse Problems
+Each problem shows:
+- **Source**: "SP18 Midterm 2 Problem 5"
+- **Categories**: `Double Integral` `Polar Coordinates`
+- **Difficulty**: 🟢 Easy / 🟡 Medium / 🔴 Hard
+
+### 3. Practice with Guidance
+Ask Claire to help with any problem. She'll:
+1. Identify the problem type
+2. Explain the solving strategy
+3. Guide you step-by-step
+4. Ask you to try each step
 
 ```
-Problem Input
-      │
-      ▼
-┌─────────────────┐
-│ detect_pattern()│  ← Rule-based keyword matching
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ get_heuristic() │  ← Load markdown template
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   ReAct Agent   │  ← Claude + SymPy tools
-│  (Teaching Mode)│
-└────────┬────────┘
-         │
-         ▼
-   Guided Response
-   (Pattern → Template → Steps → Questions)
+You: "Let's do Problem 3"
+
+Claire: "This is from SP18 Midterm 2 — a constrained optimization problem.
+
+        We'll use Lagrange multipliers:
+        1. Identify f(x,y) and constraint g(x,y) = c
+        2. Set up ∇f = λ∇g
+        3. Solve the system
+
+        What's the objective function here?"
 ```
+
+## Supported Problem Types
+
+| Pattern | Topics |
+|---------|--------|
+| **Optimization** | Max/min, critical points, second derivative test |
+| **Constrained Optimization** | Lagrange multipliers, boundary analysis |
+| **Integration** | Double/triple integrals, polar/spherical coordinates |
+| **Derivatives** | Chain rule, partial derivatives, gradients |
+| **Related Rates** | Time-dependent problems |
+| **Limits** | L'Hôpital's rule, indeterminate forms |
 
 ## Project Structure
 
 ```
-claire/
+Claire/
 ├── app.py              # Streamlit web UI
 ├── claire_agent.py     # ReAct agent with teaching prompt
-├── pattern_tools.py    # Pattern detection + heuristic retrieval
-├── sympy_tools.py      # SymPy math tools
-├── heuristics/         # Markdown solving templates
+├── question_bank.py    # Problem extraction & classification
+├── exam_context.py     # Course material analysis
+├── pattern_tools.py    # Pattern detection + heuristics
+├── sympy_tools.py      # SymPy math verification
+├── heuristics/         # Solving strategy templates
 │   ├── optimization.md
 │   ├── constrained_optimization.md
-│   ├── related_rates.md
-│   ├── derivatives.md
 │   ├── integration.md
-│   └── limits.md
-└── main.py             # CLI entry point
+│   └── ...
+└── tests/
 ```
-
-## Example Interaction
-
-**Student:** "Find the maximum area of a rectangle with perimeter 20"
-
-**Claire:**
-> **Pattern:** Optimization
->
-> **Heuristic Template:**
-> - Set up objective function to maximize
-> - Find derivative, set equal to zero
-> - Solve for critical points
-> - Use second derivative test
->
-> **Let's Begin:**
-> We need to set up our objective function first. Let's call the sides x and y.
->
-> **Your Turn:**
-> What expression represents the area A in terms of x and y?
-
-**Student:** "A = xy"
-
-**Claire:**
-> Good! Now we need to use the constraint. The perimeter is 20, so 2x + 2y = 20.
->
-> **Your Turn:**
-> Can you solve for y in terms of x, so we can write A as a function of one variable?
 
 ## Tech Stack
 
 - **Agent**: LangChain + LangGraph (ReAct)
 - **LLM**: Claude Sonnet
 - **Math**: SymPy
+- **PDF**: PyMuPDF
 - **UI**: Streamlit
-- **Language**: Python 3.11+
 
 ## License
 
@@ -174,4 +130,4 @@ MIT License
 
 ---
 
-**Claire 2.0** — Teaching patterns, not just solutions.
+**Claire** — *Calculus Cram*
