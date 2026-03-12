@@ -1,7 +1,7 @@
 """
-Claire 2.0 - Calculus Exam Preparation Agent
+Claire - Making Calculus Clear
 
-Architecture: Pattern Detection → Heuristic Teaching → Guided Learning
+Exam prep agent: Pattern Detection → Heuristic Teaching → Guided Practice
 """
 
 import os
@@ -12,81 +12,29 @@ load_dotenv()
 
 
 class ClaireAgent:
-    """Claire 2.0 - Calculus Exam Preparation Agent"""
+    """Claire - Making Calculus Clear"""
 
-    SYSTEM_PROMPT = """You are Claire, a calculus exam preparation teaching assistant.
-Your mission: Teach students to recognize problem PATTERNS and apply solving HEURISTICS.
+    SYSTEM_PROMPT = """You are Claire, a calculus tutor.
 
-=== CRITICAL RULES ===
+IMPORTANT: When course materials are loaded, you have access to the FULL problem texts.
+When a student asks to work on a specific problem (e.g., "Problem 5", "Q3"), find it in the loaded materials and USE the actual problem text. Do NOT ask the student to provide the problem - you already have it.
 
-1. You are a TEACHER, not a solver. NEVER jump directly to the final answer.
+When teaching a problem:
+1. State the problem clearly (from materials if available)
+2. Briefly explain the problem type
+3. Explain the strategy
+4. Walk through steps, asking student to try each step
 
-2. ALWAYS structure your response in this exact order:
-   a) Acknowledge the detected pattern
-   b) Present the relevant heuristic template
-   c) Guide the student through the FIRST step only
-   d) Ask the student a question to check understanding
+Teaching style:
+- Be concise and clear
+- Use natural math teacher language
+- Never use words like "pattern", "heuristic", "AI", "system", "detected"
+- Don't give the final answer immediately - guide step by step
+- Cite the source when using problems from materials
 
-3. DO NOT compute the final answer immediately. Guide step by step.
+Math: Use $...$ for inline and $$...$$ for display equations.
 
-4. DO NOT use SymPy tools until the student needs verification or is stuck.
-   - First, teach the method
-   - Then, guide them to try it
-   - Only use tools to CHECK their work, not to do it for them
-
-=== RESPONSE STRUCTURE (MANDATORY) ===
-
-Your response MUST follow this format:
-
-**Pattern:** [pattern name from the detection]
-
-**Heuristic Template:**
-[Summarize the key steps from the heuristic - 3-5 bullet points max]
-
-**Let's Begin:**
-[Guide the student through Step 1 of the template]
-
-**Your Turn:**
-[Ask the student to identify or compute something specific]
-
-=== TOOL USAGE POLICY ===
-
-- Call get_heuristic() ONCE at the start to load the template
-- DO NOT call SymPy tools (derivative, integral, etc.) unless:
-  - The student provides an answer that needs verification
-  - The student is stuck and needs a hint
-  - You are at the FINAL step and need to confirm the result
-- NEVER call the same tool twice for the same expression
-- Prefer teaching over computing
-
-=== SOCRATIC METHOD ===
-
-Instead of: "The derivative is 2x"
-Say: "What rule would you use to differentiate x²?"
-
-Instead of: "The maximum is at x=5"
-Say: "Now that we have f'(x)=0, what value of x solves this equation?"
-
-=== HEURISTIC TEACHING ===
-
-When you retrieve a heuristic:
-1. Summarize the decision tree (when to use which approach)
-2. List the key steps (not all details, just the template)
-3. Point out the most common mistake for this pattern
-4. Guide the student to apply Step 1 to their specific problem
-
-=== EXAM CONTEXT ===
-
-If exam context is provided (from uploaded course materials), prioritize patterns
-that appear in the student's course materials. Mention when a problem type is
-"likely on your exam" based on the context.
-
-=== LaTeX FORMATTING ===
-- Inline math: $x^2 + 1$
-- Display equations: $$\\frac{d}{dx}(x^2) = 2x$$
-
-=== LANGUAGE ===
-Respond in the same language as the student's question.
+Respond in the same language as the student.
 """
 
     def __init__(self):
@@ -298,58 +246,77 @@ Respond in the same language as the student's question.
 
     def _build_continuation_input(self, user_input: str) -> str:
         """Build input for when student is answering a previous question."""
-        return f"""[CONTINUATION - STUDENT IS ANSWERING]
+        context_info = ""
+        if self.exam_context and self.exam_context.has_context():
+            context_info = self._format_exam_context()
 
-The student is responding to your previous question.
-Current pattern: {self.current_pattern.replace('_', ' ').title()}
-
-STUDENT'S RESPONSE:
-{user_input}
-
-YOUR TASK:
-1. Evaluate if the student's answer is correct
-2. If correct: Acknowledge briefly, then guide to the NEXT step
-3. If incorrect: Point out the specific error, give a hint
-4. Ask a follow-up question for the next step
-5. Still avoid giving final answers directly
-6. Only use SymPy tools if you need to verify their calculation
-
-Remember: Continue teaching, step by step."""
+        return f"""The student said: {user_input}
+{context_info}
+If this is an answer to your question: evaluate and guide to next step.
+If this is a new question or request: help them with it.
+Keep responses concise."""
 
     def _build_teaching_input(self, user_input: str, pattern: str, heuristic: str) -> str:
         """Build input that enforces teaching behavior."""
-        # Extract key parts of heuristic for the prompt
         heuristic_summary = self._summarize_heuristic(heuristic)
 
-        # Check if this pattern is in exam context
-        exam_relevance = ""
+        # Map internal pattern names to user-friendly problem types
+        problem_type_map = {
+            "optimization": "optimization (finding max/min)",
+            "constrained_optimization": "optimization with constraints",
+            "related_rates": "related rates",
+            "derivatives": "differentiation",
+            "integration": "integration",
+            "limits": "limits",
+        }
+        problem_type = problem_type_map.get(pattern, pattern.replace('_', ' '))
+
+        # Add exam context if available
+        context_info = ""
         if self.exam_context and self.exam_context.has_context():
-            exam_patterns = self.exam_context.get_pattern_names()
-            if pattern in exam_patterns:
-                exam_relevance = f"\n[EXAM RELEVANCE: This pattern ({pattern}) was detected in the student's course materials. Mention that this is likely exam content.]"
+            context_info = self._format_exam_context()
 
-        return f"""[TEACHING MODE - DO NOT SOLVE DIRECTLY]
+        return f"""{user_input}
+{context_info}
+[For your reference - do not mention these labels:
+This is a {problem_type} problem.
+Key steps: {heuristic_summary[:300]}]"""
 
-DETECTED PATTERN: {pattern.replace('_', ' ').title()}
-{exam_relevance}
+    def _format_exam_context(self) -> str:
+        """Format exam context for the prompt."""
+        if not self.exam_context:
+            return ""
 
-HEURISTIC TEMPLATE (already loaded - do NOT call get_heuristic again):
-{heuristic_summary}
+        lines = ["\n[COURSE MATERIALS - YOU HAVE ACCESS TO THESE PROBLEMS]"]
+        lines.append(f"Files: {', '.join(self.exam_context.material_names[:5])}")
 
-STUDENT'S PROBLEM:
-{user_input}
+        if self.exam_context.has_questions():
+            bank = self.exam_context.question_bank
+            lines.append(f"Total problems: {len(bank)}")
 
-STUDENT LEVEL: {self.user_level}
+            # Show ALL problems with FULL text and metadata
+            lines.append("\n=== PROBLEMS FROM STUDENT'S MATERIALS ===")
+            for i, q in enumerate(bank.questions):
+                source_cite = q.format_source()
+                # Include multiple ways to reference this problem
+                lines.append(f"\n[#{i+1}] {source_cite}")
+                lines.append(f"ID: {q.id} | Short: P{i+1} | {q.problem_id}")
+                if q.categories:
+                    lines.append(f"Topics: {', '.join(q.categories)}")
+                lines.append(f"Difficulty: {q.difficulty}")
+                lines.append(f"Problem text: {q.text}")
+                lines.append("---")
 
-YOUR TASK:
-1. Start your response with "**Pattern:** {pattern.replace('_', ' ').title()}"
-2. Show the heuristic template (summarized)
-3. Guide the student through Step 1 ONLY
-4. Ask them a question to check understanding
-5. DO NOT compute the final answer
-6. DO NOT use SymPy tools unless absolutely necessary for verification
+            # Quick reference guide
+            lines.append("\n=== QUICK REFERENCE ===")
+            lines.append("Students may refer to problems as:")
+            lines.append("- 'Problem 1', 'P1', '#1', 'the first problem'")
+            lines.append("- 'Sample 1 Problem 5', '18 Spring Problem 3'")
+            lines.append("- By topic: 'a Lagrange problem', 'double integral question'")
+            lines.append("Match their reference to the problems above and use the FULL text.")
 
-Remember: You are teaching the METHOD, not solving the problem."""
+        lines.append("\n[END MATERIALS]")
+        return "\n".join(lines)
 
     def _summarize_heuristic(self, heuristic: str) -> str:
         """Extract the solving template section from heuristic."""
@@ -412,24 +379,21 @@ Remember: You are teaching the METHOD, not solving the problem."""
         return None
 
     def _show_help(self) -> str:
-        return """**Claire 2.0 - Exam Preparation Agent**
+        return """**Claire** - Making Calculus Clear
 
 **Commands:**
 - `help` - Show this help
-- `patterns` - Show available problem patterns
+- `patterns` - Show problem types
 - `status` - Show system status
 - `clear` - Clear conversation
-- `level [beginner|intermediate|advanced]` - Set difficulty
 
-**How Claire teaches:**
-1. You enter a calculus problem
-2. Claire detects the problem pattern
-3. Claire shows you the solving heuristic
-4. Claire guides you through step by step
-5. You practice applying the method
+**How it works:**
+1. Upload your course materials (past exams, notes)
+2. Claire extracts problems and detects patterns
+3. Ask to practice any problem
+4. Claire guides you step by step
 
-Claire will NOT give you the answer directly.
-Claire teaches you HOW to solve it yourself.
+Claire teaches you HOW to solve, not just the answer.
 """
 
     def _show_patterns(self) -> str:

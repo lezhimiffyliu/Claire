@@ -24,6 +24,35 @@ def test_question_creation():
     assert q.heuristic_file == "heuristics/derivatives.md"
 
 
+def test_question_format_source():
+    """Test source citation formatting."""
+    q1 = Question(
+        id="",
+        text="Find the derivative",
+        source="SP18_Midterm_2.pdf",
+        pattern="derivatives",
+        problem_id="Problem 1"
+    )
+    assert q1.format_source() == "SP18 Midterm 2 Problem 1"
+
+    q2 = Question(
+        id="",
+        text="Evaluate integral",
+        source="exam.txt",
+        pattern="integration",
+        problem_id="Q3"
+    )
+    assert q2.format_source() == "exam Q3"
+
+    q3 = Question(
+        id="",
+        text="Find limit",
+        source="practice.pdf",
+        pattern="limits"
+    )
+    assert q3.format_source() == "practice"
+
+
 def test_question_bank_operations():
     """Test QuestionBank add and query operations."""
     bank = QuestionBank()
@@ -67,6 +96,9 @@ def test_extract_questions_from_text():
     patterns = [q.pattern for q in questions]
     # Should have detected some patterns
     assert any(p in patterns for p in ["derivatives", "integration", "limits"])
+    # Should have problem IDs
+    for q in questions:
+        assert q.problem_id.startswith("Problem ")
 
 
 def test_extract_questions_numbered_list():

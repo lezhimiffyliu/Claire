@@ -20,6 +20,38 @@ from pattern_tools import detect_pattern, PATTERNS
 # DATA STRUCTURES
 # ============================================================
 
+# User-friendly category names (mapped from internal patterns)
+CATEGORY_LABELS = {
+    "optimization": ["Optimization", "Max/Min"],
+    "constrained_optimization": ["Lagrange Multipliers", "Constrained Optimization"],
+    "related_rates": ["Related Rates"],
+    "derivatives": ["Derivatives", "Differentiation"],
+    "integration": ["Integration", "Integrals"],
+    "limits": ["Limits", "L'Hôpital's Rule"],
+}
+
+# Additional topic keywords to detect
+TOPIC_KEYWORDS = {
+    "Double Integral": ["double integral", "∬", "dxdy", "dydx", "iterated integral"],
+    "Triple Integral": ["triple integral", "∭", "dxdydz", "dzdydx"],
+    "Polar Coordinates": ["polar", "r dr", "dθ", "r²"],
+    "Spherical Coordinates": ["spherical", "ρ", "φ", "azimuthal"],
+    "Cylindrical Coordinates": ["cylindrical", "r dz"],
+    "Chain Rule": ["chain rule", "composite"],
+    "Product Rule": ["product rule"],
+    "Quotient Rule": ["quotient rule"],
+    "Partial Derivatives": ["partial derivative", "∂", "fx", "fy", "fxy"],
+    "Gradient": ["gradient", "∇f", "grad"],
+    "Directional Derivative": ["directional derivative"],
+    "Taylor Series": ["taylor", "maclaurin", "power series"],
+    "U-Substitution": ["u-sub", "substitution", "let u ="],
+    "Integration by Parts": ["by parts", "∫udv"],
+    "Surface Area": ["surface area"],
+    "Volume": ["volume", "solid of revolution"],
+    "Arc Length": ["arc length"],
+}
+
+
 @dataclass
 class Question:
     """A single calculus problem extracted from course materials."""
@@ -27,7 +59,9 @@ class Question:
     text: str                        # Problem text
     source: str                      # Source file name
     pattern: str                     # Detected pattern type
-    difficulty: str = "intermediate" # beginner/intermediate/advanced
+    problem_id: str = ""             # Problem identifier (e.g., "Problem 1", "Q2", "(a)")
+    difficulty: str = "medium"       # easy/medium/hard
+    categories: list = field(default_factory=list)  # User-friendly category labels
     heuristic_file: str = ""         # Path to heuristic .md file
     solution: Optional[str] = None   # Solution if available
     metadata: dict = field(default_factory=dict)  # Extra info
@@ -39,6 +73,87 @@ class Question:
         # Set heuristic file based on pattern
         if not self.heuristic_file and self.pattern in PATTERNS:
             self.heuristic_file = f"heuristics/{self.pattern}.md"
+        # Generate categories if not provided
+        if not self.categories:
+            self.categories = self._detect_categories()
+        # Estimate difficulty if not set
+        if self.difficulty == "medium":
+            self.difficulty = self._estimate_difficulty()
+
+    def _detect_categories(self) -> list:
+        """Detect user-friendly category labels from problem text."""
+        categories = []
+        text_lower = self.text.lower()
+
+        # Add pattern-based categories
+        if self.pattern in CATEGORY_LABELS:
+            categories.append(CATEGORY_LABELS[self.pattern][0])
+
+        # Detect additional topics
+        for topic, keywords in TOPIC_KEYWORDS.items():
+            if any(kw in text_lower for kw in keywords):
+                if topic not in categories:
+                    categories.append(topic)
+
+        return categories[:4]  # Limit to 4 labels
+
+    def _estimate_difficulty(self) -> str:
+        """Estimate difficulty based on problem characteristics."""
+        text_lower = self.text.lower()
+        score = 0
+
+        # Length factor
+        if len(self.text) > 300:
+            score += 1
+        if len(self.text) > 500:
+            score += 1
+
+        # Multi-step indicators
+        hard_indicators = [
+            "prove", "show that", "verify", "multiple", "combined",
+            "spherical", "triple", "taylor", "series expansion",
+            "partial fractions", "by parts"
+        ]
+        for indicator in hard_indicators:
+            if indicator in text_lower:
+                score += 1
+
+        # Easy indicators
+        easy_indicators = [
+            "find the derivative of", "evaluate", "compute",
+            "what is", "calculate"
+        ]
+        if any(ind in text_lower for ind in easy_indicators) and len(self.text) < 150:
+            score -= 1
+
+        if score >= 2:
+            return "hard"
+        elif score <= 0:
+            return "easy"
+        return "medium"
+
+    def format_source(self) -> str:
+        """Format a readable source citation like 'SP18 Midterm 2 Q2'."""
+        # Clean up filename to readable form
+        name = Path(self.source).stem  # Remove extension
+
+        # Common exam naming patterns
+        name = name.replace("_", " ").replace("-", " ")
+
+        # Add problem identifier if available
+        if self.problem_id:
+            return f"{name} {self.problem_id}"
+        return name
+
+    def get_short_id(self) -> str:
+        """Get a short identifier for quick reference."""
+        if self.problem_id:
+            # Extract just the number/letter
+            import re
+            match = re.search(r'(\d+|[a-z])', self.problem_id, re.I)
+            if match:
+                return f"P{match.group(1)}"
+        return f"#{self.id[:4]}"
 
 
 @dataclass
@@ -165,15 +280,26 @@ def extract_questions_from_text(text: str, source: str) -> list[Question]:
     seen_texts = set()  # Deduplicate
 
     # Try each pattern
-    for pattern in QUESTION_PATTERNS:
+    for pattern_idx, pattern in enumerate(QUESTION_PATTERNS):
         matches = re.findall(pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
 
         for match in matches:
-            # Extract question text (last group in match)
-            if isinstance(match, tuple):
+            # Extract problem identifier and question text
+            problem_id = ""
+            if isinstance(match, tuple) and len(match) >= 2:
+                # First group is the identifier (number or letter)
+                identifier = match[0]
                 q_text = match[-1].strip()
+
+                # Format problem_id based on pattern type
+                if pattern_idx == 0:  # Problem/Question/Exercise N
+                    problem_id = f"Problem {identifier}"
+                elif pattern_idx == 1:  # Numbered list (1. 2. 3.)
+                    problem_id = f"Q{identifier}"
+                elif pattern_idx == 2:  # Lettered ((a), (b), (c))
+                    problem_id = f"({identifier})"
             else:
-                q_text = match.strip()
+                q_text = match.strip() if isinstance(match, str) else str(match)
 
             # Clean up
             q_text = re.sub(r'\s+', ' ', q_text)
@@ -199,6 +325,7 @@ def extract_questions_from_text(text: str, source: str) -> list[Question]:
                 text=q_text,
                 source=source,
                 pattern=calc_pattern,
+                problem_id=problem_id,
             ))
 
     # If no structured questions found, try to split by double newlines
