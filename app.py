@@ -55,6 +55,8 @@ if "exam_context" not in st.session_state:
     st.session_state.exam_context = ExamContext()
 if "selected_problem" not in st.session_state:
     st.session_state.selected_problem = None
+if "pending_problem" not in st.session_state:
+    st.session_state.pending_problem = None
 
 
 # ============================================================
@@ -82,9 +84,10 @@ def show_problem_detail(question):
 
     st.markdown("---")
 
-    # Full problem text
+    # Full problem text with math rendering
     st.markdown("**Problem:**")
-    st.markdown(question.text)
+    formatted_text = question.get_formatted_text()
+    st.markdown(formatted_text)
 
     st.markdown("---")
 
@@ -92,7 +95,7 @@ def show_problem_detail(question):
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Practice this problem", use_container_width=True, type="primary"):
-            st.session_state.messages.append({"role": "user", "content": question.text})
+            st.session_state.pending_problem = question.text
             st.session_state.selected_problem = None
             st.rerun()
     with col2:
@@ -183,6 +186,24 @@ with st.sidebar:
 # ============================================================
 if st.session_state.selected_problem:
     show_problem_detail(st.session_state.selected_problem)
+
+# ============================================================
+# PROCESS PENDING PROBLEM FROM DIALOG
+# ============================================================
+if st.session_state.pending_problem:
+    problem_text = st.session_state.pending_problem
+    st.session_state.pending_problem = None
+
+    # Add user message
+    st.session_state.messages.append({"role": "user", "content": problem_text})
+
+    # Get agent response
+    with st.spinner(""):
+        result = agent.process_query(problem_text)
+
+    # Add assistant response
+    st.session_state.messages.append({"role": "assistant", "content": result["output"]})
+    st.rerun()
 
 
 # ============================================================

@@ -155,6 +155,54 @@ class Question:
                 return f"P{match.group(1)}"
         return f"#{self.id[:4]}"
 
+    def get_formatted_text(self) -> str:
+        """Get problem text with basic math formatting for display."""
+        return format_math_text(self.text)
+
+
+def format_math_text(text: str) -> str:
+    """Convert plain text math notation to LaTeX for display."""
+    import re
+
+    result = text
+
+    # Subscript patterns: gxx -> g_{xx}, f_x -> f_x (already ok)
+    # Match patterns like gxx, gyy, fxy, etc.
+    result = re.sub(r'\b([fghFGH])([xyz]{2,3})\b', r'$\1_{\2}$', result)
+
+    # Partial derivatives: ∂f/∂x
+    result = re.sub(r'∂([fghFGH])/∂([xyz])', r'$\\partial \1/\\partial \2$', result)
+
+    # Common function notations with parentheses: g(0,2) -> $g(0,2)$
+    # But be careful not to double-wrap
+
+    # Fractions in form a/b where a,b are simple
+    result = re.sub(r'(\d+)/(\d+)', r'$\\frac{\1}{\2}$', result)
+
+    # Greek letters
+    greek_map = {
+        'alpha': 'α', 'beta': 'β', 'gamma': 'γ', 'delta': 'δ',
+        'theta': 'θ', 'lambda': 'λ', 'pi': 'π', 'rho': 'ρ',
+        'sigma': 'σ', 'phi': 'φ', 'psi': 'ψ', 'omega': 'ω',
+    }
+
+    # Integral symbols
+    result = result.replace('∫∫∫', '$\\iiint$')
+    result = result.replace('∫∫', '$\\iint$')
+    result = result.replace('∫', '$\\int$')
+
+    # Partial symbol
+    result = result.replace('∂', '$\\partial$')
+
+    # Common superscripts: x^2, e^x
+    result = re.sub(r'\^(\d+)', r'^{\1}', result)
+    result = re.sub(r'\^([xyz])', r'^{\1}', result)
+
+    # Fix double dollar signs from multiple replacements
+    result = re.sub(r'\$\s*\$', ' ', result)
+
+    return result
+
 
 @dataclass
 class QuestionBank:
