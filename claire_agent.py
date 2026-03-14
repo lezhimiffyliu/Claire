@@ -14,7 +14,7 @@ load_dotenv()
 class ClaireAgent:
     """Claire - Making Calculus Clear"""
 
-    SYSTEM_PROMPT = """You are Claire, a calculus tutor.
+    SYSTEM_PROMPT_TEMPLATE = """You are Claire, a calculus tutor.
 
 IMPORTANT: When course materials are loaded, you have access to the FULL problem texts.
 When a student asks to work on a specific problem (e.g., "Problem 5", "Q3"), find it in the loaded materials and USE the actual problem text. Do NOT ask the student to provide the problem - you already have it.
@@ -46,6 +46,8 @@ Example flow for second derivative test:
 - [Student computes]
 - "Good! So D = -11. Based on the rules above, what type of point is this?"
 
+{level_instructions}
+
 Teaching style:
 - Be concise and clear
 - Use natural math teacher language
@@ -56,6 +58,36 @@ Math: Use $...$ for inline and $$...$$ for display equations.
 
 Respond in the same language as the student.
 """
+
+    LEVEL_INSTRUCTIONS = {
+        "beginner": """STUDENT LEVEL: BEGINNER — Foundations need work.
+- Use simple, everyday language. Avoid jargon; if you must use a term, define it immediately.
+- Be very explicit about each step — never skip steps or assume prior knowledge.
+- Use intuitive analogies and visual descriptions (e.g., "think of the derivative as the slope of the hill you're walking on").
+- Encourage frequently. Mistakes are learning opportunities — be patient and supportive.
+- Break problems into very small sub-steps (one operation per step).
+- Always restate what symbols mean (e.g., "f'(x), which means the derivative of f").""",
+
+        "intermediate": """STUDENT LEVEL: INTERMEDIATE — Has basics but calculus is shaky.
+- Reinforce method selection: explain WHY you pick a certain approach, not just how.
+- Point out common traps and mistakes for the problem type.
+- Still explain each step, but you can combine straightforward operations.
+- Ask the student to justify their choices ("Why did you pick u-substitution here?").
+- When they make errors, ask guiding questions rather than just correcting.""",
+
+        "advanced": """STUDENT LEVEL: ADVANCED — Strong student, focus on speed and strategy.
+- Be concise. Skip obvious algebra steps; focus on strategy and key decision points.
+- Emphasize pattern recognition: "Notice this has the same structure as..."
+- Push toward timed practice mindset — efficiency matters for exams.
+- Challenge them with follow-up variations or edge cases.
+- When they get it right, move on quickly. Don't over-explain what they already know.""",
+    }
+
+    @property
+    def system_prompt(self) -> str:
+        """Build system prompt based on current user level."""
+        level_text = self.LEVEL_INSTRUCTIONS.get(self.user_level, self.LEVEL_INSTRUCTIONS["intermediate"])
+        return self.SYSTEM_PROMPT_TEMPLATE.format(level_instructions=level_text)
 
     def __init__(self):
         """Initialize Claire 2.0 Agent"""
@@ -113,7 +145,7 @@ Respond in the same language as the student.
             self.executor = create_react_agent(
                 model=self.llm,
                 tools=self.tools,
-                prompt=self.SYSTEM_PROMPT
+                prompt=self.system_prompt
             )
             print("ReAct Agent: Ready")
 
@@ -452,6 +484,22 @@ Tools: {len(self.tools) if self.tools else 0} loaded
             self.user_level = level
             return f"Level set to: {level}"
         return "Invalid level. Use: beginner, intermediate, or advanced"
+
+    def set_user_level(self, level: str) -> None:
+        """Set user level and rebuild agent with updated system prompt."""
+        if level in ("beginner", "intermediate", "advanced"):
+            self.user_level = level
+            # Rebuild executor with new system prompt
+            if self.llm and self.tools:
+                try:
+                    from langgraph.prebuilt import create_react_agent
+                    self.executor = create_react_agent(
+                        model=self.llm,
+                        tools=self.tools,
+                        prompt=self.system_prompt,
+                    )
+                except Exception:
+                    pass
 
     def set_exam_context(self, context) -> None:
         """Set exam context from analyzed course materials."""

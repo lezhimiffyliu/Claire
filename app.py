@@ -6,6 +6,12 @@ Calculus Cram: Exam prep powered by AI
 import streamlit as st
 from claire_agent import ClaireAgent
 from exam_context import analyze_files, ExamContext
+from placement_test import (
+    build_questions_from_bank,
+    get_fallback_questions,
+    score_placement,
+    PlacementQuestion,
+)
 
 # Page config
 st.set_page_config(
@@ -57,6 +63,20 @@ if "selected_problem" not in st.session_state:
     st.session_state.selected_problem = None
 if "pending_problem" not in st.session_state:
     st.session_state.pending_problem = None
+# Placement test state
+# "not_started" → "choosing_track" → "in_progress" → "done" | "skipped"
+if "placement_stage" not in st.session_state:
+    st.session_state.placement_stage = "not_started"
+if "placement_questions" not in st.session_state:
+    st.session_state.placement_questions = []
+if "placement_answers" not in st.session_state:
+    st.session_state.placement_answers = []
+if "placement_current" not in st.session_state:
+    st.session_state.placement_current = 0
+if "placement_result" not in st.session_state:
+    st.session_state.placement_result = None
+if "calc_track" not in st.session_state:
+    st.session_state.calc_track = None
 
 
 # ============================================================
@@ -131,6 +151,9 @@ with st.sidebar:
                 context = analyze_files(files)
                 st.session_state.exam_context = context
                 agent.set_exam_context(context)
+            # Prompt placement test if not already done
+            if st.session_state.placement_stage in ("not_started", "choosing_track"):
+                st.session_state.placement_stage = "not_started"
             st.rerun()
 
     if exam_context.has_context():
@@ -175,6 +198,27 @@ with st.sidebar:
 
     st.divider()
 
+    # Show student level
+    if st.session_state.placement_result or st.session_state.placement_stage == "skipped":
+        level = agent.user_level
+        level_labels = {
+            "beginner": "🌱 Beginner",
+            "intermediate": "📚 Intermediate",
+            "advanced": "🚀 Advanced",
+        }
+        st.caption("Student Level")
+        st.markdown(level_labels.get(level, level))
+        if st.button("Retake diagnostic", use_container_width=True):
+            st.session_state.placement_stage = "not_started"
+            st.session_state.placement_questions = []
+            st.session_state.placement_answers = []
+            st.session_state.placement_current = 0
+            st.session_state.placement_result = None
+            st.session_state.messages = []
+            agent.conversation_history = []
+            st.rerun()
+        st.divider()
+
     if st.button("New conversation", use_container_width=True):
         st.session_state.messages = []
         agent.conversation_history = []
@@ -207,42 +251,233 @@ if st.session_state.pending_problem:
 
 
 # ============================================================
+# PLACEMENT TEST HELPERS
+# ============================================================
+
+def _start_placement_from_materials():
+    """Start placement test using uploaded materials."""
+    bank = st.session_state.exam_context.question_bank if st.session_state.exam_context.has_questions() else None
+    questions = build_questions_from_bank(bank, limit=5)
+    if not questions:
+        # Fall back to generic questions based on track
+        track = st.session_state.calc_track or "calc_i"
+        questions = get_fallback_questions(track)
+    st.session_state.placement_questions = questions
+    st.session_state.placement_answers = [None] * len(questions)
+    st.session_state.placement_current = 0
+    st.session_state.placement_stage = "in_progress"
+
+
+def _start_placement_for_track(track: str):
+    """Start placement test for a specific calc track (no materials)."""
+    st.session_state.calc_track = track
+    questions = get_fallback_questions(track)
+    st.session_state.placement_questions = questions
+    st.session_state.placement_answers = [None] * len(questions)
+    st.session_state.placement_current = 0
+    st.session_state.placement_stage = "in_progress"
+
+
+def _finish_placement():
+    """Score placement test and apply result."""
+    result = score_placement(
+        st.session_state.placement_questions,
+        st.session_state.placement_answers,
+    )
+    st.session_state.placement_result = result
+    st.session_state.placement_stage = "done"
+    agent.set_user_level(result.level)
+
+
+def _skip_placement():
+    """Skip the placement test."""
+    st.session_state.placement_stage = "skipped"
+    agent.set_user_level("intermediate")
+
+
+def _render_placement_test():
+    """Render the placement test UI."""
+    stage = st.session_state.placement_stage
+
+    # ---- NOT STARTED: prompt to take the test ----
+    if stage == "not_started":
+        st.markdown("## Claire")
+        st.caption("Making Calculus Clear · Calculus Cram")
+        st.markdown("---")
+
+        st.markdown("### 📝 Quick Diagnostic (5 min)")
+        st.markdown(
+            "Before we start, let's figure out where you are so I can teach "
+            "in a way that actually helps. This is **5 multiple-choice questions** "
+            "— should take about 5 minutes."
+        )
+
+        has_materials = exam_context.has_questions()
+        if has_materials:
+            st.info("📂 I'll use questions based on your uploaded materials.")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Start diagnostic", type="primary", use_container_width=True):
+                    _start_placement_from_materials()
+                    st.rerun()
+            with col2:
+                if st.button("Skip — let's just start", use_container_width=True):
+                    _skip_placement()
+                    st.rerun()
+        else:
+            st.markdown("Which calculus course are you studying?")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("Calc I", use_container_width=True, type="primary"):
+                    _start_placement_for_track("calc_i")
+                    st.rerun()
+            with col2:
+                if st.button("Calc II", use_container_width=True, type="primary"):
+                    _start_placement_for_track("calc_ii")
+                    st.rerun()
+            with col3:
+                if st.button("Calc III", use_container_width=True, type="primary"):
+                    _start_placement_for_track("calc_iii")
+                    st.rerun()
+
+            st.caption("")
+            if st.button("Skip — I just want to start practicing", use_container_width=True):
+                _skip_placement()
+                st.rerun()
+
+        return True  # signal that we rendered the placement UI
+
+    # ---- IN PROGRESS: show current question ----
+    if stage == "in_progress":
+        questions = st.session_state.placement_questions
+        idx = st.session_state.placement_current
+        total = len(questions)
+
+        st.markdown(f"### Diagnostic — Question {idx + 1} of {total}")
+        st.progress((idx) / total)
+
+        q = questions[idx]
+
+        # Difficulty badge
+        diff_colors = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}
+        st.caption(f"{diff_colors.get(q.difficulty, '')} {q.difficulty}")
+
+        st.markdown(q.prompt)
+
+        # Radio choices
+        answer = st.radio(
+            "Pick the best approach:",
+            options=list(range(len(q.choices))),
+            format_func=lambda i: q.choices[i],
+            index=None,
+            key=f"placement_q_{idx}",
+            label_visibility="collapsed",
+        )
+
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if idx > 0:
+                if st.button("← Back", use_container_width=True):
+                    st.session_state.placement_current = idx - 1
+                    st.rerun()
+        with col2:
+            if st.button("Skip diagnostic", use_container_width=True):
+                _skip_placement()
+                st.rerun()
+        with col3:
+            is_last = idx == total - 1
+            btn_label = "Finish" if is_last else "Next →"
+            if st.button(btn_label, use_container_width=True, type="primary", disabled=(answer is None)):
+                st.session_state.placement_answers[idx] = answer
+                if is_last:
+                    _finish_placement()
+                else:
+                    st.session_state.placement_current = idx + 1
+                st.rerun()
+
+        return True
+
+    # ---- DONE: show result ----
+    if stage == "done":
+        result = st.session_state.placement_result
+        st.markdown("### Diagnostic Complete!")
+        st.markdown(f"**Score: {result.score}/{result.total}**")
+
+        level_emoji = {"beginner": "🌱", "intermediate": "📚", "advanced": "🚀"}.get(result.level, "📚")
+        st.markdown(f"#### {level_emoji} {result.title}")
+        st.markdown(result.summary)
+
+        # Show answer review
+        with st.expander("Review answers"):
+            for i, (q, a) in enumerate(zip(
+                st.session_state.placement_questions,
+                st.session_state.placement_answers,
+            )):
+                correct = a == q.correct_index
+                icon = "✅" if correct else "❌"
+                st.markdown(f"**Q{i+1}:** {icon}")
+                st.caption(q.prompt[:120] + "..." if len(q.prompt) > 120 else q.prompt)
+                if not correct:
+                    st.caption(f"💡 {q.explanation}")
+                st.divider()
+
+        if st.button("Let's start! →", type="primary", use_container_width=True):
+            st.session_state.placement_stage = "completed"
+            st.rerun()
+
+        return True
+
+    return False  # "skipped" or "completed" — don't render placement UI
+
+
+# ============================================================
 # MAIN AREA
 # ============================================================
 
 # Header
 if not st.session_state.messages:
-    st.markdown("## Claire")
-    st.caption("Making Calculus Clear · Calculus Cram")
-    st.markdown("---")
+    # Show placement test if not done yet
+    placement_active = _render_placement_test()
 
-    # Show problems from materials or examples
-    if exam_context.has_questions():
-        st.markdown("#### From your materials")
-        bank = exam_context.question_bank
-        for i, q in enumerate(bank.questions[:4]):
-            source_label = q.format_source()
-            text_preview = q.text[:50] + "..." if len(q.text) > 50 else q.text
-            label = f"**{source_label}**: {text_preview}"
-            if st.button(label, key=f"q_{i}", use_container_width=True):
-                st.session_state.messages.append({"role": "user", "content": q.text})
-                result = agent.process_query(q.text)
-                st.session_state.messages.append({"role": "assistant", "content": result["output"]})
-                st.rerun()
-    else:
-        st.markdown("#### Try an example")
-        examples = [
-            "Find the maximum area of a rectangle with perimeter 100",
-            "Maximize xy subject to x + 2y = 10",
-            "Find d/dx of ln(x² + 1)",
-            "Evaluate ∫ x·eˣ dx",
-        ]
-        for i, ex in enumerate(examples):
-            if st.button(ex, key=f"ex_{i}", use_container_width=True):
-                st.session_state.messages.append({"role": "user", "content": ex})
-                result = agent.process_query(ex)
-                st.session_state.messages.append({"role": "assistant", "content": result["output"]})
-                st.rerun()
+    if not placement_active:
+        st.markdown("## Claire")
+        st.caption("Making Calculus Clear · Calculus Cram")
+
+        # Show current level if diagnostic was completed
+        if st.session_state.placement_result:
+            result = st.session_state.placement_result
+            level_emoji = {"beginner": "🌱", "intermediate": "📚", "advanced": "🚀"}.get(result.level, "📚")
+            st.caption(f"{level_emoji} Teaching level: {result.title}")
+
+        st.markdown("---")
+
+        # Show problems from materials or examples
+        if exam_context.has_questions():
+            st.markdown("#### From your materials")
+            bank = exam_context.question_bank
+            for i, q in enumerate(bank.questions[:4]):
+                source_label = q.format_source()
+                text_preview = q.text[:50] + "..." if len(q.text) > 50 else q.text
+                label = f"**{source_label}**: {text_preview}"
+                if st.button(label, key=f"q_{i}", use_container_width=True):
+                    st.session_state.messages.append({"role": "user", "content": q.text})
+                    result = agent.process_query(q.text)
+                    st.session_state.messages.append({"role": "assistant", "content": result["output"]})
+                    st.rerun()
+        else:
+            st.markdown("#### Try an example")
+            examples = [
+                "Find the maximum area of a rectangle with perimeter 100",
+                "Maximize xy subject to x + 2y = 10",
+                "Find d/dx of ln(x² + 1)",
+                "Evaluate ∫ x·eˣ dx",
+            ]
+            for i, ex in enumerate(examples):
+                if st.button(ex, key=f"ex_{i}", use_container_width=True):
+                    st.session_state.messages.append({"role": "user", "content": ex})
+                    result = agent.process_query(ex)
+                    st.session_state.messages.append({"role": "assistant", "content": result["output"]})
+                    st.rerun()
 
 else:
     # Chat history
