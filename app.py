@@ -12,6 +12,7 @@ from placement_test import (
     score_placement,
     PlacementQuestion,
 )
+from session_store import new_session_id, save_session, load_session
 
 # Page config
 st.set_page_config(
@@ -52,6 +53,22 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ────────────────────────────────────────────────────────────
+# Session ID — lives in URL as ?s=<id>
+# ────────────────────────────────────────────────────────────
+if "session_id" not in st.session_state:
+    params = st.query_params
+    sid = params.get("s", None)
+    if sid:
+        st.session_state.session_id = sid
+        st.session_state._restored = False   # will attempt restore below
+    else:
+        # Brand-new visitor — generate an ID and put it in the URL
+        sid = new_session_id()
+        st.session_state.session_id = sid
+        st.query_params["s"] = sid
+        st.session_state._restored = True    # nothing to restore
+
 # Initialize session state
 if "agent" not in st.session_state:
     st.session_state.agent = ClaireAgent()
@@ -77,6 +94,60 @@ if "placement_result" not in st.session_state:
     st.session_state.placement_result = None
 if "calc_track" not in st.session_state:
     st.session_state.calc_track = None
+
+# ────────────────────────────────────────────────────────────
+# Restore from disk if this is a returning visitor
+# ────────────────────────────────────────────────────────────
+if not st.session_state.get("_restored", False):
+    saved = load_session(st.session_state.session_id)
+    st.session_state._restored = True
+
+    if saved and saved.get("material_names"):
+        # Rebuild ExamContext from saved questions (no need to re-upload)
+        from question_bank import QuestionBank
+        qb = QuestionBank()
+        qb.questions = saved["questions"]
+        ctx = ExamContext(
+            material_names=saved["material_names"],
+            materials=["(restored)"] * len(saved["material_names"]),
+        )
+        ctx.question_bank = qb
+        st.session_state.exam_context = ctx
+        st.session_state.agent.set_exam_context(ctx)
+
+        # Restore user level + placement
+        st.session_state.placement_stage = saved["placement_stage"]
+        st.session_state.placement_result = saved["placement_result"]
+        st.session_state.placement_questions = saved["placement_questions"]
+        st.session_state.placement_answers = saved["placement_answers"]
+        st.session_state.calc_track = saved["calc_track"]
+        st.session_state.agent.user_level = saved["user_level"]
+    elif saved and saved.get("calc_track"):
+        # No materials but has done placement (e.g., skipped upload)
+        st.session_state.placement_stage = saved["placement_stage"]
+        st.session_state.placement_result = saved["placement_result"]
+        st.session_state.placement_questions = saved["placement_questions"]
+        st.session_state.placement_answers = saved["placement_answers"]
+        st.session_state.calc_track = saved["calc_track"]
+        st.session_state.agent.user_level = saved["user_level"]
+
+
+def _save_current_session():
+    """Snapshot current state to disk."""
+    ctx = st.session_state.exam_context
+    questions = ctx.question_bank.questions if ctx.question_bank else []
+    save_session(
+        st.session_state.session_id,
+        material_names=ctx.material_names,
+        questions=questions,
+        detected_patterns=ctx.detected_patterns,
+        user_level=st.session_state.agent.user_level,
+        calc_track=st.session_state.calc_track,
+        placement_stage=st.session_state.placement_stage,
+        placement_result=st.session_state.placement_result,
+        placement_questions=st.session_state.placement_questions,
+        placement_answers=st.session_state.placement_answers,
+    )
 
 
 # ============================================================
@@ -157,6 +228,7 @@ with st.sidebar:
                 # Clear chat so the diagnostic screen shows immediately
                 st.session_state.messages = []
                 agent.conversation_history = []
+            _save_current_session()
             st.rerun()
 
     if exam_context.has_context():
@@ -219,6 +291,7 @@ with st.sidebar:
             st.session_state.placement_result = None
             st.session_state.messages = []
             agent.conversation_history = []
+            _save_current_session()
             st.rerun()
         st.divider()
 
@@ -279,6 +352,7 @@ def _start_placement_for_track(track: str):
     st.session_state.placement_answers = [None] * len(questions)
     st.session_state.placement_current = 0
     st.session_state.placement_stage = "in_progress"
+    _save_current_session()
 
 
 def _finish_placement():
@@ -290,12 +364,14 @@ def _finish_placement():
     st.session_state.placement_result = result
     st.session_state.placement_stage = "done"
     agent.set_user_level(result.level)
+    _save_current_session()
 
 
 def _skip_placement():
     """Skip the placement test."""
     st.session_state.placement_stage = "skipped"
     agent.set_user_level("intermediate")
+    _save_current_session()
 
 
 def _inject_welcome_message(result):

@@ -134,3 +134,4 @@ usage.db
 api.log
 CLAUDE.md
 tests/test_usage.db
+.sessions/
