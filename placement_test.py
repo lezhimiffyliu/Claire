@@ -67,192 +67,224 @@ METHOD_CHOICES = {
 FALLBACK_BANK = {
     "calc_i": [
         PlacementQuestion(
-            prompt="You are given f(x)=x^3-3x+1. What is the best first step if the goal is to find local maxima and minima?",
+            prompt="What is $\\frac{d}{dx}\\bigl[x^3 - 4x + 7\\bigr]$?",
             choices=[
-                "Differentiate f(x) and solve f'(x)=0.",
-                "Take a definite integral from 0 to 1.",
-                "Apply L'Hôpital's Rule.",
-                "Use implicit differentiation with respect to time.",
+                "$3x^2 - 4$",
+                "$3x^2 - 4x$",
+                "$x^2 - 4$",
+                "$3x^2 - 4 + C$",
             ],
             correct_index=0,
-            explanation="Optimization in Calc I usually starts by differentiating and locating critical points.",
-            source="Calc I quick check",
+            explanation="Power rule: d/dx[xⁿ] = nxⁿ⁻¹. The constant 7 vanishes.",
+            source="Calc I diagnostic",
             difficulty="easy",
         ),
         PlacementQuestion(
-            prompt="A ladder slides down a wall. Which idea should you use first?",
-            choices=METHOD_CHOICES["related_rates"],
+            prompt=(
+                "At $x = a$ you find $f'(a) = 0$ and $f''(a) > 0$. "
+                "What can you conclude about $x = a$?"
+            ),
+            choices=[
+                "Local minimum at $x = a$",
+                "Local maximum at $x = a$",
+                "Inflection point at $x = a$",
+                "The second derivative test is inconclusive",
+            ],
             correct_index=0,
-            explanation="Related-rates problems start by expressing the geometry, then differentiating with respect to time.",
-            source="Calc I quick check",
+            explanation="Second derivative test: f''(a) > 0 means the curve is concave up → local minimum.",
+            source="Calc I diagnostic",
             difficulty="medium",
         ),
         PlacementQuestion(
-            prompt="For ∫ x e^x dx, what is the most natural method?",
-            choices=[
-                "Integration by parts.",
-                "Lagrange multipliers.",
-                "Second derivative test.",
-                "Squeeze theorem.",
-            ],
+            prompt="Evaluate $\\displaystyle\\lim_{x \\to 0} \\frac{\\sin(3x)}{x}$.",
+            choices=["$3$", "$1$", "$0$", "Does not exist"],
             correct_index=0,
-            explanation="This is a classic integration-by-parts setup.",
-            source="Calc I quick check",
-            difficulty="medium",
-        ),
-        PlacementQuestion(
-            prompt="If lim(x→0) sin(x)/x appears, what should you recognize first?",
-            choices=[
-                "A standard limit / limit rule pattern.",
-                "A constrained optimization problem.",
-                "A related-rates setup.",
-                "A partial fractions setup.",
-            ],
-            correct_index=0,
-            explanation="Students should recognize this as a standard limit pattern before doing computation.",
-            source="Calc I quick check",
+            explanation="Standard limit: lim(x→0) sin(kx)/x = k. Here k = 3.",
+            source="Calc I diagnostic",
             difficulty="easy",
         ),
         PlacementQuestion(
-            prompt="A question asks for the absolute maximum on a closed interval. What must you check?",
+            prompt="For $\\displaystyle\\int x e^x\\,dx$, which technique works best?",
             choices=[
-                "Interior critical points and endpoints.",
-                "Only the points where f'(x)=0.",
-                "Only the endpoints.",
-                "Only the antiderivative.",
+                "Integration by parts ($u = x$, $dv = e^x\\,dx$)",
+                "$u$-substitution with $u = xe^x$",
+                "Partial fractions",
+                "Trigonometric substitution",
             ],
             correct_index=0,
-            explanation="Absolute extrema on a closed interval require both endpoints and interior critical points.",
-            source="Calc I quick check",
+            explanation="x·eˣ is a polynomial × exponential — the classic integration-by-parts setup.",
+            source="Calc I diagnostic",
+            difficulty="medium",
+        ),
+        PlacementQuestion(
+            prompt=(
+                "To find the **absolute maximum** of $f(x) = x^2 - 4x$ on $[0,\\,5]$, "
+                "what do you need to check?"
+            ),
+            choices=[
+                "Critical points inside $(0,5)$ **and** both endpoints $x=0$, $x=5$",
+                "Only where $f'(x) = 0$",
+                "Only the endpoints $x = 0$ and $x = 5$",
+                "Where $f''(x) = 0$ (inflection points)",
+            ],
+            correct_index=0,
+            explanation="Absolute extrema on a closed interval: check interior critical points AND endpoints (Closed Interval Method).",
+            source="Calc I diagnostic",
             difficulty="medium",
         ),
     ],
     "calc_ii": [
         PlacementQuestion(
-            prompt="For ∫ x ln(x) dx, which method is the best starting point?",
+            prompt="For $\\displaystyle\\int x\\ln(x)\\,dx$, which technique fits best?",
             choices=[
-                "Integration by parts.",
-                "L'Hôpital's Rule.",
-                "Implicit differentiation.",
-                "Lagrange multipliers.",
+                "Integration by parts ($u = \\ln x$, $dv = x\\,dx$)",
+                "$u$-substitution with $u = \\ln x$",
+                "Partial fractions",
+                "Trigonometric substitution",
             ],
             correct_index=0,
-            explanation="Integration by parts is the usual opening move for x·ln(x).",
-            source="Calc II quick check",
+            explanation="ln(x) lacks a simple antiderivative on its own; integration by parts handles log × polynomial products.",
+            source="Calc II diagnostic",
+            difficulty="easy",
+        ),
+        PlacementQuestion(
+            prompt="Which test would you apply first to $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{n}{2^n}$?",
+            choices=[
+                "Ratio Test: check $\\lim_{n\\to\\infty} |a_{n+1}/a_n|$",
+                "Integral Test",
+                "Divergence Test: check $\\lim_{n\\to\\infty} a_n$",
+                "Alternating Series Test",
+            ],
+            correct_index=0,
+            explanation="Exponential denominator — Ratio Test gives a clean limit less than 1, confirming convergence.",
+            source="Calc II diagnostic",
             difficulty="medium",
         ),
         PlacementQuestion(
-            prompt="When a series problem asks whether Σ a_n converges, what should you do first?",
+            prompt=(
+                "Why is $\\displaystyle\\int_1^{\\infty}\\frac{1}{x^2}\\,dx$ called an improper integral, "
+                "and how do you handle it?"
+            ),
             choices=[
-                "Identify the series type or a likely convergence test.",
-                "Take a derivative.",
-                "Set up a Lagrange multiplier equation.",
-                "Convert to polar coordinates.",
+                "The upper limit is $\\infty$; replace it with $b$ and take $\\lim_{b\\to\\infty}$",
+                "The integrand blows up at $x=0$; split there",
+                "The function is not continuous, so you cannot integrate it",
+                "Apply L'Hôpital's rule directly on $1/x^2$",
             ],
             correct_index=0,
-            explanation="Series questions are largely about choosing the right convergence test.",
-            source="Calc II quick check",
+            explanation="Infinite upper bound → improper integral. Evaluate as a limit.",
+            source="Calc II diagnostic",
             difficulty="medium",
         ),
         PlacementQuestion(
-            prompt="A volume problem gives a region and an axis of rotation. What is the first strategic step?",
+            prompt=(
+                "To find the volume when $y = \\sqrt{x}$ on $[0,4]$ is rotated around "
+                "the $x$-axis, which formula applies?"
+            ),
             choices=[
-                "Choose a volume method such as washers or shells and set up the radius carefully.",
-                "Use L'Hôpital's Rule.",
-                "Differentiate with respect to time.",
-                "Check left- and right-hand limits.",
+                "$V = \\pi\\displaystyle\\int_0^4 x\\,dx$ (disk method: $[\\sqrt{x}]^2 = x$)",
+                "$V = 2\\pi\\displaystyle\\int_0^4 x\\sqrt{x}\\,dx$ (shells about $y$-axis)",
+                "$V = \\displaystyle\\int_0^4 \\sqrt{x}\\,dx$",
+                "$V = \\pi(\\sqrt{4})^2 \\cdot 4$",
             ],
             correct_index=0,
-            explanation="Volume questions hinge on choosing the right geometric setup.",
-            source="Calc II quick check",
+            explanation="Rotate around x-axis → disk method: V = π∫[f(x)]² dx.",
+            source="Calc II diagnostic",
             difficulty="medium",
         ),
         PlacementQuestion(
-            prompt="If a power series is given, what is often the most important thing to determine first?",
+            prompt=(
+                "For $\\displaystyle\\sum_{n=0}^{\\infty}\\frac{x^n}{n!}$, "
+                "what is the radius of convergence $R$?"
+            ),
             choices=[
-                "Its interval/radius of convergence.",
-                "Its constrained maximum.",
-                "A related-rates equation.",
-                "A derivative using the quotient rule.",
+                "$R = \\infty$ (converges for all $x$)",
+                "$R = 1$",
+                "$R = 0$",
+                "$R = e$",
             ],
             correct_index=0,
-            explanation="For power series, convergence behavior is usually the first target.",
-            source="Calc II quick check",
+            explanation="This is the Taylor series for eˣ — it converges everywhere, so R = ∞.",
+            source="Calc II diagnostic",
             difficulty="hard",
-        ),
-        PlacementQuestion(
-            prompt="For an improper integral, what should you recognize before computing?",
-            choices=[
-                "Where the improper behavior comes from and whether a limit is required.",
-                "That it must use shells.",
-                "That it is automatically convergent.",
-                "That it is a derivatives problem.",
-            ],
-            correct_index=0,
-            explanation="Improper integrals are fundamentally limit problems wrapped inside integration.",
-            source="Calc II quick check",
-            difficulty="medium",
         ),
     ],
     "calc_iii": [
         PlacementQuestion(
-            prompt="A problem asks for extrema of f(x,y) on a closed bounded region. What should you plan to check?",
+            prompt="Compute $\\dfrac{\\partial}{\\partial x}\\bigl[x^2 y + e^y\\bigr]$.",
             choices=[
-                "Interior critical points and the boundary.",
-                "Only a single partial derivative.",
-                "Only a double integral.",
-                "Only one-sided limits.",
+                "$2xy$",
+                "$2xy + e^y$",
+                "$x^2 + ye^y$",
+                "$2x + e^y$",
             ],
             correct_index=0,
-            explanation="Closed-region extrema in multivariable calculus require interior and boundary analysis.",
-            source="Calc III quick check",
+            explanation="Treat y as constant: ∂/∂x[x²y] = 2xy, ∂/∂x[eʸ] = 0.",
+            source="Calc III diagnostic",
+            difficulty="easy",
+        ),
+        PlacementQuestion(
+            prompt=(
+                "To maximize $f(x,y)$ subject to $g(x,y) = 0$, "
+                "what is the standard Calc III method?"
+            ),
+            choices=[
+                "Lagrange multipliers: solve $\\nabla f = \\lambda\\,\\nabla g$",
+                "Set $f_x = 0$ and $f_y = 0$, ignoring the constraint",
+                "Substitute the constraint and reduce to one variable only",
+                "Apply the second derivative test to $f$ alone",
+            ],
+            correct_index=0,
+            explanation="Equality constraints in Calc III signal Lagrange multipliers.",
+            source="Calc III diagnostic",
             difficulty="medium",
         ),
         PlacementQuestion(
-            prompt="If the problem says maximize f(x,y) subject to g(x,y)=c, what method should you recognize?",
-            choices=METHOD_CHOICES["constrained_optimization"],
+            prompt=(
+                "You need $\\iint_D f(x,y)\\,dA$ where $D: x^2+y^2\\le 4$. "
+                "Which coordinate system is usually best?"
+            ),
+            choices=[
+                "Polar coordinates ($x = r\\cos\\theta$, $y = r\\sin\\theta$, $dA = r\\,dr\\,d\\theta$)",
+                "Cartesian — it always works fine",
+                "Cylindrical (that's only for 3-D)",
+                "Spherical coordinates",
+            ],
             correct_index=0,
-            explanation="Equality constraints in Calc III usually signal Lagrange multipliers.",
-            source="Calc III quick check",
+            explanation="Circular region → polar coordinates simplify both the boundary and the integrand.",
+            source="Calc III diagnostic",
             difficulty="medium",
         ),
         PlacementQuestion(
-            prompt="For a double integral over a circular region, what is often a smart strategic move?",
+            prompt=(
+                "The directional derivative of $f$ in direction $\\hat{u}$ equals "
+                "$D_{\\hat{u}}f = \\nabla f \\cdot \\hat{u}$. What does this measure?"
+            ),
             choices=[
-                "Consider polar coordinates if the geometry becomes simpler.",
-                "Use related rates.",
-                "Differentiate the integrand first.",
-                "Apply the ratio test.",
+                "The rate of change of $f$ as you move in direction $\\hat{u}$",
+                "The maximum value of $f$ along $\\hat{u}$",
+                "The surface area of $z = f(x,y)$ in direction $\\hat{u}$",
+                "The curvature of $f$ along $\\hat{u}$",
             ],
             correct_index=0,
-            explanation="Circular symmetry is a classic sign that polar coordinates may simplify the work.",
-            source="Calc III quick check",
+            explanation="Directional derivative = how fast f changes as you walk in direction û.",
+            source="Calc III diagnostic",
             difficulty="medium",
         ),
         PlacementQuestion(
-            prompt="If a question asks for the directional derivative, what information do you need conceptually?",
+            prompt=(
+                "Finding extrema of $f(x,y) = x^2+y^2-xy$ on the closed triangle "
+                "$x\\ge 0,\\; y\\ge 0,\\; x+y\\le 2$. What must you check?"
+            ),
             choices=[
-                "The gradient and a direction vector.",
-                "An interval of convergence.",
-                "A shell radius.",
-                "A time derivative relation.",
+                "Interior critical points ($f_x = f_y = 0$) **and** values on all three boundary edges",
+                "Only where $f_x = 0$",
+                "Only the three corner vertices",
+                "Only the interior — boundaries don't matter for smooth functions",
             ],
             correct_index=0,
-            explanation="Directional derivatives come from projecting the gradient onto a direction.",
-            source="Calc III quick check",
-            difficulty="medium",
-        ),
-        PlacementQuestion(
-            prompt="If a surface integral / vector-calculus question appears, what usually matters first?",
-            choices=[
-                "Choosing the right representation, orientation, or theorem before grinding algebra.",
-                "Applying the quotient rule.",
-                "Testing divergence of a series.",
-                "Finding a single-variable antiderivative.",
-            ],
-            correct_index=0,
-            explanation="In Calc III, setup decisions often matter more than raw algebra at the start.",
-            source="Calc III quick check",
+            explanation="Closed bounded region: check interior critical points AND all boundary segments.",
+            source="Calc III diagnostic",
             difficulty="hard",
         ),
     ],

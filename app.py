@@ -154,6 +154,9 @@ with st.sidebar:
             # Prompt placement test if not already done
             if st.session_state.placement_stage in ("not_started", "choosing_track"):
                 st.session_state.placement_stage = "not_started"
+                # Clear chat so the diagnostic screen shows immediately
+                st.session_state.messages = []
+                agent.conversation_history = []
             st.rerun()
 
     if exam_context.has_context():
@@ -295,6 +298,39 @@ def _skip_placement():
     agent.set_user_level("intermediate")
 
 
+def _inject_welcome_message(result):
+    """Send a personalized first assistant message based on diagnostic level."""
+    level = result.level
+    score_str = f"{result.score}/{result.total}"
+
+    if level == "beginner":
+        msg = (
+            f"Great — diagnostic done! Score: {score_str}.\n\n"
+            "No worries at all — everyone starts somewhere. "
+            "I'll walk you through everything step by step, in plain language, "
+            "with no jargon unless we define it first. "
+            "Just paste in a problem you want to work on, and we'll take it slow together. 🌱"
+        )
+    elif level == "intermediate":
+        msg = (
+            f"Nice — diagnostic done! Score: {score_str}.\n\n"
+            "You've got the basics down. "
+            "We'll work on making sure you're picking the *right* method quickly "
+            "and avoiding the common traps. "
+            "Drop in any problem you want to tackle. 📚"
+        )
+    else:  # advanced
+        msg = (
+            f"Solid — diagnostic done! Score: {score_str}.\n\n"
+            "You know your stuff. I'll keep explanations tight and focus on "
+            "strategy, edge cases, and exam speed. "
+            "Throw a problem at me. 🚀"
+        )
+
+    st.session_state.messages.append({"role": "assistant", "content": msg})
+    agent.conversation_history.append({"role": "assistant", "content": msg})
+
+
 def _render_placement_test():
     """Render the placement test UI."""
     stage = st.session_state.placement_stage
@@ -423,6 +459,8 @@ def _render_placement_test():
 
         if st.button("Let's start! →", type="primary", use_container_width=True):
             st.session_state.placement_stage = "completed"
+            # Inject a personalized opening message into chat
+            _inject_welcome_message(result)
             st.rerun()
 
         return True
@@ -480,6 +518,28 @@ if not st.session_state.messages:
                     st.rerun()
 
 else:
+    # If materials were just loaded and diagnostic isn't done, show a nudge banner
+    if (
+        st.session_state.placement_stage == "not_started"
+        and exam_context.has_questions()
+    ):
+        with st.container():
+            st.info(
+                "📝 **Quick diagnostic available** — I can gauge your level with 5 questions "
+                "(~5 min) and teach more effectively. Want to take it?",
+                icon=None,
+            )
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Take the diagnostic", type="primary", use_container_width=True):
+                    st.session_state.messages = []
+                    agent.conversation_history = []
+                    st.rerun()
+            with col2:
+                if st.button("Skip, keep chatting", use_container_width=True):
+                    _skip_placement()
+                    st.rerun()
+
     # Chat history
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
