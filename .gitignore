@@ -133,3 +133,5 @@ LEARNING_NOTES.md
 usage.db
 api.log
 CLAUDE.md
+tests/test_usage.db
+.sessions/
