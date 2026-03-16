@@ -108,6 +108,9 @@ def _serialize_placement_questions(qs: list) -> list[dict]:
             "explanation": q.explanation,
             "source": q.source,
             "difficulty": q.difficulty,
+            "topic": getattr(q, "topic", ""),
+            "question_excerpt": getattr(q, "question_excerpt", ""),
+            "ask_text": getattr(q, "ask_text", ""),
         }
         for q in qs
     ]
@@ -115,7 +118,20 @@ def _serialize_placement_questions(qs: list) -> list[dict]:
 
 def _deserialize_placement_questions(lst: list[dict]) -> list:
     from placement_test import PlacementQuestion
-    return [PlacementQuestion(**d) for d in lst]
+    return [
+        PlacementQuestion(
+            prompt=d["prompt"],
+            choices=d["choices"],
+            correct_index=d["correct_index"],
+            explanation=d["explanation"],
+            source=d["source"],
+            difficulty=d["difficulty"],
+            topic=d.get("topic", ""),
+            question_excerpt=d.get("question_excerpt", ""),
+            ask_text=d.get("ask_text", ""),
+        )
+        for d in lst
+    ]
 
 
 # ────────────────────────────────────────────────────────────

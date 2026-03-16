@@ -525,20 +525,41 @@ def _render_placement_test():
 
         q = questions[idx]
 
-        # Difficulty badge
+        # Source + difficulty on one line
         diff_colors = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}
-        st.caption(f"{diff_colors.get(q.difficulty, '')} {q.difficulty}")
+        diff_icon = diff_colors.get(q.difficulty, "")
+        st.caption(f"{diff_icon} {q.difficulty.capitalize()}  ·  {q.source}")
 
-        st.markdown(q.prompt)
+        st.markdown("---")
 
-        # Radio choices
+        # Question body
+        if q.question_excerpt:
+            # From uploaded materials: show excerpt in a styled box, then ask_text below
+            st.markdown(
+                f"""<div style="background:#f8f9fa;border-left:4px solid #4a90d9;
+                    padding:12px 16px;border-radius:4px;font-size:15px;
+                    line-height:1.6;margin-bottom:12px;">{q.question_excerpt}</div>""",
+                unsafe_allow_html=True,
+            )
+            if q.ask_text:
+                st.markdown(f"*{q.ask_text}*")
+        else:
+            # Fallback / hand-written questions: render LaTeX markdown
+            st.markdown(q.prompt)
+
+        st.markdown("")
+
+        # Choices as lettered radio options
+        LETTERS = ["A", "B", "C", "D", "E"]
+        choice_labels = [f"**{LETTERS[i]}.**  {c}" for i, c in enumerate(q.choices)]
+
         answer = st.radio(
-            "Pick the best approach:",
+            "Your answer:",
             options=list(range(len(q.choices))),
-            format_func=lambda i: q.choices[i],
+            format_func=lambda i: choice_labels[i],
             index=None,
             key=f"placement_q_{idx}",
-            label_visibility="collapsed",
+            label_visibility="visible",
         )
 
         col1, col2, col3 = st.columns([1, 1, 1])
@@ -589,16 +610,25 @@ def _render_placement_test():
 
         # Answer review (collapsed by default)
         with st.expander("Review your answers"):
+            LETTERS = ["A", "B", "C", "D", "E"]
             for i, (q, a) in enumerate(zip(
                 st.session_state.placement_questions,
                 st.session_state.placement_answers,
             )):
                 correct = a == q.correct_index
                 icon = "✅" if correct else "❌"
-                st.markdown(f"**Q{i+1} ({q.topic or q.difficulty}):** {icon}")
-                st.caption(q.prompt[:150] + "..." if len(q.prompt) > 150 else q.prompt)
-                if not correct:
-                    st.caption(f"💡 {q.explanation}")
+                diff_icon = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}.get(q.difficulty, "")
+                st.markdown(f"**Q{i+1}** {icon}  ·  {diff_icon} {q.source}")
+                # Show excerpt or prompt as preview
+                body = q.question_excerpt if q.question_excerpt else q.prompt
+                st.caption(body[:160] + "..." if len(body) > 160 else body)
+                if a is not None:
+                    chosen = q.choices[a] if a < len(q.choices) else "—"
+                    correct_ans = q.choices[q.correct_index]
+                    if not correct:
+                        st.caption(f"You chose: {LETTERS[a] if a < len(LETTERS) else a}. {chosen}")
+                        st.caption(f"Correct: {LETTERS[q.correct_index]}. {correct_ans}")
+                        st.caption(f"💡 {q.explanation}")
                 st.divider()
 
         if st.button("Let's start practicing! →", type="primary", use_container_width=True):

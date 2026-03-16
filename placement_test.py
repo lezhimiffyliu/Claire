@@ -8,13 +8,15 @@ from typing import Optional
 
 @dataclass
 class PlacementQuestion:
-    prompt: str
+    prompt: str            # Full display text (used when question_excerpt is empty)
     choices: list[str]
     correct_index: int
     explanation: str
     source: str
     difficulty: str
-    topic: str = ""   # e.g. "derivatives", "integration", "limits"
+    topic: str = ""              # e.g. "derivatives", "integration", "limits"
+    question_excerpt: str = ""   # Raw excerpt from uploaded material (if from bank)
+    ask_text: str = ""           # The question stem shown below the excerpt
 
 
 @dataclass
@@ -331,19 +333,25 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
         if pattern in seen_patterns and len(selected) < 3:
             continue
 
-        prompt = (
-            f"Source: {q.format_source()}\n\n"
-            f"Question excerpt:\n{q.get_formatted_text()[:350]}\n\n"
-            "What is the best first approach to this problem?"
-        )
+        excerpt = q.get_formatted_text()[:400] if hasattr(q, "get_formatted_text") else q.text[:400]
+        ask = "What is the best first approach to this problem?"
+
         selected.append(
             PlacementQuestion(
-                prompt=prompt,
+                # prompt kept as fallback plain text
+                prompt=(
+                    f"**{q.format_source()}**\n\n"
+                    f"{excerpt}\n\n"
+                    f"*{ask}*"
+                ),
                 choices=METHOD_CHOICES[pattern],
                 correct_index=0,
                 explanation=f"This problem was classified as {pattern.replace('_', ' ')}.",
                 source=q.format_source(),
                 difficulty=getattr(q, "difficulty", "medium"),
+                topic=pattern,
+                question_excerpt=excerpt,
+                ask_text=ask,
             )
         )
         seen_patterns.add(pattern)
