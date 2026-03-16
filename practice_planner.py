@@ -191,3 +191,38 @@ def format_study_plan(result, prioritized_questions: list, *, max_preview: int =
     lines.append("")
     lines.append("Just paste or click any problem to start. I'll teach based on your weak areas first.")
     return "\n".join(lines)
+
+
+def study_plan_for_prompt(result, prioritized_questions: list) -> str:
+    """
+    Compact study-plan block for injection into the agent system prompt.
+    Tells Claude which topics to prioritize and which practice problems to suggest.
+    """
+    lines = ["[STUDENT STUDY PLAN — use this to guide practice]"]
+
+    if result.weak_topics:
+        labels = [TOPIC_LABELS.get(t, t.replace("_", " ").title()) for t in result.weak_topics]
+        lines.append(f"Weak topics (prioritize these): {', '.join(labels)}")
+    if result.strong_topics:
+        labels = [TOPIC_LABELS.get(t, t.replace("_", " ").title()) for t in result.strong_topics]
+        lines.append(f"Strong topics (brief review): {', '.join(labels)}")
+
+    lines.append(f"Overall level: {result.level} — {result.title}")
+
+    if prioritized_questions:
+        lines.append("Top practice problems from uploaded materials (suggest in this order):")
+        for i, q in enumerate(prioritized_questions[:5], 1):
+            src = getattr(q, "source", "")
+            pid = getattr(q, "problem_id", "")
+            diff = getattr(q, "difficulty", "medium")
+            pts = _extract_points(getattr(q, "text", ""))
+            label = f"{src} {pid}".strip()
+            pts_str = f" · {pts} pts" if pts else ""
+            lines.append(f"  {i}. [{diff}] {label}{pts_str}")
+
+    lines.append(
+        "When the student asks for practice or 'what should I work on next', "
+        "suggest problems from the weak topics above, starting from the list."
+    )
+    lines.append("[END STUDY PLAN]")
+    return "\n".join(lines)
