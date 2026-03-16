@@ -13,6 +13,8 @@ from placement_test import (
     PlacementQuestion,
 )
 from session_store import new_session_id, save_session, load_session
+from practice_planner import prioritize_questions, format_study_plan
+from practice_planner import prioritize_questions, format_study_plan, study_plan_for_prompt
 
 # Page config
 st.set_page_config(
@@ -94,6 +96,8 @@ if "placement_result" not in st.session_state:
     st.session_state.placement_result = None
 if "calc_track" not in st.session_state:
     st.session_state.calc_track = None
+if "prioritized_questions" not in st.session_state:
+    st.session_state.prioritized_questions = []
 
 # ────────────────────────────────────────────────────────────
 # Restore from disk if this is a returning visitor
@@ -121,7 +125,17 @@ if not st.session_state.get("_restored", False):
         st.session_state.placement_questions = saved["placement_questions"]
         st.session_state.placement_answers = saved["placement_answers"]
         st.session_state.calc_track = saved["calc_track"]
-        st.session_state.agent.user_level = saved["user_level"]
+
+        # Restore weak/strong topics into agent
+        p_result = saved["placement_result"]
+        if p_result:
+            st.session_state.agent.set_diagnostic_result(p_result)
+            bank = ctx.question_bank if ctx.has_questions() else None
+            prioritized = prioritize_questions(p_result, bank)
+            st.session_state.prioritized_questions = prioritized
+        else:
+            st.session_state.agent.user_level = saved["user_level"]
+
     elif saved and saved.get("calc_track"):
         # No materials but has done placement (e.g., skipped upload)
         st.session_state.placement_stage = saved["placement_stage"]
@@ -129,7 +143,11 @@ if not st.session_state.get("_restored", False):
         st.session_state.placement_questions = saved["placement_questions"]
         st.session_state.placement_answers = saved["placement_answers"]
         st.session_state.calc_track = saved["calc_track"]
-        st.session_state.agent.user_level = saved["user_level"]
+        p_result = saved["placement_result"]
+        if p_result:
+            st.session_state.agent.set_diagnostic_result(p_result)
+        else:
+            st.session_state.agent.user_level = saved["user_level"]
 
 
 def _save_current_session():
@@ -363,7 +381,15 @@ def _finish_placement():
     )
     st.session_state.placement_result = result
     st.session_state.placement_stage = "done"
-    agent.set_user_level(result.level)
+
+    # Apply level + weak/strong topics to the agent
+    agent.set_diagnostic_result(result)
+
+    # Build prioritized practice queue from uploaded materials
+    bank = st.session_state.exam_context.question_bank if st.session_state.exam_context.has_questions() else None
+    prioritized = prioritize_questions(result, bank)
+    st.session_state.prioritized_questions = prioritized
+
     _save_current_session()
 
 
@@ -375,34 +401,63 @@ def _skip_placement():
 
 
 def _inject_welcome_message(result):
-    """Send a personalized first assistant message based on diagnostic level."""
+    """Send a personalized first assistant message based on diagnostic level and weak topics."""
+    from practice_planner import TOPIC_LABELS
     level = result.level
     score_str = f"{result.score}/{result.total}"
 
+    # Build weak/strong topic phrase
+    weak_labels = [TOPIC_LABELS.get(t, t.replace("_", " ").title()) for t in result.weak_topics]
+    strong_labels = [TOPIC_LABELS.get(t, t.replace("_", " ").title()) for t in result.strong_topics]
+
+    focus_line = ""
+    if weak_labels:
+        focus_line = f"Based on the diagnostic, let's pay extra attention to: **{', '.join(weak_labels)}**."
+        if strong_labels:
+            focus_line += f" You're solid on {', '.join(strong_labels)}, so we'll move faster there."
+
     if level == "beginner":
         msg = (
-            f"Great — diagnostic done! Score: {score_str}.\n\n"
-            "No worries at all — everyone starts somewhere. "
-            "I'll walk you through everything step by step, in plain language, "
-            "with no jargon unless we define it first. "
-            "Just paste in a problem you want to work on, and we'll take it slow together. 🌱"
+            f"Diagnostic done — {score_str}. No worries, everyone starts somewhere.\n\n"
+            f"{focus_line}\n\n"
+            "I'll walk you through everything step by step in plain language — no jargon "
+            "unless we define it first. "
+            "Just paste in a problem you want to work on. 🌱"
         )
     elif level == "intermediate":
         msg = (
-            f"Nice — diagnostic done! Score: {score_str}.\n\n"
-            "You've got the basics down. "
-            "We'll work on making sure you're picking the *right* method quickly "
-            "and avoiding the common traps. "
-            "Drop in any problem you want to tackle. 📚"
+            f"Diagnostic done — {score_str}. You've got the basics.\n\n"
+            f"{focus_line}\n\n"
+            "We'll focus on picking the right method quickly and avoiding common traps. "
+            "Drop in any problem. 📚"
         )
     else:  # advanced
         msg = (
-            f"Solid — diagnostic done! Score: {score_str}.\n\n"
-            "You know your stuff. I'll keep explanations tight and focus on "
-            "strategy, edge cases, and exam speed. "
+            f"Diagnostic done — {score_str}. Solid foundation.\n\n"
+            f"{focus_line}\n\n"
+            "I'll keep explanations concise and focus on strategy and exam speed. "
             "Throw a problem at me. 🚀"
         )
 
+    # Append prioritized problem list if materials were loaded
+    prioritized = st.session_state.get("prioritized_questions", [])
+    if prioritized:
+        import re as _re
+        plan_lines = ["\n\n---\n**Recommended practice order from your materials:**"]
+        for i, q in enumerate(prioritized[:6], 1):
+            src = getattr(q, "source", "")
+            pid = getattr(q, "problem_id", "")
+            diff = getattr(q, "difficulty", "medium")
+            diff_icon = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}.get(diff, "")
+            label = f"{src} — {pid}" if pid else src
+            pts_m = _re.search(r"(\d{1,3})\s*(?:pts?|points?)", getattr(q, "text", ""), _re.IGNORECASE)
+            pts_str = f" · {pts_m.group(1)} pts" if pts_m else ""
+            plan_lines.append(f"{i}. {diff_icon} **{label}**{pts_str}")
+        plan_lines.append("\nJust click any problem in the sidebar, or paste one here.")
+        msg = msg + "\n".join(plan_lines)
+
+        # Strip stray blank lines
+    msg = msg.replace("\n\n\n\n", "\n\n").strip()
     st.session_state.messages.append({"role": "assistant", "content": msg})
     agent.conversation_history.append({"role": "assistant", "content": msg})
 
@@ -512,28 +567,41 @@ def _render_placement_test():
     # ---- DONE: show result ----
     if stage == "done":
         result = st.session_state.placement_result
-        st.markdown("### Diagnostic Complete!")
-        st.markdown(f"**Score: {result.score}/{result.total}**")
-
         level_emoji = {"beginner": "🌱", "intermediate": "📚", "advanced": "🚀"}.get(result.level, "📚")
-        st.markdown(f"#### {level_emoji} {result.title}")
-        st.markdown(result.summary)
 
-        # Show answer review
-        with st.expander("Review answers"):
+        st.markdown("### Diagnostic Complete!")
+        col_score, col_level = st.columns(2)
+        with col_score:
+            st.metric("Score", f"{result.score}/{result.total}")
+        with col_level:
+            st.metric("Level", f"{level_emoji} {result.level.capitalize()}")
+
+        st.markdown(f"*{result.title}*")
+        st.markdown("---")
+
+        # Study plan — topic breakdown + prioritized practice queue
+        prioritized = st.session_state.get("prioritized_questions", [])
+        has_materials = exam_context.has_questions()
+        plan_md = format_study_plan(result, prioritized, has_materials=has_materials)
+        st.markdown("#### 📋 Your Study Plan")
+        st.markdown(plan_md)
+        st.markdown("---")
+
+        # Answer review (collapsed by default)
+        with st.expander("Review your answers"):
             for i, (q, a) in enumerate(zip(
                 st.session_state.placement_questions,
                 st.session_state.placement_answers,
             )):
                 correct = a == q.correct_index
                 icon = "✅" if correct else "❌"
-                st.markdown(f"**Q{i+1}:** {icon}")
-                st.caption(q.prompt[:120] + "..." if len(q.prompt) > 120 else q.prompt)
+                st.markdown(f"**Q{i+1} ({q.topic or q.difficulty}):** {icon}")
+                st.caption(q.prompt[:150] + "..." if len(q.prompt) > 150 else q.prompt)
                 if not correct:
                     st.caption(f"💡 {q.explanation}")
                 st.divider()
 
-        if st.button("Let's start! →", type="primary", use_container_width=True):
+        if st.button("Let's start practicing! →", type="primary", use_container_width=True):
             st.session_state.placement_stage = "completed"
             # Inject a personalized opening message into chat
             _inject_welcome_message(result)

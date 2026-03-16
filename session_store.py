@@ -79,6 +79,8 @@ def _serialize_placement_result(r) -> Optional[dict]:
         "summary": r.summary,
         "score": r.score,
         "total": r.total,
+        "weak_topics": getattr(r, "weak_topics", []),
+        "strong_topics": getattr(r, "strong_topics", []),
     }
 
 
@@ -86,7 +88,15 @@ def _deserialize_placement_result(d: Optional[dict]):
     if d is None:
         return None
     from placement_test import PlacementResult
-    return PlacementResult(**d)
+    return PlacementResult(
+        level=d["level"],
+        title=d["title"],
+        summary=d["summary"],
+        score=d["score"],
+        total=d["total"],
+        weak_topics=d.get("weak_topics", []),
+        strong_topics=d.get("strong_topics", []),
+    )
 
 
 def _serialize_placement_questions(qs: list) -> list[dict]:

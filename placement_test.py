@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -14,6 +14,7 @@ class PlacementQuestion:
     explanation: str
     source: str
     difficulty: str
+    topic: str = ""   # e.g. "derivatives", "integration", "limits"
 
 
 @dataclass
@@ -23,6 +24,8 @@ class PlacementResult:
     summary: str
     score: int
     total: int
+    weak_topics: list[str] = field(default_factory=list)    # topics answered wrong
+    strong_topics: list[str] = field(default_factory=list)  # topics answered correctly
 
 
 METHOD_CHOICES = {
@@ -78,6 +81,7 @@ FALLBACK_BANK = {
             explanation="Power rule: d/dx[xⁿ] = nxⁿ⁻¹. The constant 7 vanishes.",
             source="Calc I diagnostic",
             difficulty="easy",
+            topic="derivatives",
         ),
         PlacementQuestion(
             prompt=(
@@ -94,6 +98,7 @@ FALLBACK_BANK = {
             explanation="Second derivative test: f''(a) > 0 means the curve is concave up → local minimum.",
             source="Calc I diagnostic",
             difficulty="medium",
+            topic="optimization",
         ),
         PlacementQuestion(
             prompt="Evaluate $\\displaystyle\\lim_{x \\to 0} \\frac{\\sin(3x)}{x}$.",
@@ -102,6 +107,7 @@ FALLBACK_BANK = {
             explanation="Standard limit: lim(x→0) sin(kx)/x = k. Here k = 3.",
             source="Calc I diagnostic",
             difficulty="easy",
+            topic="limits",
         ),
         PlacementQuestion(
             prompt="For $\\displaystyle\\int x e^x\\,dx$, which technique works best?",
@@ -115,6 +121,7 @@ FALLBACK_BANK = {
             explanation="x·eˣ is a polynomial × exponential — the classic integration-by-parts setup.",
             source="Calc I diagnostic",
             difficulty="medium",
+            topic="integration",
         ),
         PlacementQuestion(
             prompt=(
@@ -131,6 +138,7 @@ FALLBACK_BANK = {
             explanation="Absolute extrema on a closed interval: check interior critical points AND endpoints (Closed Interval Method).",
             source="Calc I diagnostic",
             difficulty="medium",
+            topic="optimization",
         ),
     ],
     "calc_ii": [
@@ -146,6 +154,7 @@ FALLBACK_BANK = {
             explanation="ln(x) lacks a simple antiderivative on its own; integration by parts handles log × polynomial products.",
             source="Calc II diagnostic",
             difficulty="easy",
+            topic="integration",
         ),
         PlacementQuestion(
             prompt="Which test would you apply first to $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{n}{2^n}$?",
@@ -159,6 +168,7 @@ FALLBACK_BANK = {
             explanation="Exponential denominator — Ratio Test gives a clean limit less than 1, confirming convergence.",
             source="Calc II diagnostic",
             difficulty="medium",
+            topic="series",
         ),
         PlacementQuestion(
             prompt=(
@@ -175,6 +185,7 @@ FALLBACK_BANK = {
             explanation="Infinite upper bound → improper integral. Evaluate as a limit.",
             source="Calc II diagnostic",
             difficulty="medium",
+            topic="improper_integrals",
         ),
         PlacementQuestion(
             prompt=(
@@ -191,6 +202,7 @@ FALLBACK_BANK = {
             explanation="Rotate around x-axis → disk method: V = π∫[f(x)]² dx.",
             source="Calc II diagnostic",
             difficulty="medium",
+            topic="volume",
         ),
         PlacementQuestion(
             prompt=(
@@ -207,6 +219,7 @@ FALLBACK_BANK = {
             explanation="This is the Taylor series for eˣ — it converges everywhere, so R = ∞.",
             source="Calc II diagnostic",
             difficulty="hard",
+            topic="series",
         ),
     ],
     "calc_iii": [
@@ -222,6 +235,7 @@ FALLBACK_BANK = {
             explanation="Treat y as constant: ∂/∂x[x²y] = 2xy, ∂/∂x[eʸ] = 0.",
             source="Calc III diagnostic",
             difficulty="easy",
+            topic="partial_derivatives",
         ),
         PlacementQuestion(
             prompt=(
@@ -238,6 +252,7 @@ FALLBACK_BANK = {
             explanation="Equality constraints in Calc III signal Lagrange multipliers.",
             source="Calc III diagnostic",
             difficulty="medium",
+            topic="constrained_optimization",
         ),
         PlacementQuestion(
             prompt=(
@@ -254,6 +269,7 @@ FALLBACK_BANK = {
             explanation="Circular region → polar coordinates simplify both the boundary and the integrand.",
             source="Calc III diagnostic",
             difficulty="medium",
+            topic="multivariable_integration",
         ),
         PlacementQuestion(
             prompt=(
@@ -270,6 +286,7 @@ FALLBACK_BANK = {
             explanation="Directional derivative = how fast f changes as you walk in direction û.",
             source="Calc III diagnostic",
             difficulty="medium",
+            topic="gradient",
         ),
         PlacementQuestion(
             prompt=(
@@ -286,6 +303,7 @@ FALLBACK_BANK = {
             explanation="Closed bounded region: check interior critical points AND all boundary segments.",
             source="Calc III diagnostic",
             difficulty="hard",
+            topic="multivariable_optimization",
         ),
     ],
 }
@@ -344,6 +362,22 @@ def score_placement(questions: list[PlacementQuestion], answers: list[Optional[i
     total = len(questions)
     score = sum(1 for q, a in zip(questions, answers) if a == q.correct_index)
 
+    # Track which topics were wrong vs. correct (preserve insertion order, deduplicate)
+    seen_weak: dict[str, bool] = {}
+    seen_strong: dict[str, bool] = {}
+    for q, a in zip(questions, answers):
+        topic = q.topic or ""
+        if not topic:
+            continue
+        if a != q.correct_index:
+            seen_weak[topic] = True
+        else:
+            seen_strong[topic] = True
+
+    weak_topics = list(seen_weak.keys())
+    # Strong = correct AND not also wrong on a different question of the same topic
+    strong_topics = [t for t in seen_strong if t not in seen_weak]
+
     if total == 0:
         return PlacementResult(
             level="intermediate",
@@ -351,6 +385,8 @@ def score_placement(questions: list[PlacementQuestion], answers: list[Optional[i
             summary="No diagnostic data yet, so Claire will start in a balanced teaching mode.",
             score=0,
             total=0,
+            weak_topics=[],
+            strong_topics=[],
         )
 
     ratio = score / total
@@ -361,6 +397,8 @@ def score_placement(questions: list[PlacementQuestion], answers: list[Optional[i
             summary="Claire should use simple language, emphasize intuition, define symbols, and slow down the step size.",
             score=score,
             total=total,
+            weak_topics=weak_topics,
+            strong_topics=strong_topics,
         )
     if ratio <= 0.75:
         return PlacementResult(
@@ -369,6 +407,8 @@ def score_placement(questions: list[PlacementQuestion], answers: list[Optional[i
             summary="Claire should reinforce method choice and common traps while still explaining why each step works.",
             score=score,
             total=total,
+            weak_topics=weak_topics,
+            strong_topics=strong_topics,
         )
     return PlacementResult(
         level="advanced",
@@ -376,4 +416,6 @@ def score_placement(questions: list[PlacementQuestion], answers: list[Optional[i
         summary="Claire should be more concise, focus on strategy, and push the student toward timed practice and higher-yield drilling.",
         score=score,
         total=total,
+        weak_topics=weak_topics,
+        strong_topics=strong_topics,
     )

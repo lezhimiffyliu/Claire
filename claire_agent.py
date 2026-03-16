@@ -84,20 +84,43 @@ Respond in the same language as the student.
     }
 
     @property
+    @property
     def system_prompt(self) -> str:
-        """Build system prompt based on current user level."""
+        """Build system prompt based on current user level and weak topics."""
         level_text = self.LEVEL_INSTRUCTIONS.get(self.user_level, self.LEVEL_INSTRUCTIONS["intermediate"])
-        return self.SYSTEM_PROMPT_TEMPLATE.format(level_instructions=level_text)
+
+        weak_section = ""
+        if self.weak_topics:
+            try:
+                from practice_planner import TOPIC_LABELS
+                labels = [TOPIC_LABELS.get(t, t.replace("_", " ").title()) for t in self.weak_topics]
+                weak_section = (
+                    f"\n\nSTUDENT WEAK AREAS (from diagnostic): {', '.join(labels)}. "
+                    "When a problem touches one of these areas, be especially thorough — "
+                    "slow down, explain the concept from first principles, and verify understanding "
+                    "before moving on. When suggesting what to practice next, prefer these topics."
+                )
+            except ImportError:
+                pass
+
+        return self.SYSTEM_PROMPT_TEMPLATE.format(
+            level_instructions=level_text + weak_section
+        )
 
     def __init__(self):
         """Initialize Claire 2.0 Agent"""
         self.conversation_history: List[Dict[str, str]] = []
         self.user_level = "intermediate"
+        self.weak_topics: List[str] = []
+        self.strong_topics: List[str] = []
         self.current_pattern: Optional[str] = None
         self.current_heuristic: Optional[str] = None
 
         # Exam context from uploaded materials
         self.exam_context = None
+
+        # (legacy) study plan snippet — kept for backwards compat
+        self._study_plan_snippet: str = ""
 
         # LangChain components
         self.llm = None
@@ -489,17 +512,33 @@ Tools: {len(self.tools) if self.tools else 0} loaded
         """Set user level and rebuild agent with updated system prompt."""
         if level in ("beginner", "intermediate", "advanced"):
             self.user_level = level
-            # Rebuild executor with new system prompt
-            if self.llm and self.tools:
-                try:
-                    from langgraph.prebuilt import create_react_agent
-                    self.executor = create_react_agent(
-                        model=self.llm,
-                        tools=self.tools,
-                        prompt=self.system_prompt,
-                    )
-                except Exception:
-                    pass
+            self._rebuild_executor()
+
+    def set_diagnostic_result(self, result) -> None:
+        """Apply full diagnostic result: level + weak/strong topics, then rebuild."""
+        if result.level in ("beginner", "intermediate", "advanced"):
+            self.user_level = result.level
+        self.weak_topics = list(getattr(result, "weak_topics", []))
+        self.strong_topics = list(getattr(result, "strong_topics", []))
+        self._rebuild_executor()
+
+    def set_study_plan(self, snippet: str) -> None:
+        """Inject a study-plan block into the system prompt (legacy)."""
+        self._study_plan_snippet = snippet
+        self._rebuild_executor()
+
+    def _rebuild_executor(self) -> None:
+        """Rebuild the LangGraph executor with the current system prompt."""
+        if self.llm and self.tools:
+            try:
+                from langgraph.prebuilt import create_react_agent
+                self.executor = create_react_agent(
+                    model=self.llm,
+                    tools=self.tools,
+                    prompt=self.system_prompt,
+                )
+            except Exception:
+                pass
 
     def set_exam_context(self, context) -> None:
         """Set exam context from analyzed course materials."""
