@@ -53,8 +53,8 @@ def _pre_strip(text: str) -> str:
     # 1b. Strip inline "(A) ... (B) ..." after a sentence-ending period
     text = _re.sub(r'([.!])\s*\([A-Ea-e]\)\s+.+$', r'\1', text, flags=_re.DOTALL)
 
-    # 2. Strip "(A) ... (B) ..." style options on their own lines
-    text = _re.sub(r'^\s*\([A-Ea-e]\)\s+.+$', '', text, flags=_re.MULTILINE)
+    # 2. Strip MC options on their own lines — handles "(A) ...", "A) ...", "A. ..."
+    text = _re.sub(r'^\s*\(?[A-Ea-e]\)?[.)]\s+.+$', '', text, flags=_re.MULTILINE)
 
     # 3. Strip "None / All of the above"
     text = _re.sub(r'\b(None|All)\s+of\s+the\s+above\b', '', text, flags=_re.IGNORECASE)
