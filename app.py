@@ -16,6 +16,7 @@ from session_store import new_session_id, save_session, load_session
 from practice_planner import prioritize_questions, format_study_plan
 from practice_planner import prioritize_questions, format_study_plan, study_plan_for_prompt
 from tracker import track, track_feedback
+from auth import handle_oauth_callback, get_user, show_login_button, sign_out
 
 # Page config
 st.set_page_config(
@@ -59,6 +60,9 @@ st.markdown("""
 # ────────────────────────────────────────────────────────────
 # Session ID — lives in URL as ?s=<id>
 # ────────────────────────────────────────────────────────────
+# Handle Google OAuth callback (must be before any other st calls)
+handle_oauth_callback()
+
 if "session_id" not in st.session_state:
     params = st.query_params
     sid = params.get("s", None)
@@ -228,12 +232,21 @@ with st.sidebar:
 
     # Course materials
     st.caption("Course Materials")
-    uploaded = st.file_uploader(
-        "Upload",
-        type=["pdf", "txt", "md"],
-        accept_multiple_files=True,
-        label_visibility="collapsed"
-    )
+    current_user = get_user()
+    if not current_user:
+        show_login_button("Sign in to upload materials")
+        uploaded = None
+    else:
+        st.caption(f"👤 {current_user.email}")
+        if st.button("Sign out", use_container_width=True, key="signout"):
+            sign_out()
+            st.rerun()
+        uploaded = st.file_uploader(
+            "Upload",
+            type=["pdf", "txt", "md"],
+            accept_multiple_files=True,
+            label_visibility="collapsed"
+        )
 
     if uploaded:
         if st.button("Load", use_container_width=True):
