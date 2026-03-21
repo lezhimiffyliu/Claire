@@ -14,7 +14,7 @@ load_dotenv()
 class ClaireAgent:
     """Claire - Making Calculus Clear"""
 
-    SYSTEM_PROMPT = """You are Claire, a calculus tutor.
+    SYSTEM_PROMPT_TEMPLATE = """You are Claire, a calculus tutor.
 
 IMPORTANT: When course materials are loaded, you have access to the FULL problem texts.
 When a student asks to work on a specific problem (e.g., "Problem 5", "Q3"), find it in the loaded materials and USE the actual problem text. Do NOT ask the student to provide the problem - you already have it.
@@ -46,6 +46,8 @@ Example flow for second derivative test:
 - [Student computes]
 - "Good! So D = -11. Based on the rules above, what type of point is this?"
 
+{level_instructions}
+
 Teaching style:
 - Be concise and clear
 - Use natural math teacher language
@@ -57,20 +59,74 @@ Math: Use $...$ for inline and $$...$$ for display equations.
 Respond in the same language as the student.
 """
 
+    LEVEL_INSTRUCTIONS = {
+        "beginner": """STUDENT LEVEL: BEGINNER — Foundations need work.
+- Use simple, everyday language. Avoid jargon; if you must use a term, define it immediately.
+- Be very explicit about each step — never skip steps or assume prior knowledge.
+- Use intuitive analogies and visual descriptions (e.g., "think of the derivative as the slope of the hill you're walking on").
+- Encourage frequently. Mistakes are learning opportunities — be patient and supportive.
+- Break problems into very small sub-steps (one operation per step).
+- Always restate what symbols mean (e.g., "f'(x), which means the derivative of f").""",
+
+        "intermediate": """STUDENT LEVEL: INTERMEDIATE — Has basics but calculus is shaky.
+- Reinforce method selection: explain WHY you pick a certain approach, not just how.
+- Point out common traps and mistakes for the problem type.
+- Still explain each step, but you can combine straightforward operations.
+- Ask the student to justify their choices ("Why did you pick u-substitution here?").
+- When they make errors, ask guiding questions rather than just correcting.""",
+
+        "advanced": """STUDENT LEVEL: ADVANCED — Strong student, focus on speed and strategy.
+- Be concise. Skip obvious algebra steps; focus on strategy and key decision points.
+- Emphasize pattern recognition: "Notice this has the same structure as..."
+- Push toward timed practice mindset — efficiency matters for exams.
+- Challenge them with follow-up variations or edge cases.
+- When they get it right, move on quickly. Don't over-explain what they already know.""",
+    }
+
+    @property
+    @property
+    def system_prompt(self) -> str:
+        """Build system prompt based on current user level and weak topics."""
+        level_text = self.LEVEL_INSTRUCTIONS.get(self.user_level, self.LEVEL_INSTRUCTIONS["intermediate"])
+
+        weak_section = ""
+        if self.weak_topics:
+            try:
+                from practice_planner import TOPIC_LABELS
+                labels = [TOPIC_LABELS.get(t, t.replace("_", " ").title()) for t in self.weak_topics]
+                weak_section = (
+                    f"\n\nSTUDENT WEAK AREAS (from diagnostic): {', '.join(labels)}. "
+                    "When a problem touches one of these areas, be especially thorough — "
+                    "slow down, explain the concept from first principles, and verify understanding "
+                    "before moving on. When suggesting what to practice next, prefer these topics."
+                )
+            except ImportError:
+                pass
+
+        return self.SYSTEM_PROMPT_TEMPLATE.format(
+            level_instructions=level_text + weak_section
+        )
+
     def __init__(self):
         """Initialize Claire 2.0 Agent"""
         self.conversation_history: List[Dict[str, str]] = []
         self.user_level = "intermediate"
+        self.weak_topics: List[str] = []
+        self.strong_topics: List[str] = []
         self.current_pattern: Optional[str] = None
         self.current_heuristic: Optional[str] = None
 
         # Exam context from uploaded materials
         self.exam_context = None
 
+        # (legacy) study plan snippet — kept for backwards compat
+        self._study_plan_snippet: str = ""
+
         # LangChain components
         self.llm = None
         self.tools = None
         self.executor = None
+        self.model_tier = "premium"  # "premium" (Claude) or "basic" (DeepSeek)
 
         self._initialize_agent()
 
@@ -113,7 +169,7 @@ Respond in the same language as the student.
             self.executor = create_react_agent(
                 model=self.llm,
                 tools=self.tools,
-                prompt=self.SYSTEM_PROMPT
+                prompt=self.system_prompt
             )
             print("ReAct Agent: Ready")
 
@@ -452,6 +508,68 @@ Tools: {len(self.tools) if self.tools else 0} loaded
             self.user_level = level
             return f"Level set to: {level}"
         return "Invalid level. Use: beginner, intermediate, or advanced"
+
+    def set_user_level(self, level: str) -> None:
+        """Set user level and rebuild agent with updated system prompt."""
+        if level in ("beginner", "intermediate", "advanced"):
+            self.user_level = level
+            self._rebuild_executor()
+
+    def set_diagnostic_result(self, result) -> None:
+        """Apply full diagnostic result: level + weak/strong topics, then rebuild."""
+        if result.level in ("beginner", "intermediate", "advanced"):
+            self.user_level = result.level
+        self.weak_topics = list(getattr(result, "weak_topics", []))
+        self.strong_topics = list(getattr(result, "strong_topics", []))
+        self._rebuild_executor()
+
+    def set_study_plan(self, snippet: str) -> None:
+        """Inject a study-plan block into the system prompt (legacy)."""
+        self._study_plan_snippet = snippet
+        self._rebuild_executor()
+
+    def _rebuild_executor(self) -> None:
+        """Rebuild the LangGraph executor with the current system prompt."""
+        if self.llm and self.tools:
+            try:
+                from langgraph.prebuilt import create_react_agent
+                self.executor = create_react_agent(
+                    model=self.llm,
+                    tools=self.tools,
+                    prompt=self.system_prompt,
+                )
+            except Exception:
+                pass
+
+    def switch_to_deepseek(self) -> bool:
+        """Switch LLM from Claude to DeepSeek. Returns True if successful."""
+        if self.model_tier == "basic":
+            return True  # already on basic
+        try:
+            import os
+            from langchain_openai import ChatOpenAI
+            api_key = os.getenv("DEEPSEEK_API_KEY") or ""
+            try:
+                import streamlit as st
+                api_key = api_key or st.secrets.get("DEEPSEEK_API_KEY", "")
+            except Exception:
+                pass
+            if not api_key:
+                return False
+            self.llm = ChatOpenAI(
+                model="deepseek-chat",
+                api_key=api_key,
+                base_url="https://api.deepseek.com",
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            self.model_tier = "basic"
+            self._rebuild_executor()
+            print("AI Engine: switched to DeepSeek (basic tier)")
+            return True
+        except Exception as e:
+            print(f"DeepSeek switch failed: {e}")
+            return False
 
     def set_exam_context(self, context) -> None:
         """Set exam context from analyzed course materials."""

@@ -232,6 +232,12 @@ def analyze_files(files: list[tuple[str, bytes]]) -> ExamContext:
 
     # Build question bank
     question_bank = build_question_bank(files)
+
+    # Clean up garbled LaTeX with Claude Haiku (once per upload, in-place)
+    if question_bank and len(question_bank) > 0:
+        from math_cleaner import clean_questions
+        clean_questions(question_bank.questions)
+
     context.question_bank = question_bank
 
     return context
