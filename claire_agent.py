@@ -126,6 +126,7 @@ Respond in the same language as the student.
         self.llm = None
         self.tools = None
         self.executor = None
+        self.model_tier = "premium"  # "premium" (Claude) or "basic" (DeepSeek)
 
         self._initialize_agent()
 
@@ -539,6 +540,36 @@ Tools: {len(self.tools) if self.tools else 0} loaded
                 )
             except Exception:
                 pass
+
+    def switch_to_deepseek(self) -> bool:
+        """Switch LLM from Claude to DeepSeek. Returns True if successful."""
+        if self.model_tier == "basic":
+            return True  # already on basic
+        try:
+            import os
+            from langchain_openai import ChatOpenAI
+            api_key = os.getenv("DEEPSEEK_API_KEY") or ""
+            try:
+                import streamlit as st
+                api_key = api_key or st.secrets.get("DEEPSEEK_API_KEY", "")
+            except Exception:
+                pass
+            if not api_key:
+                return False
+            self.llm = ChatOpenAI(
+                model="deepseek-chat",
+                api_key=api_key,
+                base_url="https://api.deepseek.com",
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            self.model_tier = "basic"
+            self._rebuild_executor()
+            print("AI Engine: switched to DeepSeek (basic tier)")
+            return True
+        except Exception as e:
+            print(f"DeepSeek switch failed: {e}")
+            return False
 
     def set_exam_context(self, context) -> None:
         """Set exam context from analyzed course materials."""

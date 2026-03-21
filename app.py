@@ -104,6 +104,12 @@ if "calc_track" not in st.session_state:
     st.session_state.calc_track = None
 if "prioritized_questions" not in st.session_state:
     st.session_state.prioritized_questions = []
+if "query_count" not in st.session_state:
+    st.session_state.query_count = 0
+if "show_tier_notice" not in st.session_state:
+    st.session_state.show_tier_notice = False
+
+FREE_PREMIUM_QUERIES = 5
 
 # ────────────────────────────────────────────────────────────
 # Restore from disk if this is a returning visitor
@@ -761,6 +767,15 @@ else:
                     _skip_placement()
                     st.rerun()
 
+    # Tier switch notice (show once)
+    if st.session_state.show_tier_notice:
+        st.info(
+            "✨ You've used your 5 free premium credits. "
+            "Switched to basic mode — you can keep using Claire without limits.",
+            icon=None,
+        )
+        st.session_state.show_tier_notice = False
+
     # Chat history
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
@@ -805,6 +820,17 @@ prompt = st.chat_input("Enter a calculus problem...")
 
 if prompt:
     track(st.session_state.session_id, "query", {"query": prompt[:300]})
+    st.session_state.query_count += 1
+
+    # Tier switch: after FREE_PREMIUM_QUERIES, move to DeepSeek
+    if (
+        st.session_state.query_count > FREE_PREMIUM_QUERIES
+        and agent.model_tier == "premium"
+    ):
+        switched = agent.switch_to_deepseek()
+        if switched:
+            st.session_state.show_tier_notice = True
+
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
