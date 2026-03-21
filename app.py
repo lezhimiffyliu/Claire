@@ -583,28 +583,31 @@ def _render_placement_test():
 
         q = questions[idx]
 
-        # Source + difficulty on one line
-        diff_colors = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}
-        diff_icon = diff_colors.get(q.difficulty, "")
-        st.caption(f"{diff_icon} {q.difficulty.capitalize()}  ·  {q.source}")
-
         st.markdown("---")
 
-        # Question body
+        # Question body with math rendering
         if q.question_excerpt:
             # From uploaded materials: render with st.markdown so LaTeX ($...$) works
-            st.markdown(q.question_excerpt)
+            from question_bank import format_math_text
+            formatted_q = format_math_text(q.question_excerpt)
+            st.markdown(formatted_q)
             if q.ask_text:
                 st.markdown(f"*{q.ask_text}*")
         else:
-            # Fallback / hand-written questions: render LaTeX markdown
+            # Fallback / hand-written questions: already have LaTeX
             st.markdown(q.prompt)
+
+        # Source citation below question
+        diff_colors = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}
+        diff_icon = diff_colors.get(q.difficulty, "")
+        st.caption(f"{diff_icon} {q.difficulty.capitalize()}  ·  *{q.source}*")
 
         st.markdown("")
 
-        # Choices as lettered radio options
+        # Choices as lettered radio options with math rendering
         LETTERS = ["A", "B", "C", "D", "E"]
-        choice_labels = [f"**{LETTERS[i]}.**  {c}" for i, c in enumerate(q.choices)]
+        from question_bank import format_math_text
+        choice_labels = [f"**{LETTERS[i]}.**  {format_math_text(c)}" for i, c in enumerate(q.choices)]
 
         answer = st.radio(
             "Your answer:",
