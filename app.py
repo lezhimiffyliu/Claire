@@ -15,6 +15,7 @@ from placement_test import (
 from session_store import new_session_id, save_session, load_session
 from practice_planner import prioritize_questions, format_study_plan
 from practice_planner import prioritize_questions, format_study_plan, study_plan_for_prompt
+from tracker import track, track_feedback
 
 # Page config
 st.set_page_config(
@@ -70,6 +71,7 @@ if "session_id" not in st.session_state:
         st.session_state.session_id = sid
         st.query_params["s"] = sid
         st.session_state._restored = True    # nothing to restore
+        track(sid, "session_start")
 
 # Initialize session state
 if "agent" not in st.session_state:
@@ -240,6 +242,10 @@ with st.sidebar:
                 context = analyze_files(files)
                 st.session_state.exam_context = context
                 agent.set_exam_context(context)
+            track(st.session_state.session_id, "file_upload", {
+                "file_count": len(files),
+                "names": [f.name for f in uploaded],
+            })
             # Prompt placement test if not already done
             if st.session_state.placement_stage in ("not_started", "choosing_track"):
                 st.session_state.placement_stage = "not_started"
@@ -318,6 +324,33 @@ with st.sidebar:
         agent.conversation_history = []
         st.rerun()
 
+    st.divider()
+
+    # Feedback
+    with st.expander("💬 Leave feedback"):
+        fb_text = st.text_area(
+            "What's not working? Any suggestions?",
+            key="feedback_text",
+            placeholder="e.g. The explanation was confusing, wrong answer, missing feature...",
+            label_visibility="visible",
+        )
+        fb_col1, fb_col2, fb_col3 = st.columns(3)
+        with fb_col1:
+            if st.button("👍", use_container_width=True, key="fb_good"):
+                track_feedback(st.session_state.session_id, fb_text or "", rating="good")
+                st.success("Thanks!")
+        with fb_col2:
+            if st.button("👎", use_container_width=True, key="fb_bad"):
+                track_feedback(st.session_state.session_id, fb_text or "", rating="bad")
+                st.success("Thanks!")
+        with fb_col3:
+            if st.button("Send", use_container_width=True, key="fb_send"):
+                if fb_text.strip():
+                    track_feedback(st.session_state.session_id, fb_text)
+                    st.success("Got it!")
+                else:
+                    st.warning("Write something first")
+
 
 # ============================================================
 # SHOW PROBLEM DIALOG IF SELECTED
@@ -381,6 +414,13 @@ def _finish_placement():
     )
     st.session_state.placement_result = result
     st.session_state.placement_stage = "done"
+
+    track(st.session_state.session_id, "placement_done", {
+        "level": result.level,
+        "score": result.score,
+        "total": result.total,
+        "weak_topics": result.weak_topics,
+    })
 
     # Apply level + weak/strong topics to the agent
     agent.set_diagnostic_result(result)
@@ -757,6 +797,7 @@ components.html("""
 prompt = st.chat_input("Enter a calculus problem...")
 
 if prompt:
+    track(st.session_state.session_id, "query", {"query": prompt[:300]})
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
