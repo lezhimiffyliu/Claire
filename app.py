@@ -587,13 +587,8 @@ def _render_placement_test():
 
         # Question body
         if q.question_excerpt:
-            # From uploaded materials: show excerpt in a styled box, then ask_text below
-            st.markdown(
-                f"""<div style="background:#f8f9fa;border-left:4px solid #4a90d9;
-                    padding:12px 16px;border-radius:4px;font-size:15px;
-                    line-height:1.6;margin-bottom:12px;">{q.question_excerpt}</div>""",
-                unsafe_allow_html=True,
-            )
+            # From uploaded materials: render with st.markdown so LaTeX ($...$) works
+            st.markdown(q.question_excerpt)
             if q.ask_text:
                 st.markdown(f"*{q.ask_text}*")
         else:
