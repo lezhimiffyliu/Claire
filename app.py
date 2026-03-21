@@ -699,10 +699,11 @@ def _render_placement_test():
 
         q = questions[idx]
 
-        # Source + difficulty on one line
+        # Difficulty badge + source on separate lines
         diff_colors = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}
         diff_icon = diff_colors.get(q.difficulty, "")
-        st.caption(f"{diff_icon} {q.difficulty.capitalize()}  ·  {q.source}")
+        st.caption(f"{diff_icon} {q.difficulty.capitalize()}")
+        st.caption(f"📄 {q.source}")
 
         st.markdown("---")
 
