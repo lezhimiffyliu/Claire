@@ -720,10 +720,14 @@ def _render_placement_test():
 
         st.markdown("")
 
-        # Choices as lettered radio options with math rendering
+        # Choices as lettered radio options
         LETTERS = ["A", "B", "C", "D", "E"]
-        from question_bank import format_math_text
-        choice_labels = [f"**{LETTERS[i]}.**  {format_math_text(c)}" for i, c in enumerate(q.choices)]
+        # Only apply format_math_text to plain text (from PDFs), not to fallback questions with existing LaTeX
+        if q.question_excerpt:
+            from question_bank import format_math_text
+            choice_labels = [f"**{LETTERS[i]}.**  {format_math_text(c)}" for i, c in enumerate(q.choices)]
+        else:
+            choice_labels = [f"**{LETTERS[i]}.**  {c}" for i, c in enumerate(q.choices)]
 
         answer = st.radio(
             "Your answer:",
