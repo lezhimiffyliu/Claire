@@ -395,9 +395,12 @@ if st.session_state.pending_problem:
 # ============================================================
 
 def _start_placement_from_materials():
-    """Start placement test using hand-crafted questions (avoids garbled PDF math)."""
-    track = st.session_state.calc_track or "calc_i"
-    questions = get_fallback_questions(track)
+    """Start placement test using questions from uploaded materials (LaTeX pre-cleaned)."""
+    bank = st.session_state.exam_context.question_bank if st.session_state.exam_context.has_questions() else None
+    questions = build_questions_from_bank(bank, limit=5)
+    if not questions:
+        track = st.session_state.calc_track or "calc_i"
+        questions = get_fallback_questions(track)
     st.session_state.placement_questions = questions
     st.session_state.placement_answers = [None] * len(questions)
     st.session_state.placement_current = 0
@@ -530,27 +533,16 @@ def _render_placement_test():
 
         has_materials = exam_context.has_questions()
         if has_materials:
-            st.markdown("Which calculus course are you studying?")
-            col1, col2, col3 = st.columns(3)
+            st.info("📂 I'll use questions from your uploaded materials.")
+            col1, col2 = st.columns(2)
             with col1:
-                if st.button("Calc I", use_container_width=True, type="primary"):
-                    st.session_state.calc_track = "calc_i"
+                if st.button("Start diagnostic", type="primary", use_container_width=True):
                     _start_placement_from_materials()
                     st.rerun()
             with col2:
-                if st.button("Calc II", use_container_width=True, type="primary"):
-                    st.session_state.calc_track = "calc_ii"
-                    _start_placement_from_materials()
+                if st.button("Skip — let's just start", use_container_width=True):
+                    _skip_placement()
                     st.rerun()
-            with col3:
-                if st.button("Calc III", use_container_width=True, type="primary"):
-                    st.session_state.calc_track = "calc_iii"
-                    _start_placement_from_materials()
-                    st.rerun()
-            st.caption("")
-            if st.button("Skip — let's just start", use_container_width=True):
-                _skip_placement()
-                st.rerun()
         else:
             st.markdown("Which calculus course are you studying?")
             col1, col2, col3 = st.columns(3)
