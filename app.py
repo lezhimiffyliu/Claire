@@ -108,6 +108,11 @@ if "query_count" not in st.session_state:
     st.session_state.query_count = 0
 if "show_tier_notice" not in st.session_state:
     st.session_state.show_tier_notice = False
+# "hidden" → "showing" (after upload) → "done" (user clicked through)
+if "exam_scope_stage" not in st.session_state:
+    st.session_state.exam_scope_stage = "hidden"
+if "pending_similar" not in st.session_state:
+    st.session_state.pending_similar = False
 
 FREE_PREMIUM_QUERIES = 5
 
@@ -265,12 +270,13 @@ with st.sidebar:
                 "file_count": len(files),
                 "names": [f.name for f in uploaded],
             })
-            # Prompt placement test if not already done
+            # Show exam scope analyzer first, then placement test
+            st.session_state.exam_scope_stage = "showing"
             if st.session_state.placement_stage in ("not_started", "choosing_track"):
                 st.session_state.placement_stage = "not_started"
-                # Clear chat so the diagnostic screen shows immediately
-                st.session_state.messages = []
-                agent.conversation_history = []
+            # Clear chat so the analyzer screen shows immediately
+            st.session_state.messages = []
+            agent.conversation_history = []
             _save_current_session()
             st.rerun()
 
@@ -376,6 +382,31 @@ with st.sidebar:
 # ============================================================
 if st.session_state.selected_problem:
     show_problem_detail(st.session_state.selected_problem)
+
+# ============================================================
+# PROCESS PENDING SIMILAR PROBLEM REQUEST
+# ============================================================
+if st.session_state.pending_similar:
+    st.session_state.pending_similar = False
+    similar_query = (
+        "Generate a new practice problem similar to what we just worked on "
+        "(use different numbers or a slight variation). "
+        "Give me just the problem statement — don't solve it yet."
+    )
+    track(st.session_state.session_id, "query", {"query": "generate_similar"})
+    st.session_state.query_count += 1
+
+    if st.session_state.query_count > FREE_PREMIUM_QUERIES and agent.model_tier == "premium":
+        switched = agent.switch_to_deepseek()
+        if switched:
+            st.session_state.show_tier_notice = True
+
+    st.session_state.messages.append({"role": "user", "content": "↻ Generate a similar problem"})
+    with st.spinner(""):
+        result = agent.process_query(similar_query)
+    st.session_state.messages.append({"role": "assistant", "content": result["output"]})
+    st.rerun()
+
 
 # ============================================================
 # PROCESS PENDING PROBLEM FROM DIALOG
@@ -518,6 +549,91 @@ def _inject_welcome_message(result):
     msg = msg.replace("\n\n\n\n", "\n\n").strip()
     st.session_state.messages.append({"role": "assistant", "content": msg})
     agent.conversation_history.append({"role": "assistant", "content": msg})
+
+
+def _render_exam_scope_analyzer():
+    """
+    Render the Exam Scope Analyzer screen after file upload.
+    Shows topic distribution, high-freq topics, risk areas, and min passing path.
+    Returns True if it rendered (caller should skip other UI).
+    """
+    if st.session_state.exam_scope_stage != "showing":
+        return False
+
+    from exam_analyzer import generate_exam_scope, TOPIC_DISPLAY, TOPIC_EMOJI
+
+    ctx = st.session_state.exam_context
+    if not ctx.has_context():
+        st.session_state.exam_scope_stage = "done"
+        return False
+
+    report = generate_exam_scope(ctx)
+
+    # ── Header ──────────────────────────────────────────────
+    st.markdown("## 📊 Exam Scope Analysis")
+    names_str = ", ".join(report.material_names[:3])
+    if len(report.material_names) > 3:
+        names_str += f" +{len(report.material_names) - 3} more"
+    st.caption(f"Based on: {names_str}")
+    if report.total_questions:
+        st.caption(f"📝 {report.total_questions} problems extracted")
+    st.markdown("---")
+
+    if not report.topic_distribution:
+        st.info("📂 Materials loaded — couldn't detect clear topic patterns. Try uploading a past exam or syllabus for better analysis.")
+        if st.button("Continue →", type="primary"):
+            st.session_state.exam_scope_stage = "done"
+            st.rerun()
+        return True
+
+    # ── Two-column layout ────────────────────────────────────
+    col_left, col_right = st.columns([1.3, 1])
+
+    with col_left:
+        st.markdown("#### 📈 Topic Distribution")
+        for topic_name, pct, raw in report.topic_distribution:
+            display = TOPIC_DISPLAY.get(topic_name, topic_name.replace("_", " ").title())
+            emoji = TOPIC_EMOJI.get(topic_name, "•")
+            st.markdown(f"**{emoji} {display}**")
+            st.progress(pct / 100, text=f"{pct}%")
+
+        st.markdown("")
+        st.markdown("#### 🎯 Likely Exam Topics")
+        for t in report.high_freq_topics:
+            disp = TOPIC_DISPLAY.get(t, t.replace("_", " ").title())
+            st.markdown(f"✅ {disp}")
+
+    with col_right:
+        if report.risk_areas:
+            st.markdown("#### ⚠️ Risk Areas")
+            st.caption("Low/no coverage in your materials — don't skip these:")
+            for t in report.risk_areas:
+                disp = TOPIC_DISPLAY.get(t, t.replace("_", " ").title())
+                st.markdown(f"⚠️ {disp}")
+
+        st.markdown("")
+        st.markdown("#### 🚀 Minimum Passing Path")
+        st.caption("Master these first to cover ~70% of exam content:")
+        for i, t in enumerate(report.min_passing_path, 1):
+            pct = next((p for n, p, _ in report.topic_distribution if n == t), 0)
+            disp = TOPIC_DISPLAY.get(t, t.replace("_", " ").title())
+            st.markdown(f"**{i}.** {disp} — ~{pct}% of exam")
+
+    st.markdown("---")
+
+    # ── CTA buttons ─────────────────────────────────────────
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("Start Practicing →", type="primary", use_container_width=True):
+            st.session_state.exam_scope_stage = "done"
+            st.rerun()
+    with col_b:
+        if st.button("Skip, just ask questions", use_container_width=True):
+            st.session_state.exam_scope_stage = "done"
+            _skip_placement()
+            st.rerun()
+
+    return True
 
 
 def _render_placement_test():
@@ -703,7 +819,11 @@ def _render_placement_test():
 # ============================================================
 
 # Header
-if not st.session_state.messages:
+if st.session_state.exam_scope_stage == "showing":
+    # Show exam scope analyzer (after upload, before placement test)
+    _render_exam_scope_analyzer()
+
+elif not st.session_state.messages:
     # Show placement test if not done yet
     placement_active = _render_placement_test()
 
@@ -783,6 +903,22 @@ else:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+
+    # "Generate similar problem" button — shown after last assistant reply
+    if (
+        st.session_state.messages
+        and st.session_state.messages[-1]["role"] == "assistant"
+    ):
+        col_sim, col_gap = st.columns([1, 2])
+        with col_sim:
+            if st.button("↻ Similar problem", key="gen_similar", use_container_width=True):
+                st.session_state.pending_similar = True
+                st.rerun()
+
+    # Soft upgrade CTA — nudge after extended basic-mode usage (non-intrusive)
+    qc = st.session_state.query_count
+    if agent.model_tier == "basic" and qc > FREE_PREMIUM_QUERIES and qc % 6 == 2:
+        st.caption("💡 Enjoying Claire? **Unlock full power for exam prep** — premium model available.")
 
 
 # ============================================================

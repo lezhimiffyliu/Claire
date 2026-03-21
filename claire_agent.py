@@ -347,6 +347,15 @@ Keep responses concise."""
         }
         problem_type = problem_type_map.get(pattern, pattern.replace('_', ' '))
 
+        # Check exam-material frequency for this pattern
+        exam_freq_note = ""
+        if self.exam_context and self.exam_context.has_questions():
+            matching = self.exam_context.get_questions_for_pattern(pattern)
+            if len(matching) >= 3:
+                exam_freq_note = " · **High frequency** in your exam materials"
+            elif len(matching) >= 1:
+                exam_freq_note = " · Appears in your exam materials"
+
         # Add exam context if available
         context_info = ""
         if self.exam_context and self.exam_context.has_context():
@@ -354,9 +363,12 @@ Keep responses concise."""
 
         return f"""{user_input}
 {context_info}
-[For your reference - do not mention these labels:
+[INSTRUCTIONS FOR THIS RESPONSE:
 This is a {problem_type} problem.
-Key steps: {heuristic_summary[:300]}]"""
+Key steps: {heuristic_summary[:300]}
+IMPORTANT: After your complete solution, end with exactly this footer (a horizontal rule then the tag):
+---
+🏷️ **Topic:** {problem_type}{exam_freq_note}]"""
 
     def _format_exam_context(self) -> str:
         """Format exam context for the prompt."""
