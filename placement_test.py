@@ -315,12 +315,37 @@ def _difficulty_rank(label: str) -> int:
     return {"easy": 0, "medium": 1, "hard": 2}.get(label, 1)
 
 
+def _is_readable_question(text: str) -> bool:
+    """
+    Return True if a question excerpt has enough readable English content
+    to be used in the placement test.
+
+    Filters out garbled PDF extractions where most of the text is raw
+    LaTeX/symbols with very few actual words.
+    """
+    import re
+    # Strip dollar-sign math, backslash commands, numbers, and punctuation
+    clean = re.sub(r'\$[^$]*\$', ' ', text)            # inline math
+    clean = re.sub(r'\$\$[^$]*\$\$', ' ', clean)       # display math
+    clean = re.sub(r'\\[a-zA-Z]+\{[^}]*\}', ' ', clean)  # \cmd{...}
+    clean = re.sub(r'\\[a-zA-Z]+', ' ', clean)          # bare \cmd
+    clean = re.sub(r'[^a-zA-Z\s]', ' ', clean)          # everything non-alpha
+    words = [w for w in clean.split() if len(w) >= 3]
+    return len(words) >= 8
+
+
 def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
+    """
+    Build placement questions from the uploaded question bank.
+    Only uses questions that pass a readability check; pads with fallback
+    questions when there aren't enough good ones.
+    """
     if not bank or not getattr(bank, "questions", None):
         return []
 
-    seen_patterns = set()
-    selected = []
+    seen_patterns: set[str] = set()
+    selected: list[PlacementQuestion] = []
+
     sorted_questions = sorted(
         bank.questions,
         key=lambda q: (_difficulty_rank(getattr(q, "difficulty", "medium")), len(q.text)),
@@ -330,15 +355,18 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
         pattern = getattr(q, "pattern", None)
         if pattern not in METHOD_CHOICES:
             continue
-        if pattern in seen_patterns and len(selected) < 3:
+        if pattern in seen_patterns:
             continue
 
         excerpt = q.get_formatted_text()[:400] if hasattr(q, "get_formatted_text") else q.text[:400]
-        ask = "What is the best first approach to this problem?"
 
+        # Skip garbled / incomplete extractions
+        if not _is_readable_question(excerpt):
+            continue
+
+        ask = "What is the best first approach to this problem?"
         selected.append(
             PlacementQuestion(
-                # prompt kept as fallback plain text
                 prompt=(
                     f"**{q.format_source()}**\n\n"
                     f"{excerpt}\n\n"
@@ -358,6 +386,13 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
 
         if len(selected) >= limit:
             break
+
+    # If we couldn't find enough readable questions from materials,
+    # fall back entirely to hand-crafted questions so the diagnostic
+    # is always coherent.
+    MIN_QUALITY = 3
+    if len(selected) < MIN_QUALITY:
+        return []   # caller will invoke get_fallback_questions()
 
     return selected
 
