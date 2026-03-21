@@ -1,14 +1,15 @@
 """
 math_cleaner.py
 
-Uses Claude Haiku to clean up garbled LaTeX extracted from PDFs.
+Uses DeepSeek to clean up garbled LaTeX extracted from PDFs.
 Run once after upload — results are stored back into the question bank.
 
 Typical issues fixed:
   - Du f(-1,3) → $D_u f(-1,3)$
-  - ∬ D f dA  → $\iint_D f \, dA$
+  - ∬ D f dA  → $\\iint_D f \\, dA$
   - fxy        → $f_{xy}$
   - 3/4        → $\frac{3}{4}$
+  - Incomplete fragments reconstructed from context
 """
 
 from __future__ import annotations
@@ -24,55 +25,70 @@ _SYSTEM = (
     "from a PDF, where math notation may be garbled: subscripts appear inline, "
     "integral signs lose their limits, fractions are written a/b, etc. "
     "Rewrite each problem with correct LaTeX inside $...$ (inline) or $$...$$ (display). "
-    "Fix ONLY math notation. Do NOT change wording, punctuation, or problem structure. "
-    "Do NOT add explanations."
+    "If a problem is clearly incomplete or cut off, reconstruct it into a complete, "
+    "solvable calculus problem based on the visible context (keep the same topic and numbers). "
+    "Fix math notation and completeness. Do NOT change correct wording or problem structure. "
+    "Do NOT add explanations or commentary."
 )
 
 _SEP = "\n<<<END>>>\n"
 
 
+def _get_deepseek_key() -> str:
+    key = os.getenv("DEEPSEEK_API_KEY", "")
+    if not key:
+        try:
+            import streamlit as st
+            key = st.secrets.get("DEEPSEEK_API_KEY", "")
+        except Exception:
+            pass
+    return key
+
+
 def clean_questions(questions: list["Question"], max_batch: int = 20) -> None:
     """
     In-place: rewrite question.text with clean LaTeX for up to max_batch questions.
-    Silently skips if Anthropic API is unavailable.
+    Uses DeepSeek (cheap) for math cleanup + fragment reconstruction.
+    Silently skips if API is unavailable.
     """
     if not questions:
         return
 
     try:
-        import anthropic
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        # Also try streamlit secrets
-        if not api_key:
-            try:
-                import streamlit as st
-                api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
-            except Exception:
-                pass
+        from openai import OpenAI
+
+        api_key = _get_deepseek_key()
         if not api_key:
             return
 
-        client = anthropic.Anthropic(api_key=api_key)
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com",
+        )
+
         batch = questions[:max_batch]
 
-        # Build one prompt with all questions separated by <<<END>>>
+        # One request: all questions separated by <<<END>>>
         combined = _SEP.join(q.text for q in batch)
         prompt = (
-            "Clean up the LaTeX in each calculus problem below. "
+            "Clean up the LaTeX and fix any incomplete fragments in each calculus "
+            "problem below. "
             f"Problems are separated by '{_SEP.strip()}'. "
-            "Return the cleaned problems in the same order, separated by the same delimiter. "
-            "Do not add or remove problems.\n\n"
+            "Return the cleaned problems in the same order, separated by the same "
+            "delimiter. Do not add or remove problems.\n\n"
             + combined
         )
 
-        resp = client.messages.create(
-            model="claude-haiku-4-5",
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
             max_tokens=4096,
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
         )
 
-        cleaned = resp.content[0].text.split(_SEP)
+        cleaned = resp.choices[0].message.content.split(_SEP)
         for q, new_text in zip(batch, cleaned):
             text = new_text.strip()
             if text:
