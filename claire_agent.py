@@ -21,10 +21,23 @@ def get_secret(key: str) -> Optional[str]:
     # Then try Streamlit secrets (cloud deployment)
     try:
         import streamlit as st
-        if hasattr(st, 'secrets') and key in st.secrets:
-            return st.secrets[key]
-    except Exception:
-        pass
+        if hasattr(st, 'secrets'):
+            # Try direct access (works for both dict-like and AttrDict)
+            try:
+                secret_value = st.secrets[key]
+                if secret_value:
+                    return str(secret_value)
+            except (KeyError, TypeError):
+                pass
+            # Try .get() method
+            try:
+                secret_value = st.secrets.get(key)
+                if secret_value:
+                    return str(secret_value)
+            except (AttributeError, TypeError):
+                pass
+    except Exception as e:
+        print(f"[get_secret] Error accessing secrets: {e}")
 
     return None
 
@@ -316,6 +329,10 @@ Respond in the same language as the student.
                         final_output = msg.content
                     elif msg.type == "tool":
                         intermediate_steps.append(msg)
+
+            # Fallback if no response was generated
+            if not final_output:
+                final_output = "I'm thinking about this problem. Could you rephrase or give me more details?"
 
             self._add_to_history(user_input, final_output)
 
