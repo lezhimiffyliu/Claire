@@ -4,6 +4,8 @@ Calculus Cram: Exam prep powered by AI
 """
 
 import streamlit as st
+import time
+import re
 from claire_agent import ClaireAgent
 from exam_context import analyze_files, ExamContext
 from placement_test import (
@@ -56,6 +58,44 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ────────────────────────────────────────────────────────────
+# THINKING ANIMATION + STRUCTURED OUTPUT
+# ────────────────────────────────────────────────────────────
+
+THINKING_MESSAGES = [
+    "🤔 Analyzing problem...",
+    "📐 Identifying problem type...",
+    "🔍 Checking key conditions...",
+    "✏️ Generating solution steps...",
+]
+
+
+def render_with_hidden_solution(content: str, msg_idx: int) -> None:
+    """
+    Render Claire's response with [Solution] hidden behind a button.
+    Parses the structured output format and creates an expander for the solution.
+    """
+    # Check if content has the [Solution] section
+    solution_pattern = r'\*\*\[Solution\]\*\*\s*([\s\S]*?)(?=\n---|\Z)'
+    match = re.search(solution_pattern, content)
+
+    if match:
+        # Split content into main part and solution
+        solution_content = match.group(1).strip()
+        main_content = content[:match.start()].strip()
+
+        # Render main content (problem type, key idea, steps, try it)
+        st.markdown(main_content)
+
+        # Render solution behind expander
+        with st.expander("👁️ Show Solution", expanded=False):
+            st.markdown(solution_content)
+    else:
+        # No structured format - just render as is
+        st.markdown(content)
+
 
 # ────────────────────────────────────────────────────────────
 # Session ID — lives in URL as ?s=<id>
@@ -889,9 +929,12 @@ else:
         st.session_state.show_tier_notice = False
 
     # Chat history
-    for msg in st.session_state.messages:
+    for i, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            if msg["role"] == "assistant":
+                render_with_hidden_solution(msg["content"], i)
+            else:
+                st.markdown(msg["content"])
 
     # "Generate similar problem" button — shown after last assistant reply
     if (
@@ -965,8 +1008,38 @@ if prompt:
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner(""):
-            result = agent.process_query(prompt)
-        st.markdown(result["output"])
+        # Thinking animation - show rotating messages while waiting
+        status_placeholder = st.empty()
+        result = None
+
+        import threading
+        import queue
+
+        result_queue = queue.Queue()
+
+        def fetch_response():
+            try:
+                r = agent.process_query(prompt)
+                result_queue.put(r)
+            except Exception as e:
+                result_queue.put({"output": f"Error: {e}", "intermediate_steps": []})
+
+        thread = threading.Thread(target=fetch_response)
+        thread.start()
+
+        # Show rotating thinking messages while waiting
+        msg_idx = 0
+        while thread.is_alive():
+            status_placeholder.markdown(f"*{THINKING_MESSAGES[msg_idx % len(THINKING_MESSAGES)]}*")
+            time.sleep(0.5)
+            msg_idx += 1
+
+        # Get result from queue
+        result = result_queue.get()
+        status_placeholder.empty()
+
+        # Render with hidden solution
+        msg_count = len(st.session_state.messages)
+        render_with_hidden_solution(result["output"], msg_count)
 
     st.session_state.messages.append({"role": "assistant", "content": result["output"]})
