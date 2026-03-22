@@ -322,16 +322,12 @@ with st.sidebar:
 
     st.divider()
 
-    # Show student level
+    # Show diagnostic status (without exposing the internal level)
     if st.session_state.placement_result or st.session_state.placement_stage == "skipped":
-        level = agent.user_level
-        level_labels = {
-            "beginner": "🌱 Beginner",
-            "intermediate": "📚 Intermediate",
-            "advanced": "🚀 Advanced",
-        }
-        st.caption("Student Level")
-        st.markdown(level_labels.get(level, level))
+        if st.session_state.placement_result:
+            result = st.session_state.placement_result
+            st.caption("Diagnostic")
+            st.markdown(f"✓ {result.score}/{result.total}")
         if st.button("Retake diagnostic", use_container_width=True):
             st.session_state.placement_stage = "not_started"
             st.session_state.placement_questions = []
@@ -764,14 +760,9 @@ def _render_placement_test():
     # ---- DONE: show result ----
     if stage == "done":
         result = st.session_state.placement_result
-        level_emoji = {"beginner": "🌱", "intermediate": "📚", "advanced": "🚀"}.get(result.level, "📚")
 
         st.markdown("### Diagnostic Complete!")
-        col_score, col_level = st.columns(2)
-        with col_score:
-            st.metric("Score", f"{result.score}/{result.total}")
-        with col_level:
-            st.metric("Level", f"{level_emoji} {result.level.capitalize()}")
+        st.metric("Score", f"{result.score}/{result.total}")
 
         st.markdown(f"*{result.title}*")
         st.markdown("---")
@@ -834,12 +825,6 @@ elif not st.session_state.messages:
     if not placement_active:
         st.markdown("## Claire")
         st.caption("Making Calculus Clear · Calculus Cram")
-
-        # Show current level if diagnostic was completed
-        if st.session_state.placement_result:
-            result = st.session_state.placement_result
-            level_emoji = {"beginner": "🌱", "intermediate": "📚", "advanced": "🚀"}.get(result.level, "📚")
-            st.caption(f"{level_emoji} Teaching level: {result.title}")
 
         st.markdown("---")
 

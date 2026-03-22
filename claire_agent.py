@@ -11,6 +11,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def get_secret(key: str) -> Optional[str]:
+    """Get secret from environment or Streamlit secrets (for cloud deployment)."""
+    # First try environment variable (local dev)
+    value = os.getenv(key)
+    if value:
+        return value
+
+    # Then try Streamlit secrets (cloud deployment)
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets') and key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+
+    return None
+
+
 class ClaireAgent:
     """Claire - Making Calculus Clear"""
 
@@ -84,7 +102,6 @@ Respond in the same language as the student.
     }
 
     @property
-    @property
     def system_prompt(self) -> str:
         """Build system prompt based on current user level and weak topics."""
         level_text = self.LEVEL_INSTRUCTIONS.get(self.user_level, self.LEVEL_INSTRUCTIONS["intermediate"])
@@ -136,10 +153,11 @@ Respond in the same language as the student.
         print("Claire 2.0 - Exam Preparation Agent")
         print("=" * 60)
 
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = get_secret("ANTHROPIC_API_KEY")
         if not api_key:
-            print("ANTHROPIC_API_KEY not found in environment")
-            print("Please add it to your .env file")
+            print("ANTHROPIC_API_KEY not found")
+            print("For local dev: add to .env file")
+            print("For Streamlit Cloud: add to Secrets in dashboard")
             return
 
         try:
@@ -237,8 +255,8 @@ Respond in the same language as the student.
 
         if not self.executor:
             error_msg = (
-                "Claire is not initialized. "
-                "Please add ANTHROPIC_API_KEY to your .env file."
+                "I'm having trouble connecting right now. "
+                "Please try again in a moment."
             )
             return {
                 "output": error_msg,
@@ -558,14 +576,8 @@ Tools: {len(self.tools) if self.tools else 0} loaded
         if self.model_tier == "basic":
             return True  # already on basic
         try:
-            import os
             from langchain_openai import ChatOpenAI
-            api_key = os.getenv("DEEPSEEK_API_KEY") or ""
-            try:
-                import streamlit as st
-                api_key = api_key or st.secrets.get("DEEPSEEK_API_KEY", "")
-            except Exception:
-                pass
+            api_key = get_secret("DEEPSEEK_API_KEY")
             if not api_key:
                 return False
             self.llm = ChatOpenAI(
