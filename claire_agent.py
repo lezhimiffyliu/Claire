@@ -136,10 +136,16 @@ Respond in the same language as the student.
         print("Claire 2.0 - Exam Preparation Agent")
         print("=" * 60)
 
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = os.getenv("ANTHROPIC_API_KEY") or ""
+        # Streamlit Cloud: secrets live in st.secrets, not always in os.environ
         if not api_key:
-            print("ANTHROPIC_API_KEY not found in environment")
-            print("Please add it to your .env file")
+            try:
+                import streamlit as st
+                api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+            except Exception:
+                pass
+        if not api_key:
+            print("ANTHROPIC_API_KEY not found in environment or Streamlit secrets")
             return
 
         try:
