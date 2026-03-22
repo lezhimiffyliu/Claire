@@ -77,14 +77,30 @@ def render_with_hidden_solution(content: str, msg_idx: int) -> None:
     Render Claire's response with [Solution] hidden behind a button.
     Parses the structured output format and creates an expander for the solution.
     """
-    # Check if content has the [Solution] section
-    solution_pattern = r'\*\*\[Solution\]\*\*\s*([\s\S]*?)(?=\n---|\Z)'
-    match = re.search(solution_pattern, content)
+    # Try multiple patterns for solution section
+    # Matches: **[Solution]**, [Solution], **Solution**, ## Solution, ### Solution
+    solution_patterns = [
+        r'---\s*\n\s*\*\*\[Solution\]\*\*\s*([\s\S]*)',  # ---\n**[Solution]**
+        r'\*\*\[Solution\]\*\*\s*([\s\S]*)',              # **[Solution]**
+        r'\[Solution\]\s*([\s\S]*)',                      # [Solution]
+        r'---\s*\n\s*\*\*Solution\*\*\s*([\s\S]*)',       # ---\n**Solution**
+        r'\*\*Solution:?\*\*\s*([\s\S]*)',                # **Solution** or **Solution:**
+        r'#{2,3}\s*Solution\s*([\s\S]*)',                 # ## Solution or ### Solution
+    ]
+
+    match = None
+    for pattern in solution_patterns:
+        match = re.search(pattern, content, re.IGNORECASE)
+        if match:
+            break
 
     if match:
         # Split content into main part and solution
         solution_content = match.group(1).strip()
         main_content = content[:match.start()].strip()
+
+        # Remove trailing --- from main content if present
+        main_content = re.sub(r'\n---\s*$', '', main_content).strip()
 
         # Render main content (problem type, key idea, steps, try it)
         st.markdown(main_content)

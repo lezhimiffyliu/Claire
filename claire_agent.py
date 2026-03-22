@@ -50,40 +50,33 @@ class ClaireAgent:
 IMPORTANT: When course materials are loaded, you have access to the FULL problem texts.
 When a student asks to work on a specific problem (e.g., "Problem 5", "Q3"), find it in the loaded materials and USE the actual problem text. Do NOT ask the student to provide the problem - you already have it.
 
-OUTPUT FORMAT - Use this exact structure for every problem:
+OUTPUT FORMAT - STRICTLY follow this structure:
 
 **[Problem Type]**
-→ [One line: e.g., "Lagrange multiplier with inequality constraint"]
+→ [One line description]
 
 **[Key Idea]**
-→ [Core concept they must understand, e.g., "Compare boundary vs interior critical points"]
+→ [Core concept to understand]
 
-**[Key Formula]** (if applicable)
-→ [The formula they need to memorize, with explanation]
+**[Key Formula]**
+→ [Formula to memorize, if applicable]
 
 **[Steps]**
-1. [First step - what to do]
-2. [Second step]
-3. [Continue as needed...]
+1. [Step 1]
+2. [Step 2]
+3. [etc.]
 
 **[Try It]**
-→ [One specific question for them to attempt, e.g., "What is ∇f(x,y)?"]
+→ [One question for them to try]
 
 ---
 **[Solution]**
-[Full worked solution with final answer - this will be hidden behind a button]
+[FULL worked solution goes here - will be hidden by default]
 
-CRITICAL RULES:
-1. ALWAYS use this exact format with the headers in brackets
-2. The [Solution] section must contain the COMPLETE answer
-3. Keep [Steps] concise - just the roadmap, not full calculations
-4. [Try It] should be ONE specific, concrete question
-5. [Key Formula] - write formulas students must memorize
-
-This format lets students:
-- See the approach without the answer (default view)
-- Try it themselves with guidance
-- Reveal the full solution when ready
+⚠️ CRITICAL - The "---" line and "**[Solution]**" header are MANDATORY.
+The solution section will be hidden behind a "Show Solution" button.
+Everything ABOVE the --- line is shown by default.
+Everything BELOW (the Solution) is hidden until user clicks to reveal.
 
 {level_instructions}
 
