@@ -170,50 +170,50 @@ def _render_exam_entry() -> bool:
     Returns True if rendered (caller should skip other UI).
     """
     st.markdown("## 📝 Exam Simulation")
-    st.caption("Experience a real exam — timed, no hints, no answers until you finish.")
 
     # Get topics from materials or fallback
     bank = st.session_state.exam_context.question_bank if st.session_state.exam_context.has_questions() else None
-    if bank:
+    has_materials = bank is not None
+
+    if has_materials:
         questions = generate_exam_from_bank(bank, num_questions=5)
-        source = "from your uploaded materials"
+        # Show material source
+        material_names = st.session_state.exam_context.material_names[:3]
+        names_str = ", ".join(material_names)
+        if len(st.session_state.exam_context.material_names) > 3:
+            names_str += f" +{len(st.session_state.exam_context.material_names) - 3}"
+        st.success(f"📂 Using: **{names_str}**")
     else:
         questions = get_fallback_exam()
-        source = "Practice Exam"
+        st.info("📂 Using practice questions — upload your past exams in the sidebar for a personalized simulation")
 
     topics = get_exam_topics(questions)
 
     st.markdown("---")
-    st.markdown("**Topics covered:**")
-    for topic in topics[:5]:
-        st.markdown(f"• {topic}")
 
-    st.markdown("")
-    st.markdown(f"**Questions:** {len(questions)}")
-    st.markdown(f"**Time:** ~{len(questions) * 9} minutes")
-    st.caption(f"*{source}*")
+    col_info, col_topics = st.columns([1, 1.5])
+    with col_info:
+        st.markdown(f"**Questions:** {len(questions)}")
+        st.markdown(f"**Time:** ~{len(questions) * 9} min")
+    with col_topics:
+        st.markdown("**Topics:**")
+        st.caption(" · ".join(topics[:4]))
 
     st.markdown("---")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🚀 Start Exam", type="primary", use_container_width=True):
-            _start_exam_simulation()
-            st.rerun()
-    with col2:
-        if st.button("← Back to Practice", use_container_width=True):
-            st.session_state.exam_stage = "not_started"
-            st.rerun()
+    # Main action
+    if st.button("🚀 Start Exam", type="primary", use_container_width=True):
+        _start_exam_simulation()
+        st.rerun()
+
+    st.caption(
+        "⚠️ One question at a time · No hints · Timer runs throughout"
+    )
 
     st.markdown("")
-    st.info(
-        "⚠️ **Exam rules:**\n"
-        "- One question at a time\n"
-        "- No hints or answers during exam\n"
-        "- Can't go back to previous questions\n"
-        "- Timer runs throughout",
-        icon=None,
-    )
+    if st.button("← Back", use_container_width=True):
+        st.session_state.exam_stage = "not_started"
+        st.rerun()
 
     return True
 
@@ -1410,51 +1410,32 @@ elif not st.session_state.messages:
 
         st.markdown("---")
 
-        # Show exam simulation option prominently
+        # Single primary action: Start Exam Simulation
+        # System automatically uses workspace materials
         has_materials = exam_context.has_questions()
 
-        st.markdown("### 🎯 What do you want to do?")
-        st.markdown("")
+        # Main CTA
+        if st.button("📝 **Start Exam Simulation**", type="primary", use_container_width=True):
+            st.session_state.exam_stage = "entry"
+            st.rerun()
 
-        # Main action: Upload & simulate OR use loaded materials
+        # Show what materials will be used (context, not a choice)
         if has_materials:
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button(
-                    "📝 **Exam Simulation**\n\nTest with your materials",
-                    use_container_width=True,
-                    type="primary",
-                ):
-                    st.session_state.exam_stage = "entry"
-                    st.rerun()
-            with col2:
-                if st.button(
-                    "📄 **Upload Past Paper**\n\nParse a new exam PDF",
-                    use_container_width=True,
-                ):
-                    st.session_state.exam_stage = "upload"
-                    st.rerun()
+            material_names = exam_context.material_names[:3]
+            names_str = ", ".join(material_names)
+            if len(exam_context.material_names) > 3:
+                names_str += f" +{len(exam_context.material_names) - 3} more"
+            q_count = exam_context.get_question_count()
+            st.caption(f"📂 Using: {names_str} ({q_count} questions)")
         else:
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button(
-                    "📄 **Upload Past Exam**\n\nTurn your PDF into a simulation",
-                    use_container_width=True,
-                    type="primary",
-                ):
-                    st.session_state.exam_stage = "upload"
-                    st.rerun()
-            with col2:
-                if st.button(
-                    "📝 **Practice Exam**\n\nUse our sample questions",
-                    use_container_width=True,
-                ):
-                    st.session_state.exam_stage = "entry"
-                    st.rerun()
+            st.caption("📂 No materials loaded — will use practice questions")
+            st.caption("*Upload past exams in the sidebar to personalize*")
 
         st.markdown("")
-        if st.button("💬 **Just practice with Claire** — Get step-by-step guidance", use_container_width=True):
-            # Stay on main page, scroll to examples
+
+        # Secondary action: Practice with Claire (less prominent)
+        if st.button("💬 Practice with Claire — Step-by-step guidance", use_container_width=True):
+            # Stay on this page, user can type in chat
             pass
 
         st.markdown("---")
