@@ -37,7 +37,13 @@ def handle_oauth_callback() -> bool:
             st.query_params.clear()
             return True
     except Exception as e:
-        st.error(f"Login failed: {e}")
+        # PKCE error - code_verifier lost during redirect
+        # Clear params so user can retry
+        st.query_params.clear()
+        if "code challenge" in str(e).lower() or "code verifier" in str(e).lower():
+            st.warning("Login session expired. Please try signing in again.")
+        else:
+            st.error(f"Login failed: {e}")
     return False
 
 
