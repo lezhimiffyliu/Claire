@@ -360,7 +360,7 @@ Respond in the same language as the student.
         """Build input for when student is answering a previous question."""
         context_info = ""
         if self.exam_context and self.exam_context.has_context():
-            context_info = self._format_exam_context()
+            context_info = self._format_exam_context(user_input)
 
         return f"""The student said: {user_input}
 {context_info}
@@ -392,10 +392,10 @@ Keep responses concise."""
             elif len(matching) >= 1:
                 exam_freq_note = " · Appears in your exam materials"
 
-        # Add exam context if available
+        # Add exam context if available (OPTIMIZED: only loads if user references a problem)
         context_info = ""
         if self.exam_context and self.exam_context.has_context():
-            context_info = self._format_exam_context()
+            context_info = self._format_exam_context(user_input)
 
         return f"""{user_input}
 {context_info}
@@ -406,41 +406,112 @@ IMPORTANT: After your complete solution, end with exactly this footer (a horizon
 ---
 🏷️ **Topic:** {problem_type}{exam_freq_note}]"""
 
-    def _format_exam_context(self) -> str:
-        """Format exam context for the prompt."""
+    def _format_exam_context(self, user_input: str = "") -> str:
+        """
+        Format exam context for the prompt.
+
+        OPTIMIZATION: Only include full problem text if user is explicitly
+        referencing a problem. Otherwise just show a summary.
+        """
         if not self.exam_context:
             return ""
 
-        lines = ["\n[COURSE MATERIALS - YOU HAVE ACCESS TO THESE PROBLEMS]"]
-        lines.append(f"Files: {', '.join(self.exam_context.material_names[:5])}")
+        # Check if user is referencing a specific problem
+        referencing_problem = self._is_referencing_problem(user_input)
+
+        if not referencing_problem:
+            # FAST PATH: Just mention materials exist, don't dump everything
+            if self.exam_context.has_questions():
+                count = len(self.exam_context.question_bank.questions)
+                names = ", ".join(self.exam_context.material_names[:3])
+                return f"\n[Note: Student has {count} problems loaded from: {names}. If they reference a specific problem, you have access to it.]"
+            return ""
+
+        # SLOW PATH: User is referencing a problem - include relevant ones
+        lines = ["\n[COURSE MATERIALS]"]
+        lines.append(f"Files: {', '.join(self.exam_context.material_names[:3])}")
 
         if self.exam_context.has_questions():
             bank = self.exam_context.question_bank
-            lines.append(f"Total problems: {len(bank)}")
 
-            # Show ALL problems with FULL text and metadata
-            lines.append("\n=== PROBLEMS FROM STUDENT'S MATERIALS ===")
-            for i, q in enumerate(bank.questions):
-                source_cite = q.format_source()
-                # Include multiple ways to reference this problem
-                lines.append(f"\n[#{i+1}] {source_cite}")
-                lines.append(f"ID: {q.id} | Short: P{i+1} | {q.problem_id}")
-                if q.categories:
-                    lines.append(f"Topics: {', '.join(q.categories)}")
-                lines.append(f"Difficulty: {q.difficulty}")
-                lines.append(f"Problem text: {q.text}")
-                lines.append("---")
+            # Find which problem(s) user might be referencing
+            matched = self._find_referenced_problems(user_input)
 
-            # Quick reference guide
-            lines.append("\n=== QUICK REFERENCE ===")
-            lines.append("Students may refer to problems as:")
-            lines.append("- 'Problem 1', 'P1', '#1', 'the first problem'")
-            lines.append("- 'Sample 1 Problem 5', '18 Spring Problem 3'")
-            lines.append("- By topic: 'a Lagrange problem', 'double integral question'")
-            lines.append("Match their reference to the problems above and use the FULL text.")
+            if matched:
+                lines.append(f"\n=== REFERENCED PROBLEM(S) ===")
+                for q in matched[:3]:  # Max 3 problems
+                    lines.append(f"\n**{q.format_source()}**")
+                    if q.categories:
+                        lines.append(f"Topics: {', '.join(q.categories)}")
+                    lines.append(f"Problem: {q.text}")
+                    lines.append("---")
+            else:
+                # Couldn't match - show summary list only
+                lines.append(f"\nTotal: {len(bank.questions)} problems")
+                lines.append("Problem list:")
+                for i, q in enumerate(bank.questions[:10]):
+                    lines.append(f"  #{i+1}: {q.format_source()} - {q.text[:60]}...")
 
-        lines.append("\n[END MATERIALS]")
+        lines.append("[END MATERIALS]")
         return "\n".join(lines)
+
+    def _is_referencing_problem(self, user_input: str) -> bool:
+        """Check if user is referencing a specific problem from materials."""
+        if not user_input:
+            return False
+
+        text = user_input.lower()
+
+        # Common patterns for referencing problems
+        ref_patterns = [
+            "problem ", "question ", "q ", "p ", "#",
+            "sample", "exam", "spring", "fall", "midterm", "final",
+            "the first", "the second", "the third",
+            "problem 1", "problem 2", "problem 3",
+            "help me with", "work on", "practice"
+        ]
+
+        for pattern in ref_patterns:
+            if pattern in text:
+                return True
+
+        # Check for numbers that might be problem references
+        import re
+        if re.search(r'\b(problem|question|q|p)\s*\d+', text, re.IGNORECASE):
+            return True
+
+        return False
+
+    def _find_referenced_problems(self, user_input: str) -> list:
+        """Find which problem(s) the user is likely referencing."""
+        if not self.exam_context or not self.exam_context.has_questions():
+            return []
+
+        bank = self.exam_context.question_bank
+        text = user_input.lower()
+        matched = []
+
+        import re
+
+        # Try to find problem number references
+        num_match = re.search(r'(?:problem|question|q|p|#)\s*(\d+)', text, re.IGNORECASE)
+        if num_match:
+            idx = int(num_match.group(1)) - 1  # Convert to 0-indexed
+            if 0 <= idx < len(bank.questions):
+                matched.append(bank.questions[idx])
+                return matched
+
+        # Try to match by source name
+        for q in bank.questions:
+            source_lower = q.format_source().lower()
+            # Check if source keywords appear in user input
+            source_words = source_lower.replace("-", " ").replace("_", " ").split()
+            if any(word in text for word in source_words if len(word) > 2):
+                matched.append(q)
+                if len(matched) >= 3:
+                    break
+
+        return matched
 
     def _summarize_heuristic(self, heuristic: str) -> str:
         """Extract the solving template section from heuristic."""
@@ -469,8 +540,9 @@ IMPORTANT: After your complete solution, end with exactly this footer (a horizon
         self.conversation_history.append({"role": "user", "content": user_input})
         self.conversation_history.append({"role": "assistant", "content": response})
 
-        if len(self.conversation_history) > 20:
-            self.conversation_history = self.conversation_history[-20:]
+        # Keep only last 10 messages (5 exchanges) to reduce prompt size
+        if len(self.conversation_history) > 10:
+            self.conversation_history = self.conversation_history[-10:]
 
     def _check_system_commands(self, user_input: str) -> Optional[str]:
         """Handle system commands."""
