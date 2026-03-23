@@ -161,44 +161,70 @@ class Question:
 
 
 def format_math_text(text: str) -> str:
-    """Convert plain text math notation to LaTeX for display."""
+    """
+    Convert plain text math notation to LaTeX for Streamlit display.
+    Wraps math expressions in $...$ for inline rendering.
+    """
     import re
 
     result = text
 
-    # Subscript patterns: gxx -> g_{xx}, f_x -> f_x (already ok)
-    # Match patterns like gxx, gyy, fxy, etc.
+    # If already has LaTeX ($...$), don't double-process
+    if '$' in result and ('\\' in result or '_' in result):
+        return result
+
+    # Subscript patterns: fxx -> $f_{xx}$, gxy -> $g_{xy}$
     result = re.sub(r'\b([fghFGH])([xyz]{2,3})\b', r'$\1_{\2}$', result)
 
-    # Partial derivatives: ∂f/∂x
-    result = re.sub(r'∂([fghFGH])/∂([xyz])', r'$\\partial \1/\\partial \2$', result)
+    # Function with subscript: f_x, f_y, g_x
+    result = re.sub(r'\b([fghFGH])_([xyz])\b', r'$\1_\2$', result)
 
-    # Common function notations with parentheses: g(0,2) -> $g(0,2)$
-    # But be careful not to double-wrap
+    # Partial derivatives: ∂f/∂x, ∂²f/∂x²
+    result = re.sub(r'∂([fghFGH])/∂([xyz])', r'$\\frac{\\partial \1}{\\partial \2}$', result)
+    result = re.sub(r'∂²([fghFGH])/∂([xyz])²', r'$\\frac{\\partial^2 \1}{\\partial \2^2}$', result)
 
-    # Fractions in form a/b where a,b are simple
+    # Simple fractions: a/b where a,b are numbers or single letters
     result = re.sub(r'(\d+)/(\d+)', r'$\\frac{\1}{\2}$', result)
-
-    # Greek letters
-    greek_map = {
-        'alpha': 'α', 'beta': 'β', 'gamma': 'γ', 'delta': 'δ',
-        'theta': 'θ', 'lambda': 'λ', 'pi': 'π', 'rho': 'ρ',
-        'sigma': 'σ', 'phi': 'φ', 'psi': 'ψ', 'omega': 'ω',
-    }
 
     # Integral symbols
     result = result.replace('∫∫∫', '$\\iiint$')
     result = result.replace('∫∫', '$\\iint$')
     result = result.replace('∫', '$\\int$')
 
-    # Partial symbol
+    # Partial symbol standalone
     result = result.replace('∂', '$\\partial$')
 
-    # Common superscripts: x^2, e^x
-    result = re.sub(r'\^(\d+)', r'^{\1}', result)
-    result = re.sub(r'\^([xyz])', r'^{\1}', result)
+    # Nabla/gradient
+    result = result.replace('∇', '$\\nabla$')
 
-    # Fix double dollar signs from multiple replacements
+    # Greek letters (standalone)
+    greek = {
+        'α': '$\\alpha$', 'β': '$\\beta$', 'γ': '$\\gamma$', 'δ': '$\\delta$',
+        'θ': '$\\theta$', 'λ': '$\\lambda$', 'π': '$\\pi$', 'ρ': '$\\rho$',
+        'σ': '$\\sigma$', 'φ': '$\\phi$', 'ψ': '$\\psi$', 'ω': '$\\omega$',
+    }
+    for sym, latex in greek.items():
+        result = result.replace(sym, latex)
+
+    # Superscripts: x^2, x^3, e^x - wrap in math mode
+    result = re.sub(r'([a-zA-Z])\^(\d+)', r'$\1^{\2}$', result)
+    result = re.sub(r'([a-zA-Z])\^([a-zA-Z])', r'$\1^{\2}$', result)
+
+    # Common expressions: x², y², x³
+    result = result.replace('²', '$^2$')
+    result = result.replace('³', '$^3$')
+    result = result.replace('⁴', '$^4$')
+
+    # Square root
+    result = result.replace('√', '$\\sqrt{}$')
+
+    # Infinity
+    result = result.replace('∞', '$\\infty$')
+
+    # Plus/minus
+    result = result.replace('±', '$\\pm$')
+
+    # Fix adjacent dollar signs from multiple replacements: $...$ $...$ -> $... ...$
     result = re.sub(r'\$\s*\$', ' ', result)
 
     return result

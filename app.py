@@ -1275,41 +1275,52 @@ def _render_placement_test():
 
         st.markdown("---")
 
+        # Source citation FIRST (above question)
+        diff_colors = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}
+        diff_icon = diff_colors.get(q.difficulty, "")
+        st.caption(f"{diff_icon} {q.difficulty.capitalize()}  ·  {q.source}")
+
+        st.markdown("")
+
         # Question body with math rendering
         if q.question_excerpt:
-            # From uploaded materials: render with st.markdown so LaTeX ($...$) works
+            # From uploaded materials: render with st.latex for math
             from question_bank import format_math_text
             formatted_q = format_math_text(q.question_excerpt)
             st.markdown(formatted_q)
             if q.ask_text:
-                st.markdown(f"*{q.ask_text}*")
+                st.markdown("")
+                st.markdown(f"**{q.ask_text}**")
         else:
             # Fallback / hand-written questions: already have LaTeX
             st.markdown(q.prompt)
 
-        # Source citation below question
-        diff_colors = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}
-        diff_icon = diff_colors.get(q.difficulty, "")
-        st.caption(f"{diff_icon} {q.difficulty.capitalize()}  ·  *{q.source}*")
-
+        st.markdown("")
+        st.markdown("---")
         st.markdown("")
 
-        # Choices as lettered radio options
+        # Choices - each on its own line with clear formatting
         LETTERS = ["A", "B", "C", "D", "E"]
-        # Only apply format_math_text to plain text (from PDFs), not to fallback questions with existing LaTeX
+        st.markdown("**Choose your answer:**")
+        st.markdown("")
+
+        # Build choices with proper formatting
         if q.question_excerpt:
             from question_bank import format_math_text
-            choice_labels = [f"**{LETTERS[i]}.**  {format_math_text(c)}" for i, c in enumerate(q.choices)]
+            formatted_choices = [format_math_text(c) for c in q.choices]
         else:
-            choice_labels = [f"**{LETTERS[i]}.**  {c}" for i, c in enumerate(q.choices)]
+            formatted_choices = q.choices
+
+        # Use radio with cleaner labels
+        choice_labels = [f"{LETTERS[i]}.  {formatted_choices[i]}" for i in range(len(q.choices))]
 
         answer = st.radio(
-            "Your answer:",
+            "Select one:",
             options=list(range(len(q.choices))),
             format_func=lambda i: choice_labels[i],
             index=None,
             key=f"placement_q_{idx}",
-            label_visibility="visible",
+            label_visibility="collapsed",
         )
 
         col1, col2, col3 = st.columns([1, 1, 1])
