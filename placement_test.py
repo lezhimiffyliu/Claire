@@ -334,58 +334,152 @@ def _is_readable_question(text: str) -> bool:
     return len(words) >= 8
 
 
+def _extract_existing_choices(text: str) -> tuple[str, list[str], int | None]:
+    """
+    Detect if a question already has multiple choice options.
+    Returns (question_stem, choices, correct_index or None).
+
+    Handles:
+    - True/False questions
+    - (A) (B) (C) (D) style
+    - a) b) c) d) style
+    - A. B. C. D. style
+    """
+    import re
+
+    # Check for True/False
+    tf_patterns = [
+        r'\b(True)\s+or\s+(False)\b',
+        r'\b(T)\s*/\s*(F)\b',
+        r'\b(True)\b.*\b(False)\b',
+    ]
+    for pat in tf_patterns:
+        if re.search(pat, text, re.IGNORECASE):
+            # It's a True/False question
+            # Try to find if answer is indicated
+            return text, ["True", "False"], None
+
+    # Check for lettered choices: (A), (B), (C), (D) or A), B), C), D) or A. B. C. D.
+    # Pattern to find choices
+    choice_patterns = [
+        # (A) text (B) text ...
+        r'\(([A-Ea-e])\)\s*([^(]+?)(?=\([A-Ea-e]\)|$)',
+        # A) text B) text ...
+        r'([A-Ea-e])\)\s*([^A-E]+?)(?=[A-Ea-e]\)|$)',
+        # A. text B. text ...
+        r'([A-Ea-e])\.\s*([^A-E]+?)(?=[A-Ea-e]\.|$)',
+    ]
+
+    for pat in choice_patterns:
+        matches = re.findall(pat, text, re.IGNORECASE | re.DOTALL)
+        if len(matches) >= 2:
+            # Found choices
+            choices = [m[1].strip() for m in matches]
+            # Clean up choices (remove trailing punctuation, limit length)
+            choices = [c[:200].strip().rstrip('.') for c in choices if c.strip()]
+
+            if len(choices) >= 2:
+                # Find the question stem (text before first choice)
+                first_match = re.search(pat, text, re.IGNORECASE)
+                if first_match:
+                    stem = text[:first_match.start()].strip()
+                else:
+                    stem = text
+                return stem, choices[:5], None  # Max 5 choices
+
+    return text, [], None
+
+
+def _is_simple_mcq(text: str) -> bool:
+    """Check if a question is a simple multiple choice or True/False."""
+    stem, choices, _ = _extract_existing_choices(text)
+    return len(choices) >= 2
+
+
 def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
     """
     Build placement questions from the uploaded question bank.
-    Only uses questions that pass a readability check; pads with fallback
-    questions when there aren't enough good ones.
+
+    Logic:
+    - Simple MCQ/True-False: use original question with original choices
+    - Complex problems (no existing choices): ask "what approach" with METHOD_CHOICES
+
+    Only uses questions that pass a readability check; falls back to
+    hand-crafted questions when there aren't enough good ones.
     """
     if not bank or not getattr(bank, "questions", None):
         return []
 
-    seen_patterns: set[str] = set()
     selected: list[PlacementQuestion] = []
+    seen_ids: set[str] = set()
 
-    sorted_questions = sorted(
-        bank.questions,
-        key=lambda q: (_difficulty_rank(getattr(q, "difficulty", "medium")), len(q.text)),
-    )
+    # Prioritize simple MCQs first (easier to use directly)
+    # Then complex problems
+    def sort_key(q):
+        is_simple = _is_simple_mcq(q.text)
+        diff_rank = _difficulty_rank(getattr(q, "difficulty", "medium"))
+        return (0 if is_simple else 1, diff_rank, len(q.text))
+
+    sorted_questions = sorted(bank.questions, key=sort_key)
 
     for q in sorted_questions:
-        pattern = getattr(q, "pattern", None)
-        if pattern not in METHOD_CHOICES:
-            continue
-        if pattern in seen_patterns:
+        if len(selected) >= limit:
+            break
+
+        q_id = getattr(q, "id", q.text[:50])
+        if q_id in seen_ids:
             continue
 
-        excerpt = q.get_formatted_text()[:400] if hasattr(q, "get_formatted_text") else q.text[:400]
+        excerpt = q.get_formatted_text()[:600] if hasattr(q, "get_formatted_text") else q.text[:600]
 
         # Skip garbled / incomplete extractions
         if not _is_readable_question(excerpt):
             continue
 
-        ask = "What is the best first approach to this problem?"
-        selected.append(
-            PlacementQuestion(
-                prompt=(
-                    f"**{q.format_source()}**\n\n"
-                    f"{excerpt}\n\n"
-                    f"*{ask}*"
-                ),
-                choices=METHOD_CHOICES[pattern],
-                correct_index=0,
-                explanation=f"This problem was classified as {pattern.replace('_', ' ')}.",
-                source=q.format_source(),
-                difficulty=getattr(q, "difficulty", "medium"),
-                topic=pattern,
-                question_excerpt=excerpt,
-                ask_text=ask,
-            )
-        )
-        seen_patterns.add(pattern)
+        # Check if this is a simple MCQ with existing choices
+        stem, choices, correct_idx = _extract_existing_choices(q.text)
 
-        if len(selected) >= limit:
-            break
+        if choices and len(choices) >= 2:
+            # Simple MCQ or True/False - use original question and choices
+            selected.append(
+                PlacementQuestion(
+                    prompt=f"**{q.format_source()}**\n\n{stem}",
+                    choices=choices[:4],  # Max 4 choices
+                    correct_index=correct_idx if correct_idx is not None else 0,
+                    explanation="",  # We don't know the correct answer
+                    source=q.format_source(),
+                    difficulty=getattr(q, "difficulty", "medium"),
+                    topic=getattr(q, "pattern", "") or (q.categories[0] if q.categories else ""),
+                    question_excerpt=stem,
+                    ask_text="",
+                )
+            )
+            seen_ids.add(q_id)
+        else:
+            # Complex problem - ask "what approach"
+            pattern = getattr(q, "pattern", None)
+            if pattern not in METHOD_CHOICES:
+                continue
+
+            ask = "What is the best first approach to this problem?"
+            selected.append(
+                PlacementQuestion(
+                    prompt=(
+                        f"**{q.format_source()}**\n\n"
+                        f"{excerpt}\n\n"
+                        f"*{ask}*"
+                    ),
+                    choices=METHOD_CHOICES[pattern],
+                    correct_index=0,
+                    explanation=f"This problem type: {pattern.replace('_', ' ')}.",
+                    source=q.format_source(),
+                    difficulty=getattr(q, "difficulty", "medium"),
+                    topic=pattern,
+                    question_excerpt=excerpt,
+                    ask_text=ask,
+                )
+            )
+            seen_ids.add(q_id)
 
     # If we couldn't find enough readable questions from materials,
     # fall back entirely to hand-crafted questions so the diagnostic
