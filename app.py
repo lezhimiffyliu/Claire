@@ -23,6 +23,11 @@ from quota import (
     can_use_premium, record_query, get_quota_status,
     inject_localstorage_sync, ANON_FREE_QUERIES, USER_FREE_PREMIUM,
 )
+from exam_mode import (
+    ExamSession, ExamQuestion, ExamResult,
+    generate_exam_from_bank, get_fallback_exam, score_exam,
+    get_exam_topics, get_topic_label, format_time,
+)
 
 # Page config
 st.set_page_config(
@@ -118,6 +123,300 @@ def render_with_hidden_solution(content: str, msg_idx: int) -> None:
 
 
 # ────────────────────────────────────────────────────────────
+# EXAM SIMULATION MODE
+# ────────────────────────────────────────────────────────────
+
+def _start_exam_simulation():
+    """Start an exam simulation from uploaded materials or fallback."""
+    bank = st.session_state.exam_context.question_bank if st.session_state.exam_context.has_questions() else None
+    questions = generate_exam_from_bank(bank, num_questions=5)
+
+    st.session_state.exam_session = ExamSession(
+        exam_id=st.session_state.session_id,
+        questions=questions,
+        current_index=0,
+        answers=[""] * len(questions),
+        time_limit_minutes=45,
+    )
+    st.session_state.exam_stage = "in_progress"
+    st.session_state.exam_start_time = time.time()
+    st.session_state.exam_current_q = 0
+    st.session_state.exam_answers = [""] * len(questions)
+    st.session_state.exam_result = None
+
+
+def _finish_exam():
+    """Complete the exam and calculate results."""
+    session = st.session_state.exam_session
+    session.answers = st.session_state.exam_answers
+    session.is_complete = True
+
+    # Calculate time taken
+    elapsed = int(time.time() - st.session_state.exam_start_time)
+
+    result = score_exam(session)
+    result.time_taken_seconds = elapsed
+
+    st.session_state.exam_result = result
+    st.session_state.exam_stage = "complete"
+
+
+def _render_exam_entry() -> bool:
+    """
+    Render the exam simulation entry page.
+    Returns True if rendered (caller should skip other UI).
+    """
+    st.markdown("## 📝 Exam Simulation")
+    st.caption("Experience a real exam — timed, no hints, no answers until you finish.")
+
+    # Get topics from materials or fallback
+    bank = st.session_state.exam_context.question_bank if st.session_state.exam_context.has_questions() else None
+    if bank:
+        questions = generate_exam_from_bank(bank, num_questions=5)
+        source = "from your uploaded materials"
+    else:
+        questions = get_fallback_exam()
+        source = "Practice Exam"
+
+    topics = get_exam_topics(questions)
+
+    st.markdown("---")
+    st.markdown("**Topics covered:**")
+    for topic in topics[:5]:
+        st.markdown(f"• {topic}")
+
+    st.markdown("")
+    st.markdown(f"**Questions:** {len(questions)}")
+    st.markdown(f"**Time:** ~{len(questions) * 9} minutes")
+    st.caption(f"*{source}*")
+
+    st.markdown("---")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🚀 Start Exam", type="primary", use_container_width=True):
+            _start_exam_simulation()
+            st.rerun()
+    with col2:
+        if st.button("← Back to Practice", use_container_width=True):
+            st.session_state.exam_stage = "not_started"
+            st.rerun()
+
+    st.markdown("")
+    st.info(
+        "⚠️ **Exam rules:**\n"
+        "- One question at a time\n"
+        "- No hints or answers during exam\n"
+        "- Can't go back to previous questions\n"
+        "- Timer runs throughout",
+        icon=None,
+    )
+
+    return True
+
+
+def _render_exam_in_progress() -> bool:
+    """
+    Render the exam in progress.
+    Returns True if rendered.
+    """
+    session = st.session_state.exam_session
+    if not session:
+        st.session_state.exam_stage = "not_started"
+        return False
+
+    questions = session.questions
+    current_idx = st.session_state.exam_current_q
+    total = len(questions)
+
+    # Timer
+    elapsed = int(time.time() - st.session_state.exam_start_time)
+    time_str = format_time(elapsed)
+
+    # Header with timer
+    col_progress, col_timer = st.columns([3, 1])
+    with col_progress:
+        st.markdown(f"### Question {current_idx + 1} of {total}")
+        st.progress((current_idx) / total)
+    with col_timer:
+        st.markdown(f"### ⏱️ {time_str}")
+
+    st.markdown("---")
+
+    # Current question
+    q = questions[current_idx]
+    st.markdown(f"**{q.source}** · {get_topic_label(q.topic)}")
+
+    # Question text
+    st.markdown(q.text)
+
+    st.markdown("---")
+
+    # Answer input
+    current_answer = st.session_state.exam_answers[current_idx]
+    answer = st.text_area(
+        "Your answer:",
+        value=current_answer,
+        height=200,
+        key=f"exam_answer_{current_idx}",
+        placeholder="Show your work and final answer...",
+    )
+    st.session_state.exam_answers[current_idx] = answer
+
+    st.markdown("")
+
+    # Navigation
+    is_last = current_idx == total - 1
+
+    if is_last:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Previous", use_container_width=True, disabled=(current_idx == 0)):
+                st.session_state.exam_current_q = current_idx - 1
+                st.rerun()
+        with col2:
+            if st.button("✅ Finish Exam", type="primary", use_container_width=True):
+                _finish_exam()
+                st.rerun()
+    else:
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if current_idx > 0:
+                if st.button("← Previous", use_container_width=True):
+                    st.session_state.exam_current_q = current_idx - 1
+                    st.rerun()
+        with col3:
+            if st.button("Next →", type="primary", use_container_width=True):
+                st.session_state.exam_current_q = current_idx + 1
+                st.rerun()
+
+    return True
+
+
+def _render_exam_results() -> bool:
+    """
+    Render exam results with paywall for detailed analysis.
+    Returns True if rendered.
+    """
+    result = st.session_state.exam_result
+    session = st.session_state.exam_session
+    if not result or not session:
+        st.session_state.exam_stage = "not_started"
+        return False
+
+    st.markdown("## 📊 Exam Results")
+
+    # Score display
+    percentage = int(result.total_score / result.max_score * 100) if result.max_score > 0 else 0
+    time_str = format_time(result.time_taken_seconds)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Score", f"{result.total_score}/{result.max_score}")
+    with col2:
+        st.metric("Percentage", f"{percentage}%")
+    with col3:
+        st.metric("Time", time_str)
+
+    st.markdown("---")
+
+    # Predicted score
+    st.markdown("### 🎯 Predicted Exam Score")
+    st.markdown(f"## {result.predicted_low} – {result.predicted_high}")
+    st.caption("Based on your simulation performance")
+
+    st.markdown("---")
+
+    # Weak/Strong areas
+    col_weak, col_strong = st.columns(2)
+    with col_weak:
+        st.markdown("### ❌ Weak Areas")
+        if result.weak_topics:
+            for topic in result.weak_topics:
+                st.markdown(f"• {get_topic_label(topic)}")
+        else:
+            st.markdown("*None identified*")
+
+    with col_strong:
+        st.markdown("### ✅ Strong Areas")
+        if result.strong_topics:
+            for topic in result.strong_topics:
+                st.markdown(f"• {get_topic_label(topic)}")
+        else:
+            st.markdown("*Keep practicing*")
+
+    st.markdown("---")
+
+    # Paywall for detailed analysis
+    current_user = get_user()
+    if not current_user:
+        st.markdown("### 🔒 Unlock Full Analysis")
+        st.markdown(
+            "Sign in to see:\n"
+            "- Step-by-step solutions for each question\n"
+            "- Detailed weakness breakdown\n"
+            "- Personalized improvement roadmap"
+        )
+        show_login_button("Sign in to unlock")
+    else:
+        # Show detailed breakdown for logged-in users
+        with st.expander("📝 Review Your Answers"):
+            for i, q in enumerate(session.questions):
+                score = result.question_scores[i]
+                answer = st.session_state.exam_answers[i] if i < len(st.session_state.exam_answers) else ""
+                icon = "✅" if score == 20 else "⚠️" if score == 10 else "❌"
+
+                st.markdown(f"**Q{i+1}** {icon} — {q.source}")
+                st.caption(q.text[:150] + "..." if len(q.text) > 150 else q.text)
+                st.text_area(
+                    f"Your answer (Q{i+1})",
+                    value=answer,
+                    height=100,
+                    disabled=True,
+                    key=f"review_answer_{i}",
+                )
+                st.divider()
+
+    st.markdown("---")
+
+    # Actions
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Take Another Exam", use_container_width=True):
+            st.session_state.exam_stage = "not_started"
+            st.session_state.exam_session = None
+            st.session_state.exam_result = None
+            st.rerun()
+    with col2:
+        if st.button("💬 Practice with Claire", type="primary", use_container_width=True):
+            # Reset to chat mode with context about weak areas
+            st.session_state.exam_stage = "not_started"
+            if result.weak_topics:
+                weak_msg = f"I just finished an exam simulation. My weak areas are: {', '.join(get_topic_label(t) for t in result.weak_topics)}. Can you help me practice?"
+                st.session_state.messages.append({"role": "user", "content": weak_msg})
+            st.rerun()
+
+    return True
+
+
+def _render_exam_mode() -> bool:
+    """
+    Main exam mode router.
+    Returns True if exam mode is active and rendered.
+    """
+    stage = st.session_state.exam_stage
+
+    if stage == "entry":
+        return _render_exam_entry()
+    elif stage == "in_progress":
+        return _render_exam_in_progress()
+    elif stage == "complete":
+        return _render_exam_results()
+
+    return False
+
+
+# ────────────────────────────────────────────────────────────
 # Session ID — lives in URL as ?s=<id>
 # ────────────────────────────────────────────────────────────
 # Handle Google OAuth callback (must be before any other st calls)
@@ -177,6 +476,21 @@ if "anon_query_count" not in st.session_state:
     st.session_state.anon_query_count = 0
 if "show_login_prompt" not in st.session_state:
     st.session_state.show_login_prompt = False
+
+# Exam simulation state
+# "not_started" → "in_progress" → "complete"
+if "exam_stage" not in st.session_state:
+    st.session_state.exam_stage = "not_started"
+if "exam_session" not in st.session_state:
+    st.session_state.exam_session = None
+if "exam_start_time" not in st.session_state:
+    st.session_state.exam_start_time = 0
+if "exam_answers" not in st.session_state:
+    st.session_state.exam_answers = []
+if "exam_current_q" not in st.session_state:
+    st.session_state.exam_current_q = 0
+if "exam_result" not in st.session_state:
+    st.session_state.exam_result = None
 
 # Inject localStorage sync for anonymous quota tracking
 inject_localstorage_sync()
@@ -880,8 +1194,12 @@ def _render_placement_test():
 # MAIN AREA
 # ============================================================
 
+# Check if exam simulation is active first
+if st.session_state.exam_stage in ("entry", "in_progress", "complete"):
+    _render_exam_mode()
+
 # Header
-if st.session_state.exam_scope_stage == "showing":
+elif st.session_state.exam_scope_stage == "showing":
     # Show exam scope analyzer (after upload, before placement test)
     _render_exam_scope_analyzer()
 
@@ -895,11 +1213,37 @@ elif not st.session_state.messages:
 
         st.markdown("---")
 
+        # Show exam simulation option prominently
+        has_materials = exam_context.has_questions()
+
+        st.markdown("### 🎯 What do you want to do?")
+        st.markdown("")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(
+                "📝 **Take Exam Simulation**\n\nTest yourself under real exam conditions",
+                use_container_width=True,
+                type="primary",
+            ):
+                st.session_state.exam_stage = "entry"
+                st.rerun()
+
+        with col2:
+            if st.button(
+                "💬 **Practice with Claire**\n\nGet step-by-step guidance on problems",
+                use_container_width=True,
+            ):
+                # Just continue to chat
+                pass
+
+        st.markdown("---")
+
         # Show problems from materials or examples
-        if exam_context.has_questions():
-            st.markdown("#### From your materials")
+        if has_materials:
+            st.markdown("#### Quick practice from your materials")
             bank = exam_context.question_bank
-            for i, q in enumerate(bank.questions[:4]):
+            for i, q in enumerate(bank.questions[:3]):
                 source_label = q.format_source()
                 text_preview = q.text[:50] + "..." if len(q.text) > 50 else q.text
                 label = f"**{source_label}**: {text_preview}"
@@ -911,10 +1255,9 @@ elif not st.session_state.messages:
         else:
             st.markdown("#### Try an example")
             examples = [
-                "Find the maximum area of a rectangle with perimeter 100",
-                "Maximize xy subject to x + 2y = 10",
-                "Find d/dx of ln(x² + 1)",
-                "Evaluate ∫ x·eˣ dx",
+                "Find the critical points of f(x,y) = x² + y² - 4x",
+                "Use Lagrange multipliers: max xy subject to x + 2y = 10",
+                "Evaluate ∫∫ xy dA over the region bounded by y=x² and y=4",
             ]
             for i, ex in enumerate(examples):
                 if st.button(ex, key=f"ex_{i}", use_container_width=True):
