@@ -19,6 +19,10 @@ from practice_planner import prioritize_questions, format_study_plan
 from practice_planner import prioritize_questions, format_study_plan, study_plan_for_prompt
 from tracker import track, track_feedback
 from auth import handle_oauth_callback, get_user, show_login_button, sign_out
+from quota import (
+    can_use_premium, record_query, get_quota_status,
+    inject_localstorage_sync, ANON_FREE_QUERIES, USER_FREE_PREMIUM,
+)
 
 # Page config
 st.set_page_config(
@@ -169,8 +173,13 @@ if "exam_scope_stage" not in st.session_state:
     st.session_state.exam_scope_stage = "hidden"
 if "pending_similar" not in st.session_state:
     st.session_state.pending_similar = False
+if "anon_query_count" not in st.session_state:
+    st.session_state.anon_query_count = 0
+if "show_login_prompt" not in st.session_state:
+    st.session_state.show_login_prompt = False
 
-FREE_PREMIUM_QUERIES = 5
+# Inject localStorage sync for anonymous quota tracking
+inject_localstorage_sync()
 
 # ────────────────────────────────────────────────────────────
 # Restore from disk if this is a returning visitor
@@ -446,9 +455,10 @@ if st.session_state.pending_similar:
         "Give me just the problem statement — don't solve it yet."
     )
     track(st.session_state.session_id, "query", {"query": "generate_similar"})
-    st.session_state.query_count += 1
 
-    if st.session_state.query_count > FREE_PREMIUM_QUERIES and agent.model_tier == "premium":
+    # Check quota and switch model if needed
+    used_premium = can_use_premium()
+    if not used_premium and agent.model_tier == "premium":
         switched = agent.switch_to_deepseek()
         if switched:
             st.session_state.show_tier_notice = True
@@ -456,6 +466,7 @@ if st.session_state.pending_similar:
     st.session_state.messages.append({"role": "user", "content": "↻ Generate a similar problem"})
     with st.spinner(""):
         result = agent.process_query(similar_query)
+    record_query(used_premium=used_premium)
     st.session_state.messages.append({"role": "assistant", "content": result["output"]})
     st.rerun()
 
@@ -963,9 +974,16 @@ else:
                 st.session_state.pending_similar = True
                 st.rerun()
 
-    # Soft upgrade CTA — nudge after extended basic-mode usage (non-intrusive)
-    qc = st.session_state.query_count
-    if agent.model_tier == "basic" and qc > FREE_PREMIUM_QUERIES and qc % 6 == 2:
+    # Show login prompt for anonymous users who've hit their limit
+    quota = get_quota_status()
+    if not quota["is_logged_in"] and not quota["can_premium"]:
+        st.info(
+            "🔑 **Sign in to continue with the premium model.** "
+            "You've used your 3 free queries. Sign in to get 5 premium queries per day!",
+            icon=None,
+        )
+        show_login_button("Sign in to continue")
+    elif agent.model_tier == "basic" and not quota["can_premium"]:
         st.caption("💡 Enjoying Claire? **Unlock full power for exam prep** — premium model available.")
 
 
@@ -1007,13 +1025,10 @@ prompt = st.chat_input("Enter a calculus problem...")
 
 if prompt:
     track(st.session_state.session_id, "query", {"query": prompt[:300]})
-    st.session_state.query_count += 1
 
-    # Tier switch: after FREE_PREMIUM_QUERIES, move to DeepSeek
-    if (
-        st.session_state.query_count > FREE_PREMIUM_QUERIES
-        and agent.model_tier == "premium"
-    ):
+    # Check quota before making query
+    used_premium = can_use_premium()
+    if not used_premium and agent.model_tier == "premium":
         switched = agent.switch_to_deepseek()
         if switched:
             st.session_state.show_tier_notice = True
@@ -1053,6 +1068,9 @@ if prompt:
         # Get result from queue
         result = result_queue.get()
         status_placeholder.empty()
+
+        # Record query for quota tracking
+        record_query(used_premium=used_premium)
 
         # Render with hidden solution
         msg_count = len(st.session_state.messages)
