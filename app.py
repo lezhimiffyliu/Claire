@@ -28,6 +28,9 @@ from exam_mode import (
     generate_exam_from_bank, get_fallback_exam, score_exam,
     get_exam_topics, get_topic_label, format_time,
 )
+from exam_parser import (
+    parse_exam_file, parsed_exam_to_exam_questions, ParsedExam,
+)
 
 # Page config
 st.set_page_config(
@@ -406,7 +409,13 @@ def _render_exam_mode() -> bool:
     """
     stage = st.session_state.exam_stage
 
-    if stage == "entry":
+    if stage == "upload":
+        return _render_exam_upload()
+    elif stage == "parsing":
+        return _render_exam_parsing()
+    elif stage == "preview":
+        return _render_exam_preview()
+    elif stage == "entry":
         return _render_exam_entry()
     elif stage == "in_progress":
         return _render_exam_in_progress()
@@ -414,6 +423,190 @@ def _render_exam_mode() -> bool:
         return _render_exam_results()
 
     return False
+
+
+def _render_exam_upload() -> bool:
+    """Render the upload past paper page."""
+    st.markdown("## 📄 Upload Past Exam")
+    st.caption("Upload a past exam PDF and we'll turn it into a practice simulation.")
+
+    st.markdown("---")
+
+    uploaded = st.file_uploader(
+        "Upload past exam",
+        type=["pdf", "txt"],
+        key="exam_upload",
+        help="PDF or text file of a past exam paper"
+    )
+
+    st.markdown("")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📤 Parse Exam", type="primary", use_container_width=True, disabled=not uploaded):
+            if uploaded:
+                # Store file info for parsing
+                st.session_state._upload_filename = uploaded.name
+                st.session_state._upload_bytes = uploaded.getvalue()
+                st.session_state.exam_stage = "parsing"
+                st.rerun()
+
+    with col2:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.exam_stage = "not_started"
+            st.rerun()
+
+    st.markdown("---")
+    st.info(
+        "💡 **What happens:**\n"
+        "1. We extract text from your PDF\n"
+        "2. AI identifies individual questions\n"
+        "3. You preview the parsed exam\n"
+        "4. Start simulation!",
+        icon=None,
+    )
+
+    # Or use materials already loaded
+    if st.session_state.exam_context.has_questions():
+        st.markdown("---")
+        st.markdown("Or use your already loaded materials:")
+        if st.button("📝 Start with loaded materials", use_container_width=True):
+            st.session_state.exam_stage = "entry"
+            st.rerun()
+
+    return True
+
+
+def _render_exam_parsing() -> bool:
+    """Show parsing status and do the actual parsing."""
+    st.markdown("## 🔄 Analyzing Exam...")
+
+    filename = st.session_state.get("_upload_filename", "exam.pdf")
+    file_bytes = st.session_state.get("_upload_bytes", b"")
+
+    if not file_bytes:
+        st.error("No file to parse")
+        st.session_state.exam_stage = "upload"
+        st.rerun()
+        return True
+
+    # Show progress
+    status = st.empty()
+    progress = st.progress(0)
+
+    status.markdown("*📄 Extracting text from PDF...*")
+    progress.progress(20)
+
+    # Parse the exam
+    status.markdown("*🤖 AI analyzing exam structure...*")
+    progress.progress(50)
+
+    parsed = parse_exam_file(filename, file_bytes)
+
+    progress.progress(100)
+
+    if parsed.parse_success and parsed.questions:
+        status.markdown("*✅ Exam parsed successfully!*")
+        st.session_state.parsed_exam = parsed
+        st.session_state.parsed_exam_questions = parsed_exam_to_exam_questions(parsed)
+        time.sleep(0.5)
+        st.session_state.exam_stage = "preview"
+        st.rerun()
+    else:
+        status.empty()
+        progress.empty()
+        st.error(f"❌ {parsed.error_message or 'Could not parse exam'}")
+        st.markdown("Try uploading a clearer PDF or a text file.")
+        if st.button("← Try Again", use_container_width=True):
+            st.session_state.exam_stage = "upload"
+            st.rerun()
+
+    return True
+
+
+def _render_exam_preview() -> bool:
+    """Preview parsed exam before starting simulation."""
+    parsed = st.session_state.parsed_exam
+    questions = st.session_state.parsed_exam_questions
+
+    if not parsed or not questions:
+        st.session_state.exam_stage = "upload"
+        st.rerun()
+        return True
+
+    st.markdown(f"## 📋 {parsed.meta.title}")
+    st.caption("Preview your parsed exam before starting simulation")
+
+    st.markdown("---")
+
+    # Exam meta
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Questions", len(questions))
+    with col2:
+        st.metric("Total Points", parsed.meta.total_points)
+    with col3:
+        st.metric("Est. Time", f"{parsed.meta.estimated_duration_minutes} min")
+
+    # Topics
+    if parsed.meta.topics_overview:
+        st.markdown("**Topics:**")
+        st.markdown(" · ".join(parsed.meta.topics_overview[:5]))
+
+    st.markdown("---")
+
+    # Question preview
+    st.markdown("### Questions Preview")
+    for i, q in enumerate(questions[:5]):  # Show first 5
+        with st.expander(f"**{q.id}** — {get_topic_label(q.topic)} ({q.points} pts)"):
+            st.markdown(q.text[:500] + "..." if len(q.text) > 500 else q.text)
+
+    if len(questions) > 5:
+        st.caption(f"+ {len(questions) - 5} more questions")
+
+    st.markdown("---")
+
+    # Actions
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        if st.button("🚀 Start Exam Simulation", type="primary", use_container_width=True):
+            _start_exam_from_parsed()
+            st.rerun()
+    with col2:
+        if st.button("📄 Re-upload", use_container_width=True):
+            st.session_state.exam_stage = "upload"
+            st.rerun()
+    with col3:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.exam_stage = "not_started"
+            st.rerun()
+
+    return True
+
+
+def _start_exam_from_parsed():
+    """Start exam simulation from parsed exam questions."""
+    questions = st.session_state.parsed_exam_questions
+
+    if not questions:
+        st.session_state.exam_stage = "upload"
+        return
+
+    # Limit to reasonable number
+    exam_questions = questions[:10]
+
+    st.session_state.exam_session = ExamSession(
+        exam_id=st.session_state.session_id,
+        questions=exam_questions,
+        current_index=0,
+        answers=[""] * len(exam_questions),
+        time_limit_minutes=len(exam_questions) * 9,
+    )
+    st.session_state.exam_stage = "in_progress"
+    st.session_state.exam_start_time = time.time()
+    st.session_state.exam_current_q = 0
+    st.session_state.exam_answers = [""] * len(exam_questions)
+    st.session_state.exam_result = None
 
 
 # ────────────────────────────────────────────────────────────
@@ -478,7 +671,7 @@ if "show_login_prompt" not in st.session_state:
     st.session_state.show_login_prompt = False
 
 # Exam simulation state
-# "not_started" → "in_progress" → "complete"
+# "not_started" → "parsing" → "preview" → "entry" → "in_progress" → "complete"
 if "exam_stage" not in st.session_state:
     st.session_state.exam_stage = "not_started"
 if "exam_session" not in st.session_state:
@@ -491,6 +684,10 @@ if "exam_current_q" not in st.session_state:
     st.session_state.exam_current_q = 0
 if "exam_result" not in st.session_state:
     st.session_state.exam_result = None
+if "parsed_exam" not in st.session_state:
+    st.session_state.parsed_exam = None
+if "parsed_exam_questions" not in st.session_state:
+    st.session_state.parsed_exam_questions = []
 
 # Inject localStorage sync for anonymous quota tracking
 inject_localstorage_sync()
@@ -1195,7 +1392,7 @@ def _render_placement_test():
 # ============================================================
 
 # Check if exam simulation is active first
-if st.session_state.exam_stage in ("entry", "in_progress", "complete"):
+if st.session_state.exam_stage in ("upload", "parsing", "preview", "entry", "in_progress", "complete"):
     _render_exam_mode()
 
 # Header
@@ -1219,23 +1416,46 @@ elif not st.session_state.messages:
         st.markdown("### 🎯 What do you want to do?")
         st.markdown("")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(
-                "📝 **Take Exam Simulation**\n\nTest yourself under real exam conditions",
-                use_container_width=True,
-                type="primary",
-            ):
-                st.session_state.exam_stage = "entry"
-                st.rerun()
+        # Main action: Upload & simulate OR use loaded materials
+        if has_materials:
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button(
+                    "📝 **Exam Simulation**\n\nTest with your materials",
+                    use_container_width=True,
+                    type="primary",
+                ):
+                    st.session_state.exam_stage = "entry"
+                    st.rerun()
+            with col2:
+                if st.button(
+                    "📄 **Upload Past Paper**\n\nParse a new exam PDF",
+                    use_container_width=True,
+                ):
+                    st.session_state.exam_stage = "upload"
+                    st.rerun()
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button(
+                    "📄 **Upload Past Exam**\n\nTurn your PDF into a simulation",
+                    use_container_width=True,
+                    type="primary",
+                ):
+                    st.session_state.exam_stage = "upload"
+                    st.rerun()
+            with col2:
+                if st.button(
+                    "📝 **Practice Exam**\n\nUse our sample questions",
+                    use_container_width=True,
+                ):
+                    st.session_state.exam_stage = "entry"
+                    st.rerun()
 
-        with col2:
-            if st.button(
-                "💬 **Practice with Claire**\n\nGet step-by-step guidance on problems",
-                use_container_width=True,
-            ):
-                # Just continue to chat
-                pass
+        st.markdown("")
+        if st.button("💬 **Just practice with Claire** — Get step-by-step guidance", use_container_width=True):
+            # Stay on main page, scroll to examples
+            pass
 
         st.markdown("---")
 
