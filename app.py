@@ -1127,84 +1127,97 @@ def _inject_welcome_message(result):
 
 def _render_exam_scope_analyzer():
     """
-    Render the Exam Scope Analyzer screen after file upload.
-    Shows topic distribution, high-freq topics, risk areas, and min passing path.
+    Render the Exam Panic Mode analysis after file upload.
+    Shows topic distribution, focus advice, and cram plan.
     Returns True if it rendered (caller should skip other UI).
     """
     if st.session_state.exam_scope_stage != "showing":
         return False
 
-    from exam_analyzer import generate_exam_scope, TOPIC_DISPLAY, TOPIC_EMOJI
+    from exam_panic import generate_exam_summary, get_display_name
 
     ctx = st.session_state.exam_context
     if not ctx.has_context():
         st.session_state.exam_scope_stage = "done"
         return False
 
-    report = generate_exam_scope(ctx)
+    # Get questions from bank
+    questions = []
+    if ctx.question_bank:
+        questions = ctx.question_bank.questions
 
-    # ── Header ──────────────────────────────────────────────
-    st.markdown("## 📊 Exam Scope Analysis")
-    names_str = ", ".join(report.material_names[:3])
-    if len(report.material_names) > 3:
-        names_str += f" +{len(report.material_names) - 3} more"
-    st.caption(f"Based on: {names_str}")
-    if report.total_questions:
-        st.caption(f"📝 {report.total_questions} problems extracted")
-    st.markdown("---")
-
-    if not report.topic_distribution:
-        st.info("📂 Materials loaded — couldn't detect clear topic patterns. Try uploading a past exam or syllabus for better analysis.")
+    if not questions:
+        st.info("📂 Materials loaded — couldn't extract problems. Try uploading a past exam for better analysis.")
         if st.button("Continue →", type="primary"):
             st.session_state.exam_scope_stage = "done"
             st.rerun()
         return True
 
-    # ── Two-column layout ────────────────────────────────────
-    col_left, col_right = st.columns([1.3, 1])
+    # Generate exam summary
+    summary = generate_exam_summary(questions, days=3)
+
+    # Store for later use
+    st.session_state.exam_summary = summary
+
+    # ── Header ──────────────────────────────────────────────
+    st.markdown("## 📊 Exam Analysis")
+    names_str = ", ".join(ctx.material_names[:3])
+    if len(ctx.material_names) > 3:
+        names_str += f" +{len(ctx.material_names) - 3} more"
+    st.caption(f"Based on: {names_str}")
+    st.caption(f"📝 {summary.total_questions} problems analyzed")
+    st.markdown("---")
+
+    if not summary.top_topics:
+        st.info("Couldn't detect specific topics. Try uploading more materials.")
+        if st.button("Continue →", type="primary"):
+            st.session_state.exam_scope_stage = "done"
+            st.rerun()
+        return True
+
+    # ── Top Topics ───────────────────────────────────────────
+    st.markdown("### 🎯 This course heavily focuses on:")
+    st.markdown("")
+
+    for i, (topic, count) in enumerate(summary.top_topics[:5], 1):
+        name = get_display_name(topic)
+        st.markdown(f"**{i}. {name}** — appears in {count} problems")
+
+    st.markdown("---")
+
+    # ── Two-column: Focus Advice + Cram Plan ─────────────────
+    col_left, col_right = st.columns([1.5, 1])
 
     with col_left:
-        st.markdown("#### 📈 Topic Distribution")
-        for topic_name, pct, raw in report.topic_distribution:
-            display = TOPIC_DISPLAY.get(topic_name, topic_name.replace("_", " ").title())
-            emoji = TOPIC_EMOJI.get(topic_name, "•")
-            st.markdown(f"**{emoji} {display}**")
-            st.progress(pct / 100, text=f"{pct}%")
-
+        st.markdown("### 📝 What you should know:")
         st.markdown("")
-        st.markdown("#### 🎯 Likely Exam Topics")
-        for t in report.high_freq_topics:
-            disp = TOPIC_DISPLAY.get(t, t.replace("_", " ").title())
-            st.markdown(f"✅ {disp}")
+
+        for advice in summary.focus_advice[:4]:
+            with st.expander(f"**{advice['display_name']}** ({advice['count']} problems)"):
+                for step in advice["steps"]:
+                    st.markdown(f"• {step}")
 
     with col_right:
-        if report.risk_areas:
-            st.markdown("#### ⚠️ Risk Areas")
-            st.caption("Low/no coverage in your materials — don't skip these:")
-            for t in report.risk_areas:
-                disp = TOPIC_DISPLAY.get(t, t.replace("_", " ").title())
-                st.markdown(f"⚠️ {disp}")
-
+        st.markdown("### 📅 Cram Plan")
         st.markdown("")
-        st.markdown("#### 🚀 Minimum Passing Path")
-        st.caption("Master these first to cover ~70% of exam content:")
-        for i, t in enumerate(report.min_passing_path, 1):
-            pct = next((p for n, p, _ in report.topic_distribution if n == t), 0)
-            disp = TOPIC_DISPLAY.get(t, t.replace("_", " ").title())
-            st.markdown(f"**{i}.** {disp} — ~{pct}% of exam")
+
+        for day in summary.cram_plan:
+            topics_str = ", ".join(day["display_names"])
+            st.markdown(f"**Day {day['day']}**")
+            st.caption(topics_str)
 
     st.markdown("---")
 
     # ── CTA buttons ─────────────────────────────────────────
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("Start Practicing →", type="primary", use_container_width=True):
+        if st.button("📝 Start Exam Simulation", type="primary", use_container_width=True):
             st.session_state.exam_scope_stage = "done"
+            st.session_state.exam_stage = "entry"
             st.rerun()
     with col_b:
-        if st.button("Skip, just ask questions", use_container_width=True):
+        if st.button("💬 Practice with Claire", use_container_width=True):
             st.session_state.exam_scope_stage = "done"
-            _skip_placement()
             st.rerun()
 
     return True
