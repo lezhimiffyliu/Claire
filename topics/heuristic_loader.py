@@ -1,14 +1,13 @@
 """
 Heuristic Loader - Maps topics to solving templates
 
-This module provides the bridge between:
-- Fine-grained topic detection
-- Solving heuristics/templates
+Supports one-to-many mapping with LLM selection:
+    topics → candidate heuristics → LLM selects best → solving template
 
 Usage:
     from topics.heuristic_loader import get_solving_approach
 
-    approach = get_solving_approach(["lagrange_multipliers"])
+    approach = get_solving_approach(["u_substitution"], problem_text="∫x·e^(x²)dx")
     # Returns user-friendly solving steps
 """
 
@@ -24,8 +23,8 @@ PROJECT_ROOT = MODULE_DIR.parent
 MAPPING_FILE = MODULE_DIR / "topic_to_heuristic.json"
 HEURISTICS_DIR = PROJECT_ROOT / "heuristics"
 
-# Load mapping at module level
-_TOPIC_MAPPING = {}
+# Load mapping at module level (now one-to-many)
+_TOPIC_MAPPING: dict[str, list[str]] = {}
 try:
     with open(MAPPING_FILE, "r", encoding="utf-8") as f:
         _TOPIC_MAPPING = json.load(f)
@@ -55,25 +54,159 @@ TOPIC_DESCRIPTIONS = {
 }
 
 
-def get_heuristic_file(topic: str) -> Optional[Path]:
-    """Get the heuristic file path for a topic."""
-    if topic in _TOPIC_MAPPING:
-        rel_path = _TOPIC_MAPPING[topic]
-        full_path = PROJECT_ROOT / rel_path
-        if full_path.exists():
-            return full_path
+def get_candidates_for_topics(topics: list[str]) -> list[str]:
+    """Get all candidate heuristics for given topics (deduplicated)."""
+    candidates = []
+    seen = set()
+
+    for topic in topics:
+        if topic in _TOPIC_MAPPING:
+            for h in _TOPIC_MAPPING[topic]:
+                if h not in seen:
+                    candidates.append(h)
+                    seen.add(h)
+
+    return candidates
+
+
+def get_heuristic_file(heuristic_name: str) -> Optional[Path]:
+    """Get the heuristic file path for a heuristic name."""
+    # Try direct match
+    file_path = HEURISTICS_DIR / f"{heuristic_name}.md"
+    if file_path.exists():
+        return file_path
+
+    # Try legacy names (backwards compat)
+    legacy_map = {
+        "lagrange_multipliers": "constrained_optimization.md",
+        "limits": "limits.md",
+        "derivatives": "derivatives.md",
+        "integration": "integration.md",
+        "optimization": "optimization.md",
+        "related_rates": "related_rates.md",
+    }
+    if heuristic_name in legacy_map:
+        file_path = HEURISTICS_DIR / legacy_map[heuristic_name]
+        if file_path.exists():
+            return file_path
+
     return None
 
 
-def load_heuristic(topic: str) -> Optional[str]:
-    """Load the full heuristic content for a topic."""
-    file_path = get_heuristic_file(topic)
+def load_heuristic(heuristic_name: str) -> Optional[str]:
+    """Load the full heuristic content by name."""
+    file_path = get_heuristic_file(heuristic_name)
     if file_path:
         try:
             return file_path.read_text(encoding="utf-8")
         except Exception:
             pass
     return None
+
+
+# ============================================================
+# LLM Selection (one-to-many → best one)
+# ============================================================
+
+SELECTION_PROMPT = '''你是一个微积分老师。
+
+现在给你一道题，以及几个可能的解题方法，请选择最合适的一个。
+
+候选方法：
+{candidates}
+
+要求：
+1. 只返回一个方法名称（必须从候选列表中选）
+2. 不要解释
+3. 不要输出多余内容
+
+题目：
+{problem_text}
+
+输出（只输出方法名）：'''
+
+
+def _get_selection_llm():
+    """Get LLM for heuristic selection (DeepSeek, cheap)."""
+    try:
+        import sys
+        sys.path.insert(0, str(PROJECT_ROOT))
+        from claire_agent import get_secret
+
+        deepseek_key = get_secret("DEEPSEEK_API_KEY")
+        if deepseek_key:
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(
+                model="deepseek-chat",
+                api_key=deepseek_key,
+                base_url="https://api.deepseek.com",
+                temperature=0,
+                max_tokens=50,
+            )
+
+        anthropic_key = get_secret("ANTHROPIC_API_KEY")
+        if anthropic_key:
+            from langchain_anthropic import ChatAnthropic
+            return ChatAnthropic(
+                model="claude-sonnet-4-20250514",
+                api_key=anthropic_key,
+                temperature=0,
+                max_tokens=50,
+            )
+    except Exception as e:
+        print(f"[heuristic_loader] LLM error: {e}")
+
+    return None
+
+
+def select_best_heuristic(problem_text: str, candidates: list[str]) -> str:
+    """
+    Use LLM to select the best heuristic from candidates.
+
+    Args:
+        problem_text: The problem to solve
+        candidates: List of candidate heuristic names
+
+    Returns:
+        Best heuristic name (from candidates)
+    """
+    if not candidates:
+        return "derivatives"  # Default
+
+    if len(candidates) == 1:
+        return candidates[0]  # No selection needed
+
+    llm = _get_selection_llm()
+    if not llm:
+        return candidates[0]  # Fallback to first
+
+    # Format candidates for display
+    candidates_str = "\n".join(f"- {c}" for c in candidates)
+
+    prompt = SELECTION_PROMPT.format(
+        candidates=candidates_str,
+        problem_text=problem_text[:500]  # Truncate
+    )
+
+    try:
+        from langchain_core.messages import HumanMessage
+        result = llm.invoke([HumanMessage(content=prompt)])
+        response = result.content.strip().lower().replace(" ", "_")
+
+        # Validate response is in candidates
+        for c in candidates:
+            if c.lower() in response or response in c.lower():
+                return c
+
+        # Partial match
+        for c in candidates:
+            if any(word in response for word in c.split("_")):
+                return c
+
+    except Exception as e:
+        print(f"[select_best_heuristic] Error: {e}")
+
+    return candidates[0]  # Fallback
 
 
 def extract_solving_template(heuristic_content: str) -> list[str]:
@@ -125,45 +258,67 @@ def get_topic_description(topic: str) -> str:
     return topic.replace("_", " ")
 
 
-def get_solving_approach(topics: list[str]) -> dict:
+def get_solving_approach(topics: list[str], problem_text: str = "") -> dict:
     """
     Get a user-friendly solving approach for given topics.
 
+    Flow:
+    1. Get candidate heuristics for all topics
+    2. If multiple candidates, use LLM to select best one
+    3. Load heuristic and extract steps
+
     Args:
-        topics: List of topic IDs (e.g., ["lagrange_multipliers"])
+        topics: List of topic IDs (e.g., ["u_substitution"])
+        problem_text: Optional problem text for better selection
 
     Returns:
         {
             "description": "This problem is about...",
             "steps": ["Step 1...", "Step 2..."],
-            "topic": "lagrange_multipliers"
+            "topic": "u_substitution",
+            "heuristic": "u_substitution"
         }
     """
     if not topics:
         return {
             "description": "",
             "steps": [],
-            "topic": None
+            "topic": None,
+            "heuristic": None
         }
 
-    # Use first topic
-    main_topic = topics[0]
+    # Step 1: Get all candidate heuristics
+    candidates = get_candidates_for_topics(topics)
 
-    # Get description
-    description = f"This problem is about {get_topic_description(main_topic)}."
+    if not candidates:
+        # Fallback: use first topic as heuristic name
+        candidates = [topics[0]]
 
-    # Load heuristic and extract steps
-    heuristic = load_heuristic(main_topic)
-    steps = extract_solving_template(heuristic) if heuristic else []
+    # Step 2: Select best heuristic
+    if len(candidates) == 1:
+        best_heuristic = candidates[0]
+    elif problem_text:
+        best_heuristic = select_best_heuristic(problem_text, candidates)
+    else:
+        best_heuristic = candidates[0]
 
-    # Fallback steps if none found
+    # Step 3: Load heuristic content
+    heuristic_content = load_heuristic(best_heuristic)
+    steps = extract_solving_template(heuristic_content) if heuristic_content else []
+
+    # Fallback steps
     if not steps:
-        steps = _get_fallback_steps(main_topic)
+        steps = _get_fallback_steps(best_heuristic)
+
+    # Get description from first topic
+    main_topic = topics[0]
+    description = f"This problem is about {get_topic_description(main_topic)}."
 
     return {
         "description": description,
         "steps": steps,
-        "topic": main_topic
+        "topic": main_topic,
+        "heuristic": best_heuristic
     }
 
 
