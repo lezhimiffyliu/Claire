@@ -404,11 +404,32 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
     - Simple MCQ/True-False: use original question with original choices
     - Complex problems (no existing choices): ask "what approach" with METHOD_CHOICES
 
+    IMPORTANT: Uses LLM to clean garbled PDF text before display.
+
     Only uses questions that pass a readability check; falls back to
     hand-crafted questions when there aren't enough good ones.
     """
     if not bank or not getattr(bank, "questions", None):
         return []
+
+    # Import LLM cleaning function
+    from question_bank import clean_question_with_llm
+
+    # Create shared LLM instance for efficiency
+    llm = None
+    try:
+        from claire_agent import get_secret
+        api_key = get_secret("ANTHROPIC_API_KEY")
+        if api_key:
+            from langchain_anthropic import ChatAnthropic
+            llm = ChatAnthropic(
+                model="claude-sonnet-4-20250514",
+                api_key=api_key,
+                temperature=0,
+                max_tokens=1024,
+            )
+    except Exception:
+        pass
 
     selected: list[PlacementQuestion] = []
     seen_ids: set[str] = set()
@@ -430,17 +451,19 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
         if q_id in seen_ids:
             continue
 
-        excerpt = q.get_formatted_text()[:600] if hasattr(q, "get_formatted_text") else q.text[:600]
-
-        # Skip garbled / incomplete extractions
-        if not _is_readable_question(excerpt):
+        # Skip garbled / incomplete extractions (check raw text first)
+        if not _is_readable_question(q.text):
             continue
 
+        # CLEAN THE QUESTION TEXT WITH LLM
+        # This is the key fix for garbled PDF math
+        cleaned_text = clean_question_with_llm(q.text, llm=llm)
+
         # Check if this is a simple MCQ with existing choices
-        stem, choices, correct_idx = _extract_existing_choices(q.text)
+        stem, choices, correct_idx = _extract_existing_choices(cleaned_text)
 
         if choices and len(choices) >= 2:
-            # Simple MCQ or True/False - use original question and choices
+            # Simple MCQ or True/False - use cleaned question and choices
             selected.append(
                 PlacementQuestion(
                     prompt=f"**{q.format_source()}**\n\n{stem}",
@@ -450,7 +473,7 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
                     source=q.format_source(),
                     difficulty=getattr(q, "difficulty", "medium"),
                     topic=getattr(q, "pattern", "") or (q.categories[0] if q.categories else ""),
-                    question_excerpt=stem,
+                    question_excerpt=stem,  # Use cleaned stem
                     ask_text="",
                 )
             )
@@ -460,6 +483,9 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
             pattern = getattr(q, "pattern", None)
             if pattern not in METHOD_CHOICES:
                 continue
+
+            # Use cleaned text for display
+            excerpt = cleaned_text[:600]
 
             ask = "What is the best first approach to this problem?"
             selected.append(
@@ -475,7 +501,7 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
                     source=q.format_source(),
                     difficulty=getattr(q, "difficulty", "medium"),
                     topic=pattern,
-                    question_excerpt=excerpt,
+                    question_excerpt=excerpt,  # Use cleaned excerpt
                     ask_text=ask,
                 )
             )

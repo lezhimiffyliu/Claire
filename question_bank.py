@@ -160,10 +160,119 @@ class Question:
         return format_math_text(self.text)
 
 
+def _needs_llm_cleaning(text: str) -> bool:
+    """Check if text has signs of garbled PDF extraction that needs LLM cleaning."""
+    # Signs of garbled math:
+    # 1. Multiple integral symbols in a row
+    # 2. Isolated numbers that look like limits (0 1 x etc)
+    # 3. Broken spacing patterns
+    # 4. Garbage text patterns
+
+    import re
+
+    # Multiple ∫ symbols separated by spaces/newlines
+    if re.search(r'∫\s*∫', text) or re.search(r'∫\s+\d', text):
+        return True
+
+    # Isolated single digits/letters that look like broken limits
+    if re.search(r'\n\s*[0-9x]\s*\n', text):
+        return True
+
+    # Garbage exam instruction patterns
+    garbage_patterns = [
+        r'for your examination',
+        r'preferably print',
+        r'auto-\s*multiple',
+        r'\.T\s+True\s+\.F\s+False',
+    ]
+    for pat in garbage_patterns:
+        if re.search(pat, text, re.IGNORECASE):
+            return True
+
+    # Broken subscript patterns like "y2" instead of "y^2" or "y²"
+    if re.search(r'[a-z][0-9]\s+d[xy]', text):
+        return True
+
+    return False
+
+
+def clean_question_with_llm(text: str, llm=None) -> str:
+    """
+    Use LLM to clean up garbled PDF text and convert math to proper LaTeX.
+
+    This is the key fix for making diagnostic questions readable.
+    Only calls LLM if text shows signs of garbled extraction.
+    """
+    if not text or len(text) < 10:
+        return text
+
+    # Skip if already clean LaTeX
+    if text.count('$') >= 2 and '\\' in text:
+        return text
+
+    # Skip LLM if text doesn't need cleaning (saves API calls)
+    if not _needs_llm_cleaning(text):
+        return format_math_text(text)
+
+    # Get LLM
+    if llm is None:
+        try:
+            from claire_agent import get_secret
+            api_key = get_secret("ANTHROPIC_API_KEY")
+            if not api_key:
+                return format_math_text(text)  # Fallback to basic formatting
+
+            from langchain_anthropic import ChatAnthropic
+            llm = ChatAnthropic(
+                model="claude-sonnet-4-20250514",
+                api_key=api_key,
+                temperature=0,
+                max_tokens=1024,
+            )
+        except Exception:
+            return format_math_text(text)
+
+    prompt = f"""Clean up this math problem text for display. The text was extracted from a PDF and may have:
+- Broken integral symbols (∫ ∫ 1 0 should become \\int_0^1)
+- Missing superscripts/subscripts
+- Garbage text like "For your examination..." or printing instructions
+- Broken spacing
+
+IMPORTANT:
+1. Convert ALL math to proper LaTeX wrapped in $...$ for inline or $$...$$ for display
+2. Remove any unrelated text (exam instructions, printing notes)
+3. Keep only the actual math problem
+4. Use proper LaTeX: \\int, \\sqrt, ^{{}}, _{{}}, \\frac{{}}{{}}, etc.
+5. For True/False questions, keep "True or False?" at the end
+
+Return ONLY the cleaned question text. No explanations.
+
+Original text:
+{text}
+
+Cleaned version:"""
+
+    try:
+        from langchain_core.messages import HumanMessage
+        result = llm.invoke([HumanMessage(content=prompt)])
+        cleaned = result.content.strip()
+
+        # Basic validation - should have some content
+        if len(cleaned) > 10:
+            return cleaned
+    except Exception as e:
+        print(f"[clean_question_with_llm] Error: {e}")
+
+    # Fallback to basic formatting
+    return format_math_text(text)
+
+
 def format_math_text(text: str) -> str:
     """
     Convert plain text math notation to LaTeX for Streamlit display.
     Wraps math expressions in $...$ for inline rendering.
+
+    Note: This is a basic fallback. For garbled PDF text, use clean_question_with_llm().
     """
     import re
 
