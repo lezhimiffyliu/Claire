@@ -160,123 +160,13 @@ class Question:
         return format_math_text(self.text)
 
 
-def _needs_llm_cleaning(text: str) -> bool:
-    """Check if text has signs of garbled PDF extraction that needs LLM cleaning."""
-    # Signs of garbled math:
-    # 1. Multiple integral symbols in a row
-    # 2. Isolated numbers that look like limits (0 1 x etc)
-    # 3. Broken spacing patterns
-    # 4. Garbage text patterns
-
-    import re
-
-    # Multiple ∫ symbols separated by spaces/newlines
-    if re.search(r'∫\s*∫', text) or re.search(r'∫\s+\d', text):
-        return True
-
-    # Isolated single digits/letters that look like broken limits
-    if re.search(r'\n\s*[0-9x]\s*\n', text):
-        return True
-
-    # Garbage exam instruction patterns
-    garbage_patterns = [
-        r'for your examination',
-        r'preferably print',
-        r'auto-\s*multiple',
-        r'\.T\s+True\s+\.F\s+False',
-    ]
-    for pat in garbage_patterns:
-        if re.search(pat, text, re.IGNORECASE):
-            return True
-
-    # Broken subscript patterns like "y2" instead of "y^2" or "y²"
-    if re.search(r'[a-z][0-9]\s+d[xy]', text):
-        return True
-
-    return False
-
-
-def clean_question_with_llm(text: str, llm=None, force: bool = True) -> str:
-    """
-    Use LLM to clean up garbled PDF text and convert math to proper LaTeX.
-
-    This is the key fix for making diagnostic questions readable.
-
-    Args:
-        text: Raw question text from PDF
-        llm: Optional LLM instance (will create one if needed)
-        force: If True, always clean with LLM. If False, only clean if garbled.
-    """
-    if not text or len(text) < 10:
-        return text
-
-    # Skip if already clean LaTeX (has multiple $...$ blocks with backslash commands)
-    if text.count('$') >= 4 and '\\int' in text:
-        return text
-
-    # If not forcing, check if cleaning is needed
-    if not force and not _needs_llm_cleaning(text):
-        return format_math_text(text)
-
-    # Get LLM
-    if llm is None:
-        try:
-            from claire_agent import get_secret
-            api_key = get_secret("ANTHROPIC_API_KEY")
-            if not api_key:
-                return format_math_text(text)  # Fallback to basic formatting
-
-            from langchain_anthropic import ChatAnthropic
-            llm = ChatAnthropic(
-                model="claude-sonnet-4-20250514",
-                api_key=api_key,
-                temperature=0,
-                max_tokens=1024,
-            )
-        except Exception:
-            return format_math_text(text)
-
-    prompt = f"""Clean up this math problem text for display. The text was extracted from a PDF and may have:
-- Broken integral symbols (∫ ∫ 1 0 should become \\int_0^1)
-- Missing superscripts/subscripts
-- Garbage text like "For your examination..." or printing instructions
-- Broken spacing
-
-IMPORTANT:
-1. Convert ALL math to proper LaTeX wrapped in $...$ for inline or $$...$$ for display
-2. Remove any unrelated text (exam instructions, printing notes)
-3. Keep only the actual math problem
-4. Use proper LaTeX: \\int, \\sqrt, ^{{}}, _{{}}, \\frac{{}}{{}}, etc.
-5. For True/False questions, keep "True or False?" at the end
-
-Return ONLY the cleaned question text. No explanations.
-
-Original text:
-{text}
-
-Cleaned version:"""
-
-    try:
-        from langchain_core.messages import HumanMessage
-        result = llm.invoke([HumanMessage(content=prompt)])
-        cleaned = result.content.strip()
-
-        # Basic validation - should have some content
-        if len(cleaned) > 10:
-            return cleaned
-    except Exception as e:
-        print(f"[clean_question_with_llm] Error: {e}")
-
-    # Fallback to basic formatting
-    return format_math_text(text)
-
-
 def format_math_text(text: str) -> str:
     """
     Convert plain text math notation to LaTeX for Streamlit display.
     Wraps math expressions in $...$ for inline rendering.
 
-    Note: This is a basic fallback. For garbled PDF text, use clean_question_with_llm().
+    Note: This is only used as fallback when LLM parsing is unavailable.
+    Primary parsing happens at upload time via parse_questions_with_llm().
     """
     import re
 
@@ -429,7 +319,204 @@ def extract_text_from_file(file_bytes: bytes, filename: str) -> str:
 
 
 # ============================================================
-# QUESTION EXTRACTION
+# LLM PARSING (at ingestion time, NOT display time)
+# ============================================================
+
+PARSE_PROMPT = '''You are parsing a calculus exam/worksheet PDF.
+
+Convert the raw text into a structured JSON format with clean LaTeX math.
+
+CRITICAL REQUIREMENTS:
+1. Convert ALL math expressions to proper LaTeX:
+   - Integrals: \\int_0^1, \\iint, \\iiint
+   - Fractions: \\frac{a}{b}
+   - Square roots: \\sqrt{x}
+   - Powers: x^{2}, e^{x}
+   - Greek letters: \\alpha, \\beta, \\theta
+   - Partial derivatives: \\frac{\\partial f}{\\partial x}
+   - Limits: \\lim_{x \\to 0}
+
+2. Wrap inline math in $...$ and display math in $$...$$
+
+3. Remove garbage text:
+   - Printing instructions ("For your examination...")
+   - Page numbers, headers, footers
+   - ".T True .F False" formatting artifacts
+
+4. Preserve the original meaning exactly - do not solve or explain
+
+5. Detect question type: derivatives, integration, limits, optimization,
+   constrained_optimization, related_rates
+
+OUTPUT FORMAT (strict JSON, no explanation):
+{
+  "questions": [
+    {
+      "id": "Q1",
+      "text": "Evaluate $\\\\int_0^1 \\\\sqrt{x+y^2} \\\\, dx$",
+      "topic": "integration",
+      "difficulty": "medium",
+      "is_true_false": false
+    }
+  ]
+}
+
+RAW TEXT:
+'''
+
+
+def _get_parsing_llm():
+    """Get LLM for PDF parsing. Uses DeepSeek (cheaper) for batch processing."""
+    try:
+        from claire_agent import get_secret
+
+        # Try DeepSeek first (cheaper for batch processing)
+        deepseek_key = get_secret("DEEPSEEK_API_KEY")
+        if deepseek_key:
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(
+                model="deepseek-chat",
+                api_key=deepseek_key,
+                base_url="https://api.deepseek.com",
+                temperature=0,  # Deterministic output
+                max_tokens=4096,
+            )
+
+        # Fallback to Claude if no DeepSeek key
+        anthropic_key = get_secret("ANTHROPIC_API_KEY")
+        if anthropic_key:
+            from langchain_anthropic import ChatAnthropic
+            return ChatAnthropic(
+                model="claude-sonnet-4-20250514",
+                api_key=anthropic_key,
+                temperature=0,
+                max_tokens=4096,
+            )
+
+    except Exception as e:
+        print(f"[_get_parsing_llm] Error: {e}")
+
+    return None
+
+
+def parse_questions_with_llm(raw_text: str, source: str) -> list[Question]:
+    """
+    Parse raw PDF text into structured questions using LLM.
+
+    This is called ONCE at upload time, NOT at display time.
+    Uses DeepSeek (cheaper) for batch processing.
+    """
+    import json
+
+    if not raw_text or len(raw_text.strip()) < 50:
+        return []
+
+    llm = _get_parsing_llm()
+    if not llm:
+        print("[parse_questions_with_llm] No LLM available, falling back to regex")
+        return _extract_questions_regex(raw_text, source)
+
+    # Truncate if too long
+    max_chars = 12000
+    if len(raw_text) > max_chars:
+        raw_text = raw_text[:max_chars] + "\n\n[...truncated...]"
+
+    prompt = PARSE_PROMPT + raw_text
+
+    try:
+        from langchain_core.messages import HumanMessage
+        result = llm.invoke([HumanMessage(content=prompt)])
+        response_text = result.content.strip()
+
+        # Extract JSON from response
+        parsed = _extract_json(response_text)
+
+        if not parsed or "questions" not in parsed:
+            print("[parse_questions_with_llm] Invalid JSON response, falling back to regex")
+            return _extract_questions_regex(raw_text, source)
+
+        # Convert to Question objects
+        questions = []
+        for i, q_data in enumerate(parsed["questions"]):
+            q_text = q_data.get("text", "")
+            if not q_text or len(q_text) < 10:
+                continue
+
+            topic = q_data.get("topic", "")
+            pattern = _topic_to_pattern(topic)
+
+            questions.append(Question(
+                id=q_data.get("id", f"Q{i+1}"),
+                text=q_text,
+                source=source,
+                pattern=pattern,
+                problem_id=q_data.get("id", f"Problem {i+1}"),
+                difficulty=q_data.get("difficulty", "medium"),
+            ))
+
+        if questions:
+            print(f"[parse_questions_with_llm] Parsed {len(questions)} questions from {source}")
+            return questions
+
+    except Exception as e:
+        print(f"[parse_questions_with_llm] Error: {e}")
+
+    # Fallback to regex parsing
+    return _extract_questions_regex(raw_text, source)
+
+
+def _extract_json(text: str) -> dict:
+    """Extract JSON from LLM response."""
+    import json
+
+    # Try to find JSON block
+    json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
+    if json_match:
+        try:
+            return json.loads(json_match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Try raw JSON
+    start = text.find('{')
+    end = text.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    return {}
+
+
+def _topic_to_pattern(topic: str) -> str:
+    """Convert topic name to pattern name."""
+    topic_lower = topic.lower().replace(" ", "_").replace("-", "_")
+
+    mapping = {
+        "integration": "integration",
+        "integral": "integration",
+        "integrals": "integration",
+        "derivatives": "derivatives",
+        "derivative": "derivatives",
+        "differentiation": "derivatives",
+        "limits": "limits",
+        "limit": "limits",
+        "optimization": "optimization",
+        "constrained_optimization": "constrained_optimization",
+        "lagrange": "constrained_optimization",
+        "related_rates": "related_rates",
+    }
+
+    for key, pattern in mapping.items():
+        if key in topic_lower:
+            return pattern
+
+    return "derivatives"  # Default
+
+
+# ============================================================
+# REGEX FALLBACK (when LLM is unavailable)
 # ============================================================
 
 # Patterns that indicate a question/problem
@@ -461,61 +548,54 @@ def is_calculus_question(text: str) -> bool:
     return any(kw in text_lower for kw in CALCULUS_KEYWORDS)
 
 
-def extract_questions_from_text(text: str, source: str) -> list[Question]:
-    """Extract individual questions from text content."""
+def _extract_questions_regex(text: str, source: str) -> list[Question]:
+    """
+    Fallback: Extract questions using regex patterns.
+    Used when LLM is unavailable.
+    """
     questions = []
-    seen_texts = set()  # Deduplicate
+    seen_texts = set()
 
-    # Try each pattern
     for pattern_idx, pattern in enumerate(QUESTION_PATTERNS):
         matches = re.findall(pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
 
         for match in matches:
-            # Extract problem identifier and question text
             problem_id = ""
             if isinstance(match, tuple) and len(match) >= 2:
-                # First group is the identifier (number or letter)
                 identifier = match[0]
                 q_text = match[-1].strip()
 
-                # Format problem_id based on pattern type
-                if pattern_idx == 0:  # Problem/Question/Exercise N
+                if pattern_idx == 0:
                     problem_id = f"Problem {identifier}"
-                elif pattern_idx == 1:  # Numbered list (1. 2. 3.)
+                elif pattern_idx == 1:
                     problem_id = f"Q{identifier}"
-                elif pattern_idx == 2:  # Lettered ((a), (b), (c))
+                elif pattern_idx == 2:
                     problem_id = f"({identifier})"
             else:
                 q_text = match.strip() if isinstance(match, str) else str(match)
 
-            # Clean up
-            q_text = re.sub(r'\s+', ' ', q_text)
-            q_text = q_text.strip()
+            q_text = re.sub(r'\s+', ' ', q_text).strip()
 
-            # Skip if too short or already seen
-            if len(q_text) < 20:
+            if len(q_text) < 20 or q_text in seen_texts:
                 continue
-            if q_text in seen_texts:
-                continue
-
-            # Check if it's a calculus question
             if not is_calculus_question(q_text):
                 continue
 
             seen_texts.add(q_text)
-
-            # Detect pattern
             calc_pattern = detect_pattern(q_text)
+
+            # Apply basic formatting (not LLM)
+            formatted_text = format_math_text(q_text)
 
             questions.append(Question(
                 id="",
-                text=q_text,
+                text=formatted_text,
                 source=source,
                 pattern=calc_pattern,
                 problem_id=problem_id,
             ))
 
-    # If no structured questions found, try to split by double newlines
+    # Fallback: split by paragraphs
     if not questions:
         paragraphs = re.split(r'\n\n+', text)
         for para in paragraphs:
@@ -529,15 +609,26 @@ def extract_questions_from_text(text: str, source: str) -> list[Question]:
 
             seen_texts.add(para)
             calc_pattern = detect_pattern(para)
+            formatted_text = format_math_text(para)
 
             questions.append(Question(
                 id="",
-                text=para,
+                text=formatted_text,
                 source=source,
                 pattern=calc_pattern,
             ))
 
     return questions
+
+
+def extract_questions_from_text(text: str, source: str) -> list[Question]:
+    """
+    Extract questions from text - uses LLM parsing for clean LaTeX output.
+
+    This is called at UPLOAD TIME, not display time.
+    """
+    # Use LLM parsing (with DeepSeek for cost efficiency)
+    return parse_questions_with_llm(text, source)
 
 
 # ============================================================

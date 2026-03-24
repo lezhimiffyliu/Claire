@@ -404,32 +404,11 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
     - Simple MCQ/True-False: use original question with original choices
     - Complex problems (no existing choices): ask "what approach" with METHOD_CHOICES
 
-    IMPORTANT: Uses LLM to clean garbled PDF text before display.
-
-    Only uses questions that pass a readability check; falls back to
-    hand-crafted questions when there aren't enough good ones.
+    NOTE: Questions are already cleaned with LLM at upload time.
+    No LLM calls happen here - just display the pre-processed data.
     """
     if not bank or not getattr(bank, "questions", None):
         return []
-
-    # Import LLM cleaning function
-    from question_bank import clean_question_with_llm
-
-    # Create shared LLM instance for efficiency
-    llm = None
-    try:
-        from claire_agent import get_secret
-        api_key = get_secret("ANTHROPIC_API_KEY")
-        if api_key:
-            from langchain_anthropic import ChatAnthropic
-            llm = ChatAnthropic(
-                model="claude-sonnet-4-20250514",
-                api_key=api_key,
-                temperature=0,
-                max_tokens=1024,
-            )
-    except Exception:
-        pass
 
     selected: list[PlacementQuestion] = []
     seen_ids: set[str] = set()
@@ -451,29 +430,29 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
         if q_id in seen_ids:
             continue
 
-        # Skip garbled / incomplete extractions (check raw text first)
+        # Skip incomplete extractions
         if not _is_readable_question(q.text):
             continue
 
-        # CLEAN THE QUESTION TEXT WITH LLM
-        # This is the key fix for garbled PDF math
-        cleaned_text = clean_question_with_llm(q.text, llm=llm)
+        # Text is already clean from upload-time LLM parsing
+        # No LLM call here - just use the pre-processed text
+        clean_text = q.text
 
         # Check if this is a simple MCQ with existing choices
-        stem, choices, correct_idx = _extract_existing_choices(cleaned_text)
+        stem, choices, correct_idx = _extract_existing_choices(clean_text)
 
         if choices and len(choices) >= 2:
-            # Simple MCQ or True/False - use cleaned question and choices
+            # Simple MCQ or True/False
             selected.append(
                 PlacementQuestion(
                     prompt=f"**{q.format_source()}**\n\n{stem}",
-                    choices=choices[:4],  # Max 4 choices
+                    choices=choices[:4],
                     correct_index=correct_idx if correct_idx is not None else 0,
-                    explanation="",  # We don't know the correct answer
+                    explanation="",
                     source=q.format_source(),
                     difficulty=getattr(q, "difficulty", "medium"),
                     topic=getattr(q, "pattern", "") or (q.categories[0] if q.categories else ""),
-                    question_excerpt=stem,  # Use cleaned stem
+                    question_excerpt=stem,
                     ask_text="",
                 )
             )
@@ -484,10 +463,9 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
             if pattern not in METHOD_CHOICES:
                 continue
 
-            # Use cleaned text for display
-            excerpt = cleaned_text[:600]
-
+            excerpt = clean_text[:600]
             ask = "What is the best first approach to this problem?"
+
             selected.append(
                 PlacementQuestion(
                     prompt=(
@@ -501,18 +479,16 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
                     source=q.format_source(),
                     difficulty=getattr(q, "difficulty", "medium"),
                     topic=pattern,
-                    question_excerpt=excerpt,  # Use cleaned excerpt
+                    question_excerpt=excerpt,
                     ask_text=ask,
                 )
             )
             seen_ids.add(q_id)
 
-    # If we couldn't find enough readable questions from materials,
-    # fall back entirely to hand-crafted questions so the diagnostic
-    # is always coherent.
+    # If not enough readable questions, fall back to hand-crafted ones
     MIN_QUALITY = 3
     if len(selected) < MIN_QUALITY:
-        return []   # caller will invoke get_fallback_questions()
+        return []
 
     return selected
 
