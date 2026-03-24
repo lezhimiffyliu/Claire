@@ -58,10 +58,11 @@ class Question:
     id: str                          # Unique hash ID
     text: str                        # Problem text
     source: str                      # Source file name
-    pattern: str                     # Detected pattern type
+    pattern: str                     # Legacy coarse pattern (for backwards compat)
     problem_id: str = ""             # Problem identifier (e.g., "Problem 1", "Q2", "(a)")
     difficulty: str = "medium"       # easy/medium/hard
     categories: list = field(default_factory=list)  # User-friendly category labels
+    topics: list = field(default_factory=list)      # Fine-grained topic IDs (NEW)
     heuristic_file: str = ""         # Path to heuristic .md file
     solution: Optional[str] = None   # Solution if available
     metadata: dict = field(default_factory=dict)  # Extra info
@@ -79,6 +80,9 @@ class Question:
         # Estimate difficulty if not set
         if self.difficulty == "medium":
             self.difficulty = self._estimate_difficulty()
+        # Convert topics to display names for categories
+        if self.topics and not self.categories:
+            self.categories = self._topics_to_categories()
 
     def _detect_categories(self) -> list:
         """Detect user-friendly category labels from problem text."""
@@ -131,6 +135,14 @@ class Question:
         elif score <= 0:
             return "easy"
         return "medium"
+
+    def _topics_to_categories(self) -> list:
+        """Convert fine-grained topics to display categories."""
+        try:
+            from topics import get_topic_display
+            return [get_topic_display(t) for t in self.topics[:4]]
+        except ImportError:
+            return [t.replace("_", " ").title() for t in self.topics[:4]]
 
     def format_source(self) -> str:
         """Format a readable source citation like 'SP18 Midterm 2 Q2'."""
@@ -345,8 +357,15 @@ CRITICAL REQUIREMENTS:
 
 4. Preserve the original meaning exactly - do not solve or explain
 
-5. Detect question type: derivatives, integration, limits, optimization,
-   constrained_optimization, related_rates
+5. Detect SPECIFIC topics from this list (use snake_case IDs):
+   - Limits: limit_definition, squeeze_theorem, continuity, lhopitals_rule
+   - Derivatives: power_rule, product_rule, chain_rule, implicit_differentiation, related_rates
+   - Optimization: critical_points, absolute_extrema, lagrange_multipliers, constrained_optimization
+   - Integration: u_substitution, integration_by_parts, partial_fractions, improper_integrals
+   - Applications: area_between_curves, volume_disk_method, volume_shell_method, arc_length
+   - Series: taylor_series, power_series, ratio_test, geometric_series
+   - Multivariable: partial_derivatives, gradient, double_integrals_rectangular, double_integrals_polar
+   - Vector Calc: line_integrals_vector, greens_theorem, stokes_theorem, divergence_theorem
 
 OUTPUT FORMAT (strict JSON, no explanation):
 {
@@ -354,7 +373,7 @@ OUTPUT FORMAT (strict JSON, no explanation):
     {
       "id": "Q1",
       "text": "Evaluate $\\\\int_0^1 \\\\sqrt{x+y^2} \\\\, dx$",
-      "topic": "integration",
+      "topics": ["double_integrals_rectangular"],
       "difficulty": "medium",
       "is_true_false": false
     }
@@ -442,8 +461,13 @@ def parse_questions_with_llm(raw_text: str, source: str) -> list[Question]:
             if not q_text or len(q_text) < 10:
                 continue
 
-            topic = q_data.get("topic", "")
-            pattern = _topic_to_pattern(topic)
+            # Handle both old format (topic) and new format (topics)
+            topics = q_data.get("topics", [])
+            if not topics and q_data.get("topic"):
+                topics = [q_data.get("topic")]
+
+            # Get legacy pattern from first topic
+            pattern = _topics_to_pattern(topics) if topics else "derivatives"
 
             questions.append(Question(
                 id=q_data.get("id", f"Q{i+1}"),
@@ -452,6 +476,7 @@ def parse_questions_with_llm(raw_text: str, source: str) -> list[Question]:
                 pattern=pattern,
                 problem_id=q_data.get("id", f"Problem {i+1}"),
                 difficulty=q_data.get("difficulty", "medium"),
+                topics=topics,
             ))
 
         if questions:
@@ -489,30 +514,85 @@ def _extract_json(text: str) -> dict:
     return {}
 
 
-def _topic_to_pattern(topic: str) -> str:
-    """Convert topic name to pattern name."""
-    topic_lower = topic.lower().replace(" ", "_").replace("-", "_")
+def _topics_to_pattern(topics: list[str]) -> str:
+    """Convert fine-grained topics to legacy coarse pattern."""
+    if not topics:
+        return "derivatives"
 
-    mapping = {
-        "integration": "integration",
-        "integral": "integration",
-        "integrals": "integration",
-        "derivatives": "derivatives",
-        "derivative": "derivatives",
-        "differentiation": "derivatives",
-        "limits": "limits",
-        "limit": "limits",
-        "optimization": "optimization",
+    # Topic ID to legacy pattern mapping
+    TOPIC_TO_PATTERN = {
+        # Integration
+        "u_substitution": "integration",
+        "integration_by_parts": "integration",
+        "partial_fractions": "integration",
+        "trigonometric_integrals": "integration",
+        "trigonometric_substitution": "integration",
+        "improper_integrals": "integration",
+        "double_integrals_rectangular": "integration",
+        "double_integrals_polar": "integration",
+        "triple_integrals_rectangular": "integration",
+        "triple_integrals_cylindrical": "integration",
+        "triple_integrals_spherical": "integration",
+        "antiderivatives": "integration",
+        "indefinite_integrals": "integration",
+
+        # Optimization
+        "lagrange_multipliers": "constrained_optimization",
         "constrained_optimization": "constrained_optimization",
-        "lagrange": "constrained_optimization",
+        "critical_points": "optimization",
+        "critical_points_multivariable": "optimization",
+        "absolute_extrema": "optimization",
+        "absolute_extrema_multivariable": "optimization",
+        "optimization_word_problems": "optimization",
+
+        # Related Rates
         "related_rates": "related_rates",
+
+        # Limits
+        "limit_definition": "limits",
+        "one_sided_limits": "limits",
+        "infinite_limits": "limits",
+        "squeeze_theorem": "limits",
+        "lhopitals_rule": "limits",
+        "continuity": "limits",
+
+        # Derivatives (default for most derivative topics)
+        "power_rule": "derivatives",
+        "product_rule": "derivatives",
+        "quotient_rule": "derivatives",
+        "chain_rule": "derivatives",
+        "implicit_differentiation": "derivatives",
+        "partial_derivatives": "derivatives",
+        "gradient": "derivatives",
+        "directional_derivative": "derivatives",
     }
 
-    for key, pattern in mapping.items():
-        if key in topic_lower:
-            return pattern
+    # Check first topic
+    first_topic = topics[0].lower().replace(" ", "_").replace("-", "_")
 
-    return "derivatives"  # Default
+    if first_topic in TOPIC_TO_PATTERN:
+        return TOPIC_TO_PATTERN[first_topic]
+
+    # Keyword-based fallback
+    for topic in topics:
+        topic_lower = topic.lower()
+        if "integr" in topic_lower:
+            return "integration"
+        if "lagrange" in topic_lower or "constrain" in topic_lower:
+            return "constrained_optimization"
+        if "optim" in topic_lower or "extrema" in topic_lower:
+            return "optimization"
+        if "rate" in topic_lower:
+            return "related_rates"
+        if "limit" in topic_lower:
+            return "limits"
+
+    return "derivatives"
+
+
+def _topic_to_pattern(topic: str) -> str:
+    """Convert single topic name to pattern (backwards compat)."""
+    return _topics_to_pattern([topic])
 
 
 # ============================================================
