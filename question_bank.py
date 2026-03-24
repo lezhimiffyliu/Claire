@@ -196,22 +196,26 @@ def _needs_llm_cleaning(text: str) -> bool:
     return False
 
 
-def clean_question_with_llm(text: str, llm=None) -> str:
+def clean_question_with_llm(text: str, llm=None, force: bool = True) -> str:
     """
     Use LLM to clean up garbled PDF text and convert math to proper LaTeX.
 
     This is the key fix for making diagnostic questions readable.
-    Only calls LLM if text shows signs of garbled extraction.
+
+    Args:
+        text: Raw question text from PDF
+        llm: Optional LLM instance (will create one if needed)
+        force: If True, always clean with LLM. If False, only clean if garbled.
     """
     if not text or len(text) < 10:
         return text
 
-    # Skip if already clean LaTeX
-    if text.count('$') >= 2 and '\\' in text:
+    # Skip if already clean LaTeX (has multiple $...$ blocks with backslash commands)
+    if text.count('$') >= 4 and '\\int' in text:
         return text
 
-    # Skip LLM if text doesn't need cleaning (saves API calls)
-    if not _needs_llm_cleaning(text):
+    # If not forcing, check if cleaning is needed
+    if not force and not _needs_llm_cleaning(text):
         return format_math_text(text)
 
     # Get LLM
