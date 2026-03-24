@@ -1,7 +1,9 @@
 """
 Calculus Topics Module
 
-Provides fine-grained topic detection and classification.
+Provides:
+- Fine-grained topic detection and classification
+- Topic → heuristic mapping for solving templates
 """
 
 from .topic_detector import (
@@ -17,7 +19,16 @@ from .topic_detector import (
     get_top_topics,
 )
 
+from .heuristic_loader import (
+    get_heuristic_file,
+    load_heuristic,
+    get_solving_approach,
+    format_approach_for_display,
+    get_approaches_for_questions,
+)
+
 __all__ = [
+    # Topic detection
     "VALID_TOPICS",
     "TOPIC_DISPLAY_NAMES",
     "TOPIC_COURSE",
@@ -28,4 +39,10 @@ __all__ = [
     "detect_topics_batch",
     "aggregate_topics",
     "get_top_topics",
+    # Heuristic loading
+    "get_heuristic_file",
+    "load_heuristic",
+    "get_solving_approach",
+    "format_approach_for_display",
+    "get_approaches_for_questions",
 ]
