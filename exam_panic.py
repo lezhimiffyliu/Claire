@@ -151,28 +151,117 @@ def get_tips(topic_id: str) -> list[str]:
     ]
 
 
-def aggregate_topics(questions: list) -> dict[str, int]:
+def aggregate_topics(questions: list, use_llm: bool = True) -> dict[str, int]:
     """
     Aggregate topic counts from questions.
 
-    Args:
-        questions: List of Question objects with .topics attribute
-
-    Returns:
-        {topic_id: count}
+    Uses LLM for fine-grained topic detection (batch, one-time cost).
     """
     all_topics = []
 
+    # Coarse topics that need refinement
+    COARSE_TOPICS = {"integration", "derivatives", "optimization", "limits", "related_rates", "constrained_optimization"}
+
+    # Collect questions that need topic detection
+    needs_detection = []
     for q in questions:
         topics = getattr(q, "topics", [])
-        if not topics:
-            # Fallback to pattern if no fine-grained topics
-            pattern = getattr(q, "pattern", None)
-            if pattern:
-                topics = [pattern]
-        all_topics.extend(topics)
+        if topics and not all(t in COARSE_TOPICS for t in topics):
+            # Already has fine-grained topics
+            all_topics.extend(topics)
+        else:
+            needs_detection.append(q)
+
+    # Batch detect topics for questions that need it
+    if needs_detection and use_llm:
+        detected_topics = _batch_detect_topics([getattr(q, "text", "") for q in needs_detection])
+        for topics in detected_topics:
+            all_topics.extend(topics)
+    elif needs_detection:
+        # Fallback: use keyword detection
+        from topics.topic_detector import detect_topics_keyword
+        for q in needs_detection:
+            q_text = getattr(q, "text", "")
+            if q_text:
+                detected = detect_topics_keyword(q_text)
+                all_topics.extend(detected[:2])
 
     return dict(Counter(all_topics))
+
+
+def _batch_detect_topics(texts: list[str]) -> list[list[str]]:
+    """
+    Batch detect fine-grained topics for multiple questions.
+    Single LLM call for efficiency.
+    """
+    if not texts:
+        return []
+
+    # Try LLM batch detection
+    try:
+        from claire_agent import get_secret
+
+        # Use DeepSeek (cheap)
+        api_key = get_secret("DEEPSEEK_API_KEY")
+        if not api_key:
+            api_key = get_secret("ANTHROPIC_API_KEY")
+            model = "claude-sonnet-4-20250514"
+            from langchain_anthropic import ChatAnthropic
+            llm = ChatAnthropic(model=model, api_key=api_key, temperature=0, max_tokens=2048)
+        else:
+            from langchain_openai import ChatOpenAI
+            llm = ChatOpenAI(
+                model="deepseek-chat",
+                api_key=api_key,
+                base_url="https://api.deepseek.com",
+                temperature=0,
+                max_tokens=2048,
+            )
+
+        # Build batch prompt
+        questions_text = ""
+        for i, text in enumerate(texts[:20], 1):  # Max 20 questions
+            truncated = text[:300] if len(text) > 300 else text
+            questions_text += f"\n{i}. {truncated}\n"
+
+        prompt = f"""对以下每道微积分题目，识别具体的知识点（必须细粒度）。
+
+可选知识点（必须从中选择）：
+- u_substitution, integration_by_parts, partial_fractions, trig_substitution
+- taylor_series, maclaurin_series, power_series, ratio_test, comparison_test
+- lagrange_multipliers, critical_points, absolute_extrema
+- related_rates, chain_rule, implicit_differentiation
+- double_integrals_rectangular, double_integrals_polar, triple_integrals
+- gradient, directional_derivative
+- greens_theorem, stokes_theorem, divergence_theorem
+- lhopitals_rule, improper_integrals, volume_disk_method, volume_shell_method
+
+题目：
+{questions_text}
+
+输出格式（JSON，每题最多2个topic）：
+{{"results": [["topic1", "topic2"], ["topic1"], ...]}}
+"""
+
+        from langchain_core.messages import HumanMessage
+        result = llm.invoke([HumanMessage(content=prompt)])
+        response = result.content
+
+        # Parse JSON
+        import json
+        import re
+        json_match = re.search(r'\{[^{}]*"results"[^{}]*\[.*?\]\s*\}', response, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+            if "results" in data:
+                return data["results"]
+
+    except Exception as e:
+        print(f"[_batch_detect_topics] Error: {e}")
+
+    # Fallback to keyword detection
+    from topics.topic_detector import detect_topics_keyword
+    return [detect_topics_keyword(t)[:2] for t in texts]
 
 
 def get_top_topics(topic_counts: dict[str, int], n: int = 5) -> list[tuple[str, int]]:
