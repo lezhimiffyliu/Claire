@@ -47,48 +47,108 @@ class ClaireAgent:
 
     SYSTEM_PROMPT_TEMPLATE = """You are Claire, a calculus tutor.
 
+--------------------------------
+OPERATING MODES (IMPORTANT)
+
+You operate in TWO MODES:
+
+1. TEACHING MODE (default):
+- Guide step-by-step
+- Do NOT give full solution
+
+2. SOLUTION MODE:
+- Only when the student explicitly asks (e.g., "show full solution")
+- Provide full derivation
+
+Always follow the correct mode strictly.
+
+--------------------------------
+CRITICAL TEACHING RULES (MUST FOLLOW):
+
+- DO NOT give the final answer immediately
+- DO NOT solve the entire problem in one response
+- ALWAYS guide step-by-step
+- STOP after setting up the problem or first key step
+- Let the student think before continuing
+
+CRITICAL ENFORCEMENT:
+After completing the FIRST key step, you MUST STOP.
+
+Do NOT:
+- Continue solving
+- Reveal later steps
+- Hint at the final answer
+
+If you accidentally continue, STOP immediately and say:
+"Let's pause here — your turn."
+
+--------------------------------
+WHEN SOLVING:
+
+1. Identify what type of problem it is (in your mind, do NOT say "pattern")
+2. Explain the approach briefly
+3. Start ONLY the first step
+4. STOP
+
+After stopping:
+- Ask a short, simple question to engage the student
+  (e.g., "What do you think we should do next?" or "Which rule applies here?")
+
+--------------------------------
+STUDENT INTERACTION RULES:
+
+If the student says "I don't know":
+- Give a smaller hint, NOT the full answer
+
+If the student asks for the final answer directly:
+- First ask: "Do you want the full solution, or a hint?"
+- Only give full solution if they confirm
+
+If the student is stuck after multiple turns:
+- Gradually increase guidance (but still avoid jumping straight to the answer)
+
+--------------------------------
+FULL SOLUTION RULE:
+
+NEVER do full derivation unless the student explicitly asks for it.
+
+--------------------------------
+COURSE MATERIALS AWARENESS:
+
 IMPORTANT: When course materials are loaded, you have access to the FULL problem texts.
-When a student asks to work on a specific problem (e.g., "Problem 5", "Q3"), find it in the loaded materials and USE the actual problem text. Do NOT ask the student to provide the problem - you already have it.
 
-OUTPUT FORMAT - STRICTLY follow this structure:
+When a student asks to work on a specific problem (e.g., "Problem 5", "Q3"):
+- Find it in the loaded materials
+- USE the actual problem text
+- Do NOT ask the student to provide it
 
-**[Problem Type]**
-→ [One line description]
-
-**[Key Idea]**
-→ [Core concept to understand]
-
-**[Key Formula]**
-→ [Formula to memorize, if applicable]
-
-**[Steps]**
-1. [Step 1]
-2. [Step 2]
-3. [etc.]
-
-**[Try It]**
-→ [One question for them to try]
-
----
-**[Solution]**
-[FULL worked solution goes here - will be hidden by default]
-
-⚠️ CRITICAL - The "---" line and "**[Solution]**" header are MANDATORY.
-The solution section will be hidden behind a "Show Solution" button.
-Everything ABOVE the --- line is shown by default.
-Everything BELOW (the Solution) is hidden until user clicks to reveal.
+--------------------------------
 
 {level_instructions}
 
-Teaching style:
-- Be concise and clear
-- Use natural math teacher language
-- Never use words like "pattern", "heuristic", "AI", "system", "detected"
-- Cite the source when using problems from materials
+--------------------------------
+FORMAT:
 
 Math: Use $...$ for inline and $$...$$ for display equations.
 
 Respond in the same language as the student.
+"""
+
+    # Structured prompt for practice mode - returns JSON
+    STRUCTURED_PROMPT = """You are Claire, a calculus tutor. Analyze this problem and return a JSON response.
+
+CRITICAL: Your ENTIRE response must be valid JSON. No text before or after the JSON.
+
+Return this exact structure:
+{{
+  "problem_type": "Brief description of problem type (e.g., 'Integration by parts')",
+  "hint": "A helpful hint that guides without giving away the answer. Include key concepts, relevant formulas, or the first step to try.",
+  "solution": "Complete worked solution with all steps shown. Use markdown formatting. Use $...$ for inline math and $$...$$ for display equations."
+}}
+
+{level_instructions}
+
+REMEMBER: Output ONLY valid JSON, nothing else.
 """
 
     LEVEL_INSTRUCTIONS = {
@@ -249,13 +309,21 @@ Respond in the same language as the student.
 
         return False
 
-    def process_query(self, user_input: str) -> Dict[str, Any]:
+    def process_query(self, user_input: str, structured: bool = False) -> Dict[str, Any]:
         """
         Process user input through the exam preparation agent.
+
+        Args:
+            user_input: The user's question or problem
+            structured: If True, return JSON format for practice mode
 
         Returns:
             Dict with 'output', 'intermediate_steps', 'pattern', 'heuristic'
         """
+        # For structured mode, use direct LLM call with JSON prompt
+        if structured:
+            return self._process_structured(user_input)
+
         # Check system commands first
         system_response = self._check_system_commands(user_input)
         if system_response:
@@ -351,6 +419,50 @@ Respond in the same language as the student.
             traceback.print_exc()
             return {
                 "output": error_msg,
+                "intermediate_steps": [],
+                "pattern": None,
+                "heuristic": None
+            }
+
+    def _process_structured(self, problem_text: str) -> Dict[str, Any]:
+        """
+        Process a problem with structured JSON output for practice mode.
+
+        Returns JSON with: problem_type, hint, solution
+        """
+        try:
+            # Build prompt with level instructions
+            level_instructions = self.LEVEL_INSTRUCTIONS.get(
+                self.user_level, self.LEVEL_INSTRUCTIONS["intermediate"]
+            )
+            system_prompt = self.STRUCTURED_PROMPT.format(
+                level_instructions=level_instructions
+            )
+
+            # Use direct LLM call (not the agent) for structured output
+            from langchain_core.messages import SystemMessage, HumanMessage
+
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"Problem:\n{problem_text}")
+            ]
+
+            result = self.llm.invoke(messages)
+            output = result.content
+
+            return {
+                "output": output,
+                "intermediate_steps": [],
+                "pattern": None,
+                "heuristic": None
+            }
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            # Return a fallback structure
+            return {
+                "output": f'{{"problem_type": "Unknown", "hint": "Think about what techniques might apply.", "solution": "Error generating solution: {str(e)}"}}',
                 "intermediate_steps": [],
                 "pattern": None,
                 "heuristic": None

@@ -233,11 +233,35 @@ def analyze_files(files: list[tuple[str, bytes]]) -> ExamContext:
     # Build question bank
     question_bank = build_question_bank(files)
 
-    # Clean up garbled LaTeX with Claude Haiku (once per upload, in-place)
+    # Detect topics with keyword matching (instant)
     if question_bank and len(question_bank) > 0:
-        from math_cleaner import clean_questions
-        clean_questions(question_bank.questions)
+        from topics.topic_detector import detect_topics_keyword
+        for q in question_bank.questions:
+            if q.text and not q.topics:
+                q.topics = detect_topics_keyword(q.text)[:3]
 
     context.question_bank = question_bank
+    context._llm_cleaning_done = False
 
     return context
+
+
+def start_background_cleaning(context: ExamContext) -> None:
+    """
+    Start LLM cleaning in background thread.
+    Call this AFTER showing UI to user.
+    """
+    import threading
+
+    def _clean_in_background():
+        if not context.question_bank or len(context.question_bank) == 0:
+            return
+        try:
+            from math_cleaner import clean_questions
+            clean_questions(context.question_bank.questions)
+            context._llm_cleaning_done = True
+        except Exception as e:
+            print(f"[background_cleaning] Error: {e}")
+
+    thread = threading.Thread(target=_clean_in_background, daemon=True)
+    thread.start()

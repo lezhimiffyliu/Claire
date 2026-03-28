@@ -84,45 +84,7 @@ THINKING_MESSAGES = [
 ]
 
 
-def render_with_hidden_solution(content: str, msg_idx: int) -> None:
-    """
-    Render Claire's response with [Solution] hidden behind a button.
-    Parses the structured output format and creates an expander for the solution.
-    """
-    # Try multiple patterns for solution section
-    # Matches: **[Solution]**, [Solution], **Solution**, ## Solution, ### Solution
-    solution_patterns = [
-        r'---\s*\n\s*\*\*\[Solution\]\*\*\s*([\s\S]*)',  # ---\n**[Solution]**
-        r'\*\*\[Solution\]\*\*\s*([\s\S]*)',              # **[Solution]**
-        r'\[Solution\]\s*([\s\S]*)',                      # [Solution]
-        r'---\s*\n\s*\*\*Solution\*\*\s*([\s\S]*)',       # ---\n**Solution**
-        r'\*\*Solution:?\*\*\s*([\s\S]*)',                # **Solution** or **Solution:**
-        r'#{2,3}\s*Solution\s*([\s\S]*)',                 # ## Solution or ### Solution
-    ]
-
-    match = None
-    for pattern in solution_patterns:
-        match = re.search(pattern, content, re.IGNORECASE)
-        if match:
-            break
-
-    if match:
-        # Split content into main part and solution
-        solution_content = match.group(1).strip()
-        main_content = content[:match.start()].strip()
-
-        # Remove trailing --- from main content if present
-        main_content = re.sub(r'\n---\s*$', '', main_content).strip()
-
-        # Render main content (problem type, key idea, steps, try it)
-        st.markdown(main_content)
-
-        # Render solution behind expander
-        with st.expander("👁️ Show Solution", expanded=False):
-            st.markdown(solution_content)
-    else:
-        # No structured format - just render as is
-        st.markdown(content)
+# render_with_hidden_solution REMOVED - now using structured JSON responses
 
 
 # ────────────────────────────────────────────────────────────
@@ -636,10 +598,29 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "exam_context" not in st.session_state:
     st.session_state.exam_context = ExamContext()
-if "selected_problem" not in st.session_state:
-    st.session_state.selected_problem = None
-if "pending_problem" not in st.session_state:
-    st.session_state.pending_problem = None
+# ============================================================
+# PRACTICE STATE (Step-by-step engine - system controlled)
+# ============================================================
+if "practice_state" not in st.session_state:
+    st.session_state.practice_state = {
+        "mode": "browse",       # browse | practice | solution
+        "problem": None,        # Problem text
+        "problem_obj": None,    # Original problem object for display
+        "step_index": 0,
+        "history": [],          # List of step strings
+    }
+# Feedback prompt state
+if "feedback_prompt_shown" not in st.session_state:
+    st.session_state.feedback_prompt_shown = False
+if "feedback_clicked" not in st.session_state:
+    st.session_state.feedback_clicked = False
+if "user_interaction_count" not in st.session_state:
+    st.session_state.user_interaction_count = 0
+# Premium prompt state
+if "premium_prompt_dismissed" not in st.session_state:
+    st.session_state.premium_prompt_dismissed = False
+if "premium_prompt_shown" not in st.session_state:
+    st.session_state.premium_prompt_shown = False
 # Placement test state
 # "not_started" → "choosing_track" → "in_progress" → "done" | "skipped"
 if "placement_stage" not in st.session_state:
@@ -762,48 +743,403 @@ def _save_current_session():
 
 
 # ============================================================
-# PROBLEM DETAIL DIALOG
+# STEP ENGINE (Minimal, Prompt-Driven)
 # ============================================================
-@st.dialog("Problem Details", width="large")
-def show_problem_detail(question):
-    """Show problem details in a popup dialog."""
-    st.markdown(f"### {question.format_source()}")
+# System = scheduler (controls when, how much)
+# LLM = policy (decides what)
+# ============================================================
 
-    # Difficulty badge
-    diff_class = f"difficulty-{question.difficulty}"
+def llm_call(prompt: str, max_tokens: int = 400) -> str:
+    """
+    Direct single-turn LLM call. No agent, no tools.
+    """
+    from claire_agent import get_secret
+    from langchain_core.messages import HumanMessage
+
+    api_key = get_secret("ANTHROPIC_API_KEY")
+    if not api_key:
+        api_key = get_secret("DEEPSEEK_API_KEY")
+        if api_key:
+            from langchain_openai import ChatOpenAI
+            llm = ChatOpenAI(
+                model="deepseek-chat",
+                api_key=api_key,
+                base_url="https://api.deepseek.com",
+                temperature=0,
+                max_tokens=max_tokens,
+            )
+        else:
+            return "Unable to connect to AI service."
+    else:
+        from langchain_anthropic import ChatAnthropic
+        llm = ChatAnthropic(
+            model="claude-sonnet-4-20250514",
+            api_key=api_key,
+            temperature=0,
+            max_tokens=max_tokens,
+        )
+
+    try:
+        result = llm.invoke([HumanMessage(content=prompt)])
+        return result.content
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+def direct_llm_call(prompt: str) -> dict:
+    """Wrapper for compatibility."""
+    return {"output": llm_call(prompt)}
+
+
+def post_process(output: str) -> str:
+    """
+    Thin enforcement layer. Only cuts off obvious overruns.
+    """
+    stop_tokens = ["Final Answer", "Therefore", "Thus", "So the answer", "Hence"]
+
+    for t in stop_tokens:
+        if t in output:
+            output = output.split(t)[0]
+            break
+
+    # Limit lines (prevent wall of text)
+    lines = output.strip().split("\n")
+    return "\n".join(lines[:6]).strip()
+
+
+def build_step_prompt(problem: str, step_index: int, history: list) -> str:
+    """
+    The prompt IS the controller. LLM decides what, system decides when.
+    """
+    history_str = "\n".join(history) if history else "None"
+
+    return f"""You are solving a calculus problem step by step.
+
+Current step: {step_index + 1}
+
+Problem:
+{problem}
+
+Previous steps:
+{history_str}
+
+Your task:
+Produce ONLY the next step.
+
+Rules:
+- Do exactly ONE meaningful step
+- Do NOT finish the problem
+- Do NOT summarize
+- Do NOT give final answer
+- Keep it concise
+
+Format:
+Step {step_index + 1}: ...
+
+Then STOP."""
+
+
+# ============================================================
+# STATE (Minimal - only what's needed)
+# ============================================================
+
+def start_practice(problem):
+    """Initialize practice state."""
+    problem_text = problem.text if hasattr(problem, 'text') else str(problem)
+    st.session_state.practice_state = {
+        "mode": "practice",
+        "problem": problem_text,
+        "problem_obj": problem,  # Keep original for display
+        "step_index": 0,
+        "history": [],  # List of step strings
+    }
+
+
+# ============================================================
+# CORE FUNCTIONS (Single entry points)
+# ============================================================
+
+def next_step() -> str:
+    """
+    Generate next step. This is the ONLY entry point for step generation.
+    """
+    state = st.session_state.practice_state
+
+    # Track user interaction
+    st.session_state.user_interaction_count += 1
+
+    # Build prompt
+    prompt = build_step_prompt(
+        state["problem"],
+        state["step_index"],
+        state["history"]
+    )
+
+    # LLM call
+    raw = llm_call(prompt)
+
+    # Post-process (thin enforcement)
+    step = post_process(raw)
+
+    # Update state
+    state["step_index"] += 1
+    state["history"].append(step)  # LLM already includes "Step X:" prefix
+
+    return step
+
+
+def get_hint(problem) -> str:
+    """Get a hint. Does not affect step state."""
+    problem_text = problem.text if hasattr(problem, 'text') else str(problem)
+
+    prompt = f"""Give a short hint for this calculus problem.
+
+Problem:
+{problem_text}
+
+Rules:
+- 1-2 sentences
+- Do NOT solve it"""
+
+    return llm_call(prompt)
+
+
+def get_solution(problem) -> str:
+    """Get full solution. Bypasses step engine."""
+    problem_text = problem.text if hasattr(problem, 'text') else str(problem)
+
+    prompt = f"""Solve this problem completely with all steps.
+
+Problem:
+{problem_text}"""
+
+    return llm_call(prompt, max_tokens=1500)
+
+
+# ============================================================
+# FEEDBACK PROMPT (Lightweight, non-intrusive)
+# ============================================================
+
+FEEDBACK_FORM_URL = "https://forms.gle/YOUR_FORM_ID_HERE"  # Replace with actual URL
+
+def maybe_show_feedback_prompt():
+    """
+    Show feedback prompt if:
+    - User has engaged (diagnostic done OR 1+ practice interactions)
+    - Prompt hasn't been shown yet this session
+    - User hasn't already clicked
+    """
+    # Check if already shown or clicked
+    if st.session_state.feedback_prompt_shown or st.session_state.feedback_clicked:
+        return
+
+    # Check if user has engaged enough
+    diagnostic_done = st.session_state.placement_stage in ("done", "completed", "skipped")
+    has_practiced = st.session_state.user_interaction_count >= 1
+
+    if not (diagnostic_done or has_practiced):
+        return
+
+    # Mark as shown
+    st.session_state.feedback_prompt_shown = True
+
+    # Render subtle prompt
+    st.markdown("")
     st.markdown(
-        f'<span class="category-label {diff_class}">{question.difficulty.upper()}</span>',
+        "<div style='background: #f8f9fa; padding: 12px 16px; border-radius: 8px; "
+        "border-left: 3px solid #10b981; margin: 8px 0;'>"
+        "<span style='font-size: 14px; color: #374151;'>"
+        "☕ <b>Want a free coffee for feedback?</b> Takes 2 min"
+        "</span></div>",
+        unsafe_allow_html=True
+    )
+    if st.button("Give feedback →", key="feedback_btn"):
+        st.session_state.feedback_clicked = True
+        st.markdown(
+            f'<meta http-equiv="refresh" content="0; url={FEEDBACK_FORM_URL}">',
+            unsafe_allow_html=True
+        )
+        st.success("Thanks! Opening feedback form...")
+
+
+def maybe_show_premium_prompt():
+    """
+    Show premium prompt if:
+    - User has engaged (diagnostic done OR 2+ interactions)
+    - Not dismissed this session
+    """
+    # Check if dismissed
+    if st.session_state.premium_prompt_dismissed:
+        return
+
+    # Check if already showing (avoid double render)
+    if st.session_state.premium_prompt_shown:
+        return
+
+    # Check engagement
+    diagnostic_done = st.session_state.placement_stage in ("done", "completed", "skipped")
+    has_practiced = st.session_state.user_interaction_count >= 2
+
+    if not (diagnostic_done or has_practiced):
+        return
+
+    # Mark as shown
+    st.session_state.premium_prompt_shown = True
+
+    # Render premium prompt
+    st.markdown("")
+    st.markdown(
+        "<div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); "
+        "padding: 20px; border-radius: 12px; color: white; margin: 16px 0;'>"
+        "<div style='font-size: 16px; font-weight: 600; margin-bottom: 8px;'>✨ Premium Features</div>"
+        "<div style='font-size: 14px; opacity: 0.95; margin-bottom: 6px;'>"
+        "Unlock better step-by-step guidance and stronger models.</div>"
+        "<div style='font-size: 12px; opacity: 0.8;'>Free for early users during testing.</div>"
+        "</div>",
         unsafe_allow_html=True
     )
 
-    # Category labels
-    if question.categories:
-        labels_html = " ".join(
-            f'<span class="category-label">{cat}</span>'
-            for cat in question.categories
-        )
-        st.markdown(labels_html, unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # Full problem text with math rendering
-    st.markdown("**Problem:**")
-    formatted_text = question.get_formatted_text()
-    st.markdown(formatted_text)
-
-    st.markdown("---")
-
-    # Action buttons
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Practice this problem", use_container_width=True, type="primary"):
-            st.session_state.pending_problem = question.text
-            st.session_state.selected_problem = None
-            st.rerun()
+        if st.button("Explore premium", key="premium_explore_btn", type="primary", use_container_width=True):
+            st.success("🎉 You're already using premium features for free as an early tester! Enjoy!")
     with col2:
-        if st.button("Close", use_container_width=True):
-            st.session_state.selected_problem = None
+        if st.button("Not now", key="premium_dismiss_btn", use_container_width=True):
+            st.session_state.premium_prompt_dismissed = True
             st.rerun()
+
+
+# ============================================================
+# PRACTICE VIEW (UI) - Human-guided experience
+# ============================================================
+def render_practice_view():
+    """Render the step-by-step practice view with narrative flow."""
+    state = st.session_state.practice_state
+    problem_obj = state.get("problem_obj")
+
+    if state["problem"] is None:
+        st.warning("No problem selected")
+        state["mode"] = "browse"
+        return
+
+    # ── Status Bar (shows where you are in the journey) ──────
+    step_num = state["step_index"]
+
+    # Get context from problem if available
+    topic = ""
+    if problem_obj:
+        cats = getattr(problem_obj, 'categories', [])
+        if cats:
+            topic = cats[0].replace("_", " ").title()
+
+    col_status1, col_status2, col_status3 = st.columns(3)
+    with col_status1:
+        st.caption("🧠 **Practice Mode**")
+    with col_status2:
+        if step_num == 0:
+            st.caption("📍 **Ready to start**")
+        else:
+            st.caption(f"📍 **Step {step_num}**")
+    with col_status3:
+        if topic:
+            st.caption(f"🎯 **{topic}**")
+        else:
+            st.caption("🎯 **Calculus**")
+
+    # Context hint (connects to larger flow)
+    exam_summary = st.session_state.get("exam_summary")
+    if exam_summary and topic:
+        from exam_panic import get_display_name
+        for t, count in exam_summary.top_topics[:3]:
+            if topic.lower() in get_display_name(t).lower():
+                st.info(f"📊 This is a **high-frequency exam topic** — appeared in {count} problems from your materials.")
+                break
+
+    st.markdown("---")
+
+    # Back button (subtle, top right feel)
+    if st.button("← Back to problems", type="secondary"):
+        st.session_state.practice_state = {
+            "mode": "browse",
+            "problem": None,
+            "problem_obj": None,
+            "step_index": 0,
+            "history": [],
+        }
+        st.rerun()
+
+    # Problem display
+    st.markdown("### 📝 Here's your problem:")
+    if problem_obj and hasattr(problem_obj, 'get_formatted_text'):
+        st.markdown(problem_obj.get_formatted_text())
+    else:
+        st.markdown(state["problem"])
+
+    st.markdown("---")
+
+    # ── Step-by-step section ─────────────────────────────────
+    if state["history"]:
+        st.markdown("### Let's solve this step by step.")
+        st.markdown("")
+        for i, step_text in enumerate(state["history"]):
+            st.markdown(f"**{step_text}**")
+            if i < len(state["history"]) - 1:
+                st.markdown("")  # spacing between steps
+        st.markdown("---")
+    else:
+        # No steps yet - gentle prompt
+        st.markdown("*Ready when you are. Click below to see the first step, or try it yourself first.*")
+        st.markdown("")
+
+    # ── Control buttons (human language) ─────────────────────
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        # Dynamic button text based on state
+        if step_num == 0:
+            btn_text = "🚀 Show me how to start"
+        else:
+            btn_text = "👉 Continue"
+
+        if st.button(btn_text, type="primary", use_container_width=True):
+            with st.spinner("Let me think..."):
+                next_step()
+            st.rerun()
+
+    with col2:
+        if st.button("💡 Give me a hint", use_container_width=True):
+            with st.spinner("..."):
+                hint = get_hint(problem_obj or state["problem"])
+            st.session_state._last_hint = hint
+            st.rerun()
+
+    with col3:
+        if st.button("📝 Show full solution", use_container_width=True):
+            with st.spinner("Generating..."):
+                solution = get_solution(problem_obj or state["problem"])
+            state["mode"] = "solution"
+            st.session_state._full_solution = solution
+            st.rerun()
+
+    # Show hint if requested
+    if hasattr(st.session_state, '_last_hint') and st.session_state._last_hint:
+        st.info(f"💡 {st.session_state._last_hint}")
+
+    # Show full solution if in solution mode
+    if state["mode"] == "solution" and hasattr(st.session_state, '_full_solution'):
+        st.markdown("### Here's the complete solution:")
+        st.markdown(st.session_state._full_solution)
+
+        # After solution, offer next action
+        st.markdown("---")
+        if st.button("✨ Try a similar problem", use_container_width=True):
+            st.session_state.pending_similar = True
+            st.rerun()
+
+    # Show prompts (if eligible)
+    maybe_show_premium_prompt()
+    maybe_show_feedback_prompt()
+
 
 agent = st.session_state.agent
 exam_context = st.session_state.exam_context
@@ -814,26 +1150,30 @@ exam_context = st.session_state.exam_context
 # ============================================================
 with st.sidebar:
     st.markdown("### Claire")
+    st.caption("Personalized calculus exam prep. Focus on what matters.")
 
     st.divider()
 
     # Course materials
-    st.caption("Course Materials")
+    st.caption("📂 Course Materials")
     current_user = get_user()
-    if not current_user:
-        show_login_button("Sign in to upload materials")
-        uploaded = None
-    else:
+    if current_user:
         st.caption(f"👤 {current_user.email}")
         if st.button("Sign out", use_container_width=True, key="signout"):
             sign_out()
             st.rerun()
-        uploaded = st.file_uploader(
-            "Upload",
-            type=["pdf", "txt", "md"],
-            accept_multiple_files=True,
-            label_visibility="collapsed"
-        )
+
+    # Always show file uploader
+    uploaded = st.file_uploader(
+        "Upload past exams or problem sets",
+        type=["pdf", "txt", "md"],
+        accept_multiple_files=True,
+        key="material_uploader"
+    )
+
+    # Show sign-in option if not logged in
+    if not current_user:
+        show_login_button("Sign in with Google")
 
     if uploaded:
         if st.button("Load", use_container_width=True):
@@ -842,6 +1182,11 @@ with st.sidebar:
                 context = analyze_files(files)
                 st.session_state.exam_context = context
                 agent.set_exam_context(context)
+
+            # Start background LLM cleaning (user doesn't wait)
+            from exam_context import start_background_cleaning
+            start_background_cleaning(context)
+
             track(st.session_state.session_id, "file_upload", {
                 "file_count": len(files),
                 "names": [f.name for f in uploaded],
@@ -867,13 +1212,14 @@ with st.sidebar:
                 for i, q in enumerate(bank.questions):
                     source_label = q.format_source()
 
-                    # Problem header with view button
+                    # Problem header with practice button
                     col1, col2 = st.columns([4, 1])
                     with col1:
                         st.markdown(f"**{source_label}**")
                     with col2:
-                        if st.button("View", key=f"view_{i}", use_container_width=True):
-                            st.session_state.selected_problem = q
+                        if st.button("Go", key=f"practice_{i}", use_container_width=True):
+                            start_practice(q)
+                            st.rerun()
 
                     # Preview text
                     preview = q.text[:120] + "..." if len(q.text) > 120 else q.text
@@ -950,12 +1296,6 @@ with st.sidebar:
 
 
 # ============================================================
-# SHOW PROBLEM DIALOG IF SELECTED
-# ============================================================
-if st.session_state.selected_problem:
-    show_problem_detail(st.session_state.selected_problem)
-
-# ============================================================
 # PROCESS PENDING SIMILAR PROBLEM REQUEST
 # ============================================================
 if st.session_state.pending_similar:
@@ -976,27 +1316,8 @@ if st.session_state.pending_similar:
 
     st.session_state.messages.append({"role": "user", "content": "↻ Generate a similar problem"})
     with st.spinner(""):
-        result = agent.process_query(similar_query)
+        result = direct_llm_call(similar_query)
     record_query(used_premium=used_premium)
-    st.session_state.messages.append({"role": "assistant", "content": result["output"]})
-    st.rerun()
-
-
-# ============================================================
-# PROCESS PENDING PROBLEM FROM DIALOG
-# ============================================================
-if st.session_state.pending_problem:
-    problem_text = st.session_state.pending_problem
-    st.session_state.pending_problem = None
-
-    # Add user message
-    st.session_state.messages.append({"role": "user", "content": problem_text})
-
-    # Get agent response
-    with st.spinner(""):
-        result = agent.process_query(problem_text)
-
-    # Add assistant response
     st.session_state.messages.append({"role": "assistant", "content": result["output"]})
     st.rerun()
 
@@ -1153,11 +1474,13 @@ def _render_exam_scope_analyzer():
             st.rerun()
         return True
 
-    # Generate exam summary
-    summary = generate_exam_summary(questions, days=3)
-
-    # Store for later use
-    st.session_state.exam_summary = summary
+    # Generate exam summary (only once, then cache)
+    if "exam_summary" not in st.session_state or st.session_state.exam_summary is None:
+        with st.spinner("Analyzing your materials..."):
+            summary = generate_exam_summary(questions, days=3)
+            st.session_state.exam_summary = summary
+    else:
+        summary = st.session_state.exam_summary
 
     # ── Header ──────────────────────────────────────────────
     st.markdown("## 📊 Exam Analysis")
@@ -1211,13 +1534,14 @@ def _render_exam_scope_analyzer():
     # ── CTA buttons ─────────────────────────────────────────
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("📝 Start Exam Simulation", type="primary", use_container_width=True):
+        if st.button("🎯 Start Diagnostic", type="primary", use_container_width=True):
             st.session_state.exam_scope_stage = "done"
-            st.session_state.exam_stage = "entry"
             st.rerun()
+        st.caption("Recommended · 5 min · Personalized learning")
     with col_b:
-        if st.button("💬 Practice with Claire", use_container_width=True):
+        if st.button("Skip for now", use_container_width=True):
             st.session_state.exam_scope_stage = "done"
+            st.session_state.placement_stage = "skipped"
             st.rerun()
 
     return True
@@ -1229,15 +1553,13 @@ def _render_placement_test():
 
     # ---- NOT STARTED: prompt to take the test ----
     if stage == "not_started":
-        st.markdown("## Claire")
-        st.caption("Making Calculus Clear · Calculus Cram")
+        st.markdown("## Quick Diagnostic")
+        st.caption("5 questions · ~5 min")
         st.markdown("---")
 
-        st.markdown("### 📝 Quick Diagnostic (5 min)")
         st.markdown(
-            "Before we start, let's figure out where you are so I can teach "
-            "in a way that actually helps. This is **5 multiple-choice questions** "
-            "— should take about 5 minutes."
+            "Let me figure out where you're at so I can teach you more effectively. "
+            "You'll get personalized practice focused on your weak areas."
         )
 
         has_materials = exam_context.has_questions()
@@ -1406,6 +1728,10 @@ def _render_placement_test():
             _inject_welcome_message(result)
             st.rerun()
 
+        # Show prompts after diagnostic
+        maybe_show_premium_prompt()
+        maybe_show_feedback_prompt()
+
         return True
 
     return False  # "skipped" or "completed" — don't render placement UI
@@ -1415,233 +1741,136 @@ def _render_placement_test():
 # MAIN AREA
 # ============================================================
 
-# Check if exam simulation is active first
-if st.session_state.exam_stage in ("upload", "parsing", "preview", "entry", "in_progress", "complete"):
+# Get practice state
+ps = st.session_state.practice_state
+
+# Check practice mode FIRST (highest priority)
+if ps["mode"] == "practice":
+    render_practice_view()
+
+# Check if exam simulation is active
+elif st.session_state.exam_stage in ("upload", "parsing", "preview", "entry", "in_progress", "complete"):
     _render_exam_mode()
 
-# Header
+# Exam scope analyzer (after upload)
 elif st.session_state.exam_scope_stage == "showing":
-    # Show exam scope analyzer (after upload, before placement test)
     _render_exam_scope_analyzer()
 
-elif not st.session_state.messages:
-    # Show placement test if not done yet
-    placement_active = _render_placement_test()
+# Placement test (only if in_progress or done - NOT on first load)
+elif st.session_state.placement_stage in ("in_progress", "done"):
+    _render_placement_test()
 
-    if not placement_active:
-        st.markdown("## Claire")
-        st.caption("Making Calculus Clear · Calculus Cram")
+elif ps["mode"] == "browse":
+    # ============================================================
+    # BROWSE MODE - Entry to the practice journey
+    # ============================================================
+    st.markdown("## Claire")
+    st.caption("Your exam survival companion")
 
+    has_materials = exam_context.has_questions()
+    exam_summary = st.session_state.get("exam_summary")
+
+    # ── Show journey context ─────────────────────────────────
+    if has_materials and exam_summary:
+        # User has materials - show personalized context
         st.markdown("---")
+        from exam_panic import get_display_name
+        top_topic = exam_summary.top_topics[0] if exam_summary.top_topics else None
 
-        # Single primary action: Start Exam Simulation
-        # System automatically uses workspace materials
-        has_materials = exam_context.has_questions()
-
-        # Main CTA
-        if st.button("📝 **Start Exam Simulation**", type="primary", use_container_width=True):
-            st.session_state.exam_stage = "entry"
-            st.rerun()
-
-        # Show what materials will be used (context, not a choice)
-        if has_materials:
-            material_names = exam_context.material_names[:3]
-            names_str = ", ".join(material_names)
-            if len(exam_context.material_names) > 3:
-                names_str += f" +{len(exam_context.material_names) - 3} more"
-            q_count = exam_context.get_question_count()
-            st.caption(f"📂 Using: {names_str} ({q_count} questions)")
-        else:
-            st.caption("📂 No materials loaded — will use practice questions")
-            st.caption("*Upload past exams in the sidebar to personalize*")
+        if top_topic:
+            st.markdown(f"### 🎯 Your exam focuses heavily on **{get_display_name(top_topic[0])}**")
+            st.caption(f"This topic appeared in {top_topic[1]} problems from your materials.")
 
         st.markdown("")
+        st.success(f"📂 {exam_context.get_question_count()} problems loaded · Ready to practice")
 
-        # Secondary action: Practice with Claire (less prominent)
-        if st.button("💬 Practice with Claire — Step-by-step guidance", use_container_width=True):
-            # Stay on this page, user can type in chat
-            pass
-
+    elif has_materials:
+        # Materials but no analysis yet
         st.markdown("---")
+        q_count = exam_context.get_question_count()
+        st.success(f"📂 {q_count} problems loaded from your materials")
 
-        # Show problems from materials or examples
-        if has_materials:
-            st.markdown("#### Quick practice from your materials")
-            bank = exam_context.question_bank
-            for i, q in enumerate(bank.questions[:3]):
-                source_label = q.format_source()
-                text_preview = q.text[:50] + "..." if len(q.text) > 50 else q.text
-                label = f"**{source_label}**: {text_preview}"
-                if st.button(label, key=f"q_{i}", use_container_width=True):
-                    st.session_state.messages.append({"role": "user", "content": q.text})
-                    result = agent.process_query(q.text)
-                    st.session_state.messages.append({"role": "assistant", "content": result["output"]})
-                    st.rerun()
-        else:
-            st.markdown("#### Try an example")
-            examples = [
-                "Find the critical points of f(x,y) = x² + y² - 4x",
-                "Use Lagrange multipliers: max xy subject to x + 2y = 10",
-                "Evaluate ∫∫ xy dA over the region bounded by y=x² and y=4",
-            ]
-            for i, ex in enumerate(examples):
-                if st.button(ex, key=f"ex_{i}", use_container_width=True):
-                    st.session_state.messages.append({"role": "user", "content": ex})
-                    result = agent.process_query(ex)
-                    st.session_state.messages.append({"role": "assistant", "content": result["output"]})
-                    st.rerun()
+    else:
+        # No materials - gentle nudge
+        st.markdown("---")
+        st.info("📂 **Tip:** Upload your past exams or problem sets in the sidebar for personalized practice")
 
-else:
-    # If materials were just loaded and diagnostic isn't done, show a nudge banner
-    if (
-        st.session_state.placement_stage == "not_started"
-        and exam_context.has_questions()
-    ):
-        with st.container():
-            st.info(
-                "📝 **Quick diagnostic available** — I can gauge your level with 5 questions "
-                "(~5 min) and teach more effectively. Want to take it?",
-                icon=None,
-            )
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Take the diagnostic", type="primary", use_container_width=True):
-                    st.session_state.messages = []
-                    agent.conversation_history = []
-                    st.rerun()
-            with col2:
-                if st.button("Skip, keep chatting", use_container_width=True):
-                    _skip_placement()
-                    st.rerun()
+    st.markdown("")
 
-    # Tier switch notice (show once)
-    if st.session_state.show_tier_notice:
-        st.info(
-            "✨ You've used your 5 free premium credits. "
-            "Switched to basic mode — you can keep using Claire without limits.",
-            icon=None,
-        )
-        st.session_state.show_tier_notice = False
-
-    # Chat history
-    for i, msg in enumerate(st.session_state.messages):
-        with st.chat_message(msg["role"]):
-            if msg["role"] == "assistant":
-                render_with_hidden_solution(msg["content"], i)
+    # ⭐ PRIMARY ACTION
+    if has_materials:
+        if st.button("🚀 **Start targeted practice**", type="primary", use_container_width=True):
+            # Start with first problem (ideally prioritized)
+            prioritized = st.session_state.get("prioritized_questions", [])
+            if prioritized:
+                start_practice(prioritized[0])
             else:
-                st.markdown(msg["content"])
+                start_practice(exam_context.question_bank.questions[0])
+            st.rerun()
+    else:
+        if st.button("🚀 **Try a practice problem**", type="primary", use_container_width=True):
+            from dataclasses import dataclass
+            @dataclass
+            class SimpleProblem:
+                text: str
+                difficulty: str = "medium"
+                categories: list = None
+                def format_source(self): return "Example"
+                def get_formatted_text(self): return self.text
+            start_practice(SimpleProblem(
+                text="Find the critical points of f(x,y) = x² + y² - 4x",
+                categories=["critical_points"]
+            ))
+            st.rerun()
 
-    # "Generate similar problem" button — shown after last assistant reply
-    if (
-        st.session_state.messages
-        and st.session_state.messages[-1]["role"] == "assistant"
-    ):
-        col_sim, col_gap = st.columns([1, 2])
-        with col_sim:
-            if st.button("↻ Similar problem", key="gen_similar", use_container_width=True):
-                st.session_state.pending_similar = True
+    st.markdown("---")
+
+    # ── Problem list ─────────────────────────────────────────
+    st.markdown("#### Or choose a specific problem:")
+    if has_materials:
+        bank = exam_context.question_bank
+        prioritized = st.session_state.get("prioritized_questions", [])
+        problems_to_show = prioritized[:5] if prioritized else bank.questions[:5]
+
+        for i, q in enumerate(problems_to_show):
+            source_label = q.format_source()
+            text_preview = q.text[:50] + "..." if len(q.text) > 50 else q.text
+
+            # Show why this problem matters
+            cats = getattr(q, 'categories', [])
+            diff = getattr(q, 'difficulty', 'medium')
+            diff_icon = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}.get(diff, "")
+
+            label = f"{diff_icon} {source_label}"
+            if cats:
+                label += f" · {cats[0].replace('_', ' ').title()}"
+
+            if st.button(f"{label}\n{text_preview}", key=f"q_{i}", use_container_width=True):
+                start_practice(q)
                 st.rerun()
+    else:
+        examples = [
+            ("critical_points", "🟡 Critical Points", "Find the critical points of f(x,y) = x² + y² - 4x"),
+            ("lagrange_multipliers", "🔴 Lagrange Multipliers", "Use Lagrange multipliers: max xy subject to x + 2y = 10"),
+            ("double_integrals", "🟡 Double Integrals", "Evaluate ∫∫ xy dA over the region bounded by y=x² and y=4"),
+        ]
+        from dataclasses import dataclass
+        @dataclass
+        class SimpleProblem:
+            text: str
+            difficulty: str = "medium"
+            categories: list = None
+            def format_source(self): return "Example"
+            def get_formatted_text(self): return self.text
 
-    # Show login prompt for anonymous users who've hit their limit
-    quota = get_quota_status()
-    if not quota["is_logged_in"] and not quota["can_premium"]:
-        st.info(
-            "🔑 **Sign in to continue with the premium model.** "
-            "You've used your 3 free queries. Sign in to get 5 premium queries per day!",
-            icon=None,
-        )
-        show_login_button("Sign in to continue")
-    elif agent.model_tier == "basic" and not quota["can_premium"]:
-        st.caption("💡 Enjoying Claire? **Unlock full power for exam prep** — premium model available.")
+        for cat, label, text in examples:
+            if st.button(f"{label}\n{text[:45]}...", key=f"ex_{cat}", use_container_width=True):
+                start_practice(SimpleProblem(text=text, categories=[cat]))
+                st.rerun()
+# (No else block needed - all modes handled by practice_state)
 
 
 # ============================================================
-# INPUT - with IME-aware Enter handling
+# NO FREE-FORM CHAT INPUT
+# All interaction happens through practice mode
 # ============================================================
-
-# Inject JavaScript to handle IME composition properly
-import streamlit.components.v1 as components
-
-components.html("""
-<script>
-(function() {
-    const doc = window.parent.document;
-
-    if (doc.body.dataset.imeHandlerAdded) return;
-    doc.body.dataset.imeHandlerAdded = 'true';
-
-    let composing = false;
-
-    doc.addEventListener('compositionstart', () => { composing = true; }, true);
-    doc.addEventListener('compositionend', () => {
-        composing = false;
-    }, true);
-
-    doc.addEventListener('keydown', function(e) {
-        // keyCode 229 = IME processing, or isComposing, or our composing flag
-        if (e.key === 'Enter' && (e.keyCode === 229 || e.isComposing || composing)) {
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            return false;
-        }
-    }, true);
-})();
-</script>
-""", height=0)
-
-prompt = st.chat_input("Enter a calculus problem...")
-
-if prompt:
-    track(st.session_state.session_id, "query", {"query": prompt[:300]})
-
-    # Check quota before making query
-    used_premium = can_use_premium()
-    if not used_premium and agent.model_tier == "premium":
-        switched = agent.switch_to_deepseek()
-        if switched:
-            st.session_state.show_tier_notice = True
-
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        # Thinking animation - show rotating messages while waiting
-        status_placeholder = st.empty()
-        result = None
-
-        import threading
-        import queue
-
-        result_queue = queue.Queue()
-
-        def fetch_response():
-            try:
-                r = agent.process_query(prompt)
-                result_queue.put(r)
-            except Exception as e:
-                result_queue.put({"output": f"Error: {e}", "intermediate_steps": []})
-
-        thread = threading.Thread(target=fetch_response)
-        thread.start()
-
-        # Show rotating thinking messages while waiting
-        msg_idx = 0
-        while thread.is_alive():
-            status_placeholder.markdown(f"*{THINKING_MESSAGES[msg_idx % len(THINKING_MESSAGES)]}*")
-            time.sleep(0.5)
-            msg_idx += 1
-
-        # Get result from queue
-        result = result_queue.get()
-        status_placeholder.empty()
-
-        # Record query for quota tracking
-        record_query(used_premium=used_premium)
-
-        # Render with hidden solution
-        msg_count = len(st.session_state.messages)
-        render_with_hidden_solution(result["output"], msg_count)
-
-    st.session_state.messages.append({"role": "assistant", "content": result["output"]})

@@ -337,8 +337,8 @@ def generate_exam_summary(questions: list, days: int = 3) -> ExamSummary:
     Returns:
         ExamSummary with all analysis
     """
-    # Step 1: Aggregate topics
-    topic_counts = aggregate_topics(questions)
+    # Step 1: Aggregate topics (use keyword detection for speed)
+    topic_counts = aggregate_topics(questions, use_llm=False)
 
     # Step 2: Get top topics
     top_topics = get_top_topics(topic_counts, n=6)

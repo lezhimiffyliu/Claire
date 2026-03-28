@@ -9,6 +9,16 @@ Flow:
 
 from __future__ import annotations
 import streamlit as st
+import os
+
+# Load .env file
+try:
+    from dotenv import load_dotenv
+    from pathlib import Path
+    env_path = Path(__file__).parent / ".env"
+    load_dotenv(env_path)
+except ImportError:
+    pass
 
 _supabase = None
 
@@ -16,11 +26,35 @@ _supabase = None
 def _client():
     global _supabase
     if _supabase is None:
-        from supabase import create_client
-        _supabase = create_client(
-            st.secrets["SUPABASE_URL"],
-            st.secrets["SUPABASE_KEY"],
-        )
+        try:
+            from supabase import create_client
+
+            # Try st.secrets first, then environment variables
+            url = None
+            key = None
+
+            try:
+                url = st.secrets.get("SUPABASE_URL")
+                key = st.secrets.get("SUPABASE_KEY")
+            except Exception:
+                pass
+
+            # Fallback to environment variables
+            if not url:
+                url = os.environ.get("SUPABASE_URL")
+            if not key:
+                key = os.environ.get("SUPABASE_KEY")
+
+            # Debug
+            print(f"[AUTH DEBUG] url={url[:30] if url else None}... key={key[:20] if key else None}...")
+
+            if not url or not key:
+                return None
+
+            _supabase = create_client(url, key)
+        except Exception as e:
+            print(f"[AUTH DEBUG] Exception: {e}")
+            return None
     return _supabase
 
 
@@ -29,8 +63,11 @@ def handle_oauth_callback() -> bool:
     params = st.query_params
     if "code" not in params or "user" in st.session_state:
         return False
+    client = _client()
+    if not client:
+        return False
     try:
-        resp = _client().auth.exchange_code_for_session({"auth_code": params["code"]})
+        resp = client.auth.exchange_code_for_session({"auth_code": params["code"]})
         if resp.user:
             st.session_state.user = resp.user
             st.session_state.supabase_session = resp.session
@@ -54,15 +91,27 @@ def get_user():
 
 def show_login_button(label: str = "Sign in with Google to upload materials"):
     """Render a Google OAuth button. Reads APP_URL from secrets for redirect."""
-    redirect = st.secrets.get("APP_URL", "http://localhost:8501")
+    client = _client()
+    if not client:
+        # Show warning that auth isn't configured
+        st.caption("⚠️ Auth not configured (missing SUPABASE_URL/KEY)")
+        return
+
     try:
-        resp = _client().auth.sign_in_with_oauth({
+        redirect = st.secrets.get("APP_URL", None)
+    except Exception:
+        redirect = None
+    if not redirect:
+        redirect = os.environ.get("APP_URL", "http://localhost:8501")
+
+    try:
+        resp = client.auth.sign_in_with_oauth({
             "provider": "google",
             "options": {"redirect_to": redirect},
         })
         st.link_button("🔑 " + label, resp.url, use_container_width=True)
     except Exception as e:
-        st.error(f"Auth setup error: {e}")
+        st.caption(f"⚠️ OAuth error: {e}")
 
 
 def sign_out():
