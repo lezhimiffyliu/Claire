@@ -1178,14 +1178,35 @@ with st.sidebar:
     if uploaded:
         if st.button("Load", use_container_width=True):
             files = [(f.name, f.getvalue()) for f in uploaded]
-            with st.spinner("Loading..."):
-                context = analyze_files(files)
-                st.session_state.exam_context = context
-                agent.set_exam_context(context)
 
-            # Start background LLM cleaning (user doesn't wait)
-            from exam_context import start_background_cleaning
-            start_background_cleaning(context)
+            # Quick regex parse only - NO LLM wait
+            context = analyze_files(files)
+            st.session_state.exam_context = context
+            agent.set_exam_context(context)
+
+            # Start background tasks (user doesn't wait)
+            import threading
+
+            # Task 1: Prepare 5 diagnostic questions (store in context object)
+            def _prepare_diagnostic_bg():
+                try:
+                    if context.has_questions():
+                        bank = context.question_bank
+                        qs = build_questions_from_bank(bank, limit=5)
+                        if qs:
+                            qs = _clean_placement_questions(qs)
+                            context._prepared_diagnostic = qs  # Store in context, not session_state
+                            print(f"[BG] Prepared {len(qs)} diagnostic questions")
+                except Exception as e:
+                    print(f"[BG] Error preparing diagnostic: {e}")
+
+            # Task 2: Clean rest of question bank
+            def _clean_rest_bg():
+                from exam_context import start_background_cleaning
+                start_background_cleaning(context)
+
+            threading.Thread(target=_prepare_diagnostic_bg, daemon=True).start()
+            threading.Thread(target=_clean_rest_bg, daemon=True).start()
 
             track(st.session_state.session_id, "file_upload", {
                 "file_count": len(files),
@@ -1326,13 +1347,129 @@ if st.session_state.pending_similar:
 # PLACEMENT TEST HELPERS
 # ============================================================
 
+def _clean_placement_questions(questions: list) -> list:
+    """
+    Quick LLM clean for ALL diagnostic questions (5 questions max).
+    Always clean all questions - it's only 5, cost is minimal.
+    """
+    from claire_agent import get_secret
+
+    print(f"[CLEAN] Cleaning all {len(questions)} questions")
+
+    if not questions:
+        return questions
+
+    to_clean = questions  # Clean ALL, no filtering
+
+    # Quick LLM call to clean the prompts
+    try:
+        api_key = get_secret("DEEPSEEK_API_KEY") or get_secret("ANTHROPIC_API_KEY")
+        if not api_key:
+            return questions
+
+        from langchain_openai import ChatOpenAI
+        from langchain_core.messages import HumanMessage
+
+        if get_secret("DEEPSEEK_API_KEY"):
+            llm = ChatOpenAI(
+                model="deepseek-chat",
+                api_key=get_secret("DEEPSEEK_API_KEY"),
+                base_url="https://api.deepseek.com",
+                temperature=0,
+                max_tokens=2000,
+            )
+        else:
+            from langchain_anthropic import ChatAnthropic
+            llm = ChatAnthropic(
+                model="claude-sonnet-4-20250514",
+                api_key=api_key,
+                temperature=0,
+                max_tokens=2000,
+            )
+
+        # Build batch prompt
+        prompts_text = "\n---\n".join([f"Q{i+1}: {q.prompt}" for i, q in enumerate(to_clean)])
+
+        clean_prompt = f"""Clean these calculus questions from PDFs. They have OCR errors and junk text.
+
+TASKS:
+1. REMOVE junk: page numbers, professor names, course headers, "Page X of Y", dates, "Fall 2017", etc.
+2. FIX OCR: "Z" → integral sign, fix broken symbols and spacing
+3. FORMAT: Use $...$ for LaTeX math with SINGLE backslash ($\\int$ not $\\\\int$)
+
+EXAMPLES:
+- "Z 0 −1 Z arcsin y −π/2 cos(x)" → "$\\int_{{-1}}^0 \\int_{{-\\pi/2}}^{{\\arcsin y}} \\cos(x)$"
+- "Fall 2017 Calculus III Page 10 of 12 Find the integral" → "Find the integral"
+- "√ x+y2" → "$\\sqrt{{x+y^2}}$"
+
+Keep **source** headers. Return ONLY the clean question text.
+
+{prompts_text}
+
+Output Q1:, Q2:, etc."""
+
+        print(f"[CLEAN] Calling LLM...")
+        result = llm.invoke([HumanMessage(content=clean_prompt)])
+        cleaned_text = result.content
+        print(f"[CLEAN] LLM returned {len(cleaned_text)} chars")
+
+        # Parse cleaned questions
+        import re
+        cleaned_parts = re.split(r'Q\d+:\s*', cleaned_text)[1:]  # Skip empty first split
+        print(f"[CLEAN] Parsed {len(cleaned_parts)} parts for {len(to_clean)} questions")
+
+        # Pad if LLM returned fewer parts
+        while len(cleaned_parts) < len(to_clean):
+            cleaned_parts.append("")
+            print(f"[CLEAN] Warning: LLM returned fewer parts, padding")
+
+        for i, (q, cleaned) in enumerate(zip(to_clean, cleaned_parts)):
+            cleaned = cleaned.strip()
+            if cleaned:
+                # Fix escaped backslashes for Streamlit LaTeX rendering
+                fixed = cleaned.replace('\\\\', '\\')  # \\int -> \int
+                # Also fix triple/quadruple backslashes
+                while '\\\\' in fixed:
+                    fixed = fixed.replace('\\\\', '\\')
+                print(f"[CLEAN] Q{i+1}: {fixed[:60]}...")
+                q.prompt = fixed
+            else:
+                print(f"[CLEAN] Q{i+1}: No cleaned text, keeping original")
+
+    except Exception as e:
+        print(f"[CLEAN] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback: just use original
+
+    return questions
+
+
 def _start_placement_from_materials():
-    """Start placement test using questions from uploaded materials (LaTeX pre-cleaned)."""
-    bank = st.session_state.exam_context.question_bank if st.session_state.exam_context.has_questions() else None
-    questions = build_questions_from_bank(bank, limit=5)
+    """Start placement test using questions from uploaded materials."""
+    print("[START] _start_placement_from_materials called")
+
+    context = st.session_state.exam_context
+    questions = None
+
+    # Check if pre-prepared questions are ready (from upload background thread)
+    if hasattr(context, '_prepared_diagnostic') and context._prepared_diagnostic:
+        questions = context._prepared_diagnostic
+        print(f"[START] Using {len(questions)} pre-prepared questions")
+    else:
+        # Fallback: prepare now (shouldn't happen often)
+        print("[START] Pre-prepared not ready, preparing now...")
+        bank = context.question_bank if context.has_questions() else None
+        questions = build_questions_from_bank(bank, limit=5)
+        if questions:
+            questions = _clean_placement_questions(questions)
+
+    # Fallback if still no questions
     if not questions:
         track = st.session_state.calc_track or "calc_i"
         questions = get_fallback_questions(track)
+        print(f"[START] Using {len(questions)} fallback questions")
+
     st.session_state.placement_questions = questions
     st.session_state.placement_answers = [None] * len(questions)
     st.session_state.placement_current = 0
@@ -1536,6 +1673,7 @@ def _render_exam_scope_analyzer():
     with col_a:
         if st.button("🎯 Start Diagnostic", type="primary", use_container_width=True):
             st.session_state.exam_scope_stage = "done"
+            _start_placement_from_materials()
             st.rerun()
         st.caption("Recommended · 5 min · Personalized learning")
     with col_b:
@@ -1617,18 +1755,8 @@ def _render_placement_test():
 
         st.markdown("")
 
-        # Question body with math rendering
-        if q.question_excerpt:
-            # From uploaded materials: render with st.latex for math
-            from question_bank import format_math_text
-            formatted_q = format_math_text(q.question_excerpt)
-            st.markdown(formatted_q)
-            if q.ask_text:
-                st.markdown("")
-                st.markdown(f"**{q.ask_text}**")
-        else:
-            # Fallback / hand-written questions: already have LaTeX
-            st.markdown(q.prompt)
+        # Question body - use prompt (already formatted) over raw excerpt
+        st.markdown(q.prompt)
 
         st.markdown("")
         st.markdown("---")
@@ -1639,12 +1767,8 @@ def _render_placement_test():
         st.markdown("**Choose your answer:**")
         st.markdown("")
 
-        # Build choices with proper formatting
-        if q.question_excerpt:
-            from question_bank import format_math_text
-            formatted_choices = [format_math_text(c) for c in q.choices]
-        else:
-            formatted_choices = q.choices
+        # Build choices
+        formatted_choices = q.choices
 
         # Use radio with cleaner labels
         choice_labels = [f"{LETTERS[i]}.  {formatted_choices[i]}" for i in range(len(q.choices))]

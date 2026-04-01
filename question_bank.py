@@ -703,12 +703,11 @@ def _extract_questions_regex(text: str, source: str) -> list[Question]:
 
 def extract_questions_from_text(text: str, source: str) -> list[Question]:
     """
-    Extract questions from text - uses LLM parsing for clean LaTeX output.
-
-    This is called at UPLOAD TIME, not display time.
+    Extract questions from text - uses FAST regex parsing only.
+    LLM cleaning happens in background, not here.
     """
-    # Use LLM parsing (with DeepSeek for cost efficiency)
-    return parse_questions_with_llm(text, source)
+    # Fast regex parsing only - no LLM wait
+    return _extract_questions_regex(text, source)
 
 
 # ============================================================

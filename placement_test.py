@@ -442,7 +442,7 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
         stem, choices, correct_idx = _extract_existing_choices(clean_text)
 
         if choices and len(choices) >= 2:
-            # Simple MCQ or True/False
+            # Simple MCQ or True/False - use raw text, LLM will clean later
             selected.append(
                 PlacementQuestion(
                     prompt=f"**{q.format_source()}**\n\n{stem}",
@@ -466,6 +466,7 @@ def build_questions_from_bank(bank, limit: int = 5) -> list[PlacementQuestion]:
             excerpt = clean_text[:600]
             ask = "What is the best first approach to this problem?"
 
+            # Use raw text, LLM will clean later
             selected.append(
                 PlacementQuestion(
                     prompt=(
