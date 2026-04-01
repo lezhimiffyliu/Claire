@@ -1194,7 +1194,7 @@ with st.sidebar:
                         bank = context.question_bank
                         qs = build_questions_from_bank(bank, limit=5)
                         if qs:
-                            qs = _clean_placement_questions(qs)
+                            qs = reconstruct_math_problems(qs)
                             context._prepared_diagnostic = qs  # Store in context, not session_state
                             print(f"[BG] Prepared {len(qs)} diagnostic questions")
                 except Exception as e:
@@ -1347,100 +1347,81 @@ if st.session_state.pending_similar:
 # PLACEMENT TEST HELPERS
 # ============================================================
 
-def _clean_placement_questions(questions: list) -> list:
+def reconstruct_math_problems(questions: list) -> list:
     """
-    Quick LLM clean for ALL diagnostic questions (5 questions max).
-    Always clean all questions - it's only 5, cost is minimal.
+    Reconstruct math problems from garbled PDF text.
+    Uses LLM to rewrite (not fix) the math expressions.
+    Only for diagnostic questions (5 max).
     """
     from claire_agent import get_secret
-
-    print(f"[CLEAN] Cleaning all {len(questions)} questions")
+    import json
 
     if not questions:
         return questions
 
-    to_clean = questions  # Clean ALL, no filtering
+    print(f"[RECONSTRUCT] Processing {len(questions)} questions")
 
-    # Quick LLM call to clean the prompts
     try:
-        api_key = get_secret("DEEPSEEK_API_KEY") or get_secret("ANTHROPIC_API_KEY")
+        api_key = get_secret("DEEPSEEK_API_KEY")
         if not api_key:
+            print("[RECONSTRUCT] No DEEPSEEK_API_KEY, skipping")
             return questions
 
         from langchain_openai import ChatOpenAI
         from langchain_core.messages import HumanMessage
 
-        if get_secret("DEEPSEEK_API_KEY"):
-            llm = ChatOpenAI(
-                model="deepseek-chat",
-                api_key=get_secret("DEEPSEEK_API_KEY"),
-                base_url="https://api.deepseek.com",
-                temperature=0,
-                max_tokens=2000,
-            )
-        else:
-            from langchain_anthropic import ChatAnthropic
-            llm = ChatAnthropic(
-                model="claude-sonnet-4-20250514",
-                api_key=api_key,
-                temperature=0,
-                max_tokens=2000,
-            )
+        llm = ChatOpenAI(
+            model="deepseek-chat",
+            api_key=api_key,
+            base_url="https://api.deepseek.com",
+            temperature=0,
+            max_tokens=2000,
+        )
 
-        # Build batch prompt
-        prompts_text = "\n---\n".join([f"Q{i+1}: {q.prompt}" for i, q in enumerate(to_clean)])
+        # Build input array
+        raw_list = [q.prompt for q in questions]
+        raw_json = json.dumps(raw_list, ensure_ascii=False)
 
-        clean_prompt = f"""Clean these calculus questions from PDFs. They have OCR errors and junk text.
+        prompt = f"""Rewrite these garbled calculus problems as proper LaTeX.
 
-TASKS:
-1. REMOVE junk: page numbers, professor names, course headers, "Page X of Y", dates, "Fall 2017", etc.
-2. FIX OCR: "Z" → integral sign, fix broken symbols and spacing
-3. FORMAT: Use $...$ for LaTeX math with SINGLE backslash ($\\int$ not $\\\\int$)
+Input: {raw_json}
 
-EXAMPLES:
-- "Z 0 −1 Z arcsin y −π/2 cos(x)" → "$\\int_{{-1}}^0 \\int_{{-\\pi/2}}^{{\\arcsin y}} \\cos(x)$"
-- "Fall 2017 Calculus III Page 10 of 12 Find the integral" → "Find the integral"
-- "√ x+y2" → "$\\sqrt{{x+y^2}}$"
+Rules:
+- Output JSON array, same order, same length
+- Use $...$ for inline math
+- Fix integral bounds, dx/dy order, sqrt, powers
+- Remove junk (page numbers, course headers)
+- If unclear, output best guess (never empty)
 
-Keep **source** headers. Return ONLY the clean question text.
+Output ONLY the JSON array, no explanation:
+["$\\int_0^1 ...$", "$...$", ...]"""
 
-{prompts_text}
+        result = llm.invoke([HumanMessage(content=prompt)])
+        output = result.content.strip()
 
-Output Q1:, Q2:, etc."""
+        # Extract JSON array from response
+        if output.startswith("```"):
+            output = output.split("```")[1]
+            if output.startswith("json"):
+                output = output[4:]
+        output = output.strip()
 
-        print(f"[CLEAN] Calling LLM...")
-        result = llm.invoke([HumanMessage(content=clean_prompt)])
-        cleaned_text = result.content
-        print(f"[CLEAN] LLM returned {len(cleaned_text)} chars")
+        reconstructed = json.loads(output)
+        print(f"[RECONSTRUCT] Got {len(reconstructed)} results")
 
-        # Parse cleaned questions
-        import re
-        cleaned_parts = re.split(r'Q\d+:\s*', cleaned_text)[1:]  # Skip empty first split
-        print(f"[CLEAN] Parsed {len(cleaned_parts)} parts for {len(to_clean)} questions")
-
-        # Pad if LLM returned fewer parts
-        while len(cleaned_parts) < len(to_clean):
-            cleaned_parts.append("")
-            print(f"[CLEAN] Warning: LLM returned fewer parts, padding")
-
-        for i, (q, cleaned) in enumerate(zip(to_clean, cleaned_parts)):
-            cleaned = cleaned.strip()
-            if cleaned:
-                # Fix escaped backslashes for Streamlit LaTeX rendering
-                fixed = cleaned.replace('\\\\', '\\')  # \\int -> \int
-                # Also fix triple/quadruple backslashes
+        for i, (q, text) in enumerate(zip(questions, reconstructed)):
+            if text:
+                # Normalize backslashes
+                fixed = text
                 while '\\\\' in fixed:
                     fixed = fixed.replace('\\\\', '\\')
-                print(f"[CLEAN] Q{i+1}: {fixed[:60]}...")
                 q.prompt = fixed
-            else:
-                print(f"[CLEAN] Q{i+1}: No cleaned text, keeping original")
+                print(f"[RECONSTRUCT] [{i+1}] {fixed[:50]}...")
 
     except Exception as e:
-        print(f"[CLEAN] Error: {e}")
+        print(f"[RECONSTRUCT] Error: {e}")
         import traceback
         traceback.print_exc()
-        # Fallback: just use original
 
     return questions
 
@@ -1462,7 +1443,7 @@ def _start_placement_from_materials():
         bank = context.question_bank if context.has_questions() else None
         questions = build_questions_from_bank(bank, limit=5)
         if questions:
-            questions = _clean_placement_questions(questions)
+            questions = reconstruct_math_problems(questions)
 
     # Fallback if still no questions
     if not questions:
