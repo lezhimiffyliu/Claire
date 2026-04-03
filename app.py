@@ -917,6 +917,108 @@ Problem:
 
 
 # ============================================================
+# MATH RECONSTRUCTION (for diagnostic questions)
+# ============================================================
+
+def normalize_latex(s: str) -> str:
+    """Normalize LaTeX for Streamlit rendering (only $ works, not \\[ \\])."""
+    s = s.strip()
+
+    # Convert \[ \] to $
+    if "\\[" in s and "\\]" in s:
+        s = s.replace("\\[", "$").replace("\\]", "$")
+
+    # Fix common issues
+    s = s.replace(",dx", " \\, dx").replace(",dy", " \\, dy")
+
+    # Normalize backslashes
+    while '\\\\' in s:
+        s = s.replace('\\\\', '\\')
+
+    # Ensure has $ delimiters
+    if "$" not in s and any(c in s for c in ['\\int', '\\frac', '\\sqrt', '^', '_']):
+        s = f"${s}$"
+
+    return s
+
+
+def reconstruct_math_problems(questions: list) -> list:
+    """
+    Reconstruct math problems from garbled PDF text.
+    Uses LLM to rewrite (not fix) the math expressions.
+    Only for diagnostic questions (5 max).
+    """
+    from claire_agent import get_secret
+    import json
+
+    if not questions:
+        return questions
+
+    print(f"[RECONSTRUCT] Processing {len(questions)} questions")
+
+    try:
+        api_key = get_secret("DEEPSEEK_API_KEY")
+        if not api_key:
+            print("[RECONSTRUCT] No DEEPSEEK_API_KEY, skipping")
+            return questions
+
+        from langchain_openai import ChatOpenAI
+        from langchain_core.messages import HumanMessage
+
+        llm = ChatOpenAI(
+            model="deepseek-chat",
+            api_key=api_key,
+            base_url="https://api.deepseek.com",
+            temperature=0,
+            max_tokens=2000,
+        )
+
+        # Build input array
+        raw_list = [q.prompt for q in questions]
+        raw_json = json.dumps(raw_list, ensure_ascii=False)
+
+        prompt = f"""Rewrite these garbled calculus problems as proper LaTeX.
+
+Input: {raw_json}
+
+Rules:
+- Output JSON array, same order, same length
+- MUST use $...$ for math (NOT \\[ \\] - Streamlit only renders $)
+- Fix integral bounds, dx/dy order, sqrt, powers
+- Remove junk (page numbers, course headers)
+- If unclear, output best guess (never empty)
+
+Output ONLY the JSON array:
+["$\\int_0^1 ...$", "$...$", ...]"""
+
+        result = llm.invoke([HumanMessage(content=prompt)])
+        output = result.content.strip()
+
+        # Extract JSON array from response
+        if output.startswith("```"):
+            output = output.split("```")[1]
+            if output.startswith("json"):
+                output = output[4:]
+        output = output.strip()
+
+        reconstructed = json.loads(output)
+        print(f"[RECONSTRUCT] Got {len(reconstructed)} results")
+
+        for i, (q, text) in enumerate(zip(questions, reconstructed)):
+            if text:
+                fixed = normalize_latex(text)
+                q.prompt = fixed
+                print(f"[RECONSTRUCT] [{i+1}] {fixed[:50]}...")
+
+    except Exception as e:
+        print(f"[RECONSTRUCT] Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+    return questions
+
+
+# ============================================================
 # FEEDBACK PROMPT (Lightweight, non-intrusive)
 # ============================================================
 
@@ -1347,85 +1449,6 @@ if st.session_state.pending_similar:
 # PLACEMENT TEST HELPERS
 # ============================================================
 
-def reconstruct_math_problems(questions: list) -> list:
-    """
-    Reconstruct math problems from garbled PDF text.
-    Uses LLM to rewrite (not fix) the math expressions.
-    Only for diagnostic questions (5 max).
-    """
-    from claire_agent import get_secret
-    import json
-
-    if not questions:
-        return questions
-
-    print(f"[RECONSTRUCT] Processing {len(questions)} questions")
-
-    try:
-        api_key = get_secret("DEEPSEEK_API_KEY")
-        if not api_key:
-            print("[RECONSTRUCT] No DEEPSEEK_API_KEY, skipping")
-            return questions
-
-        from langchain_openai import ChatOpenAI
-        from langchain_core.messages import HumanMessage
-
-        llm = ChatOpenAI(
-            model="deepseek-chat",
-            api_key=api_key,
-            base_url="https://api.deepseek.com",
-            temperature=0,
-            max_tokens=2000,
-        )
-
-        # Build input array
-        raw_list = [q.prompt for q in questions]
-        raw_json = json.dumps(raw_list, ensure_ascii=False)
-
-        prompt = f"""Rewrite these garbled calculus problems as proper LaTeX.
-
-Input: {raw_json}
-
-Rules:
-- Output JSON array, same order, same length
-- Use $...$ for inline math
-- Fix integral bounds, dx/dy order, sqrt, powers
-- Remove junk (page numbers, course headers)
-- If unclear, output best guess (never empty)
-
-Output ONLY the JSON array, no explanation:
-["$\\int_0^1 ...$", "$...$", ...]"""
-
-        result = llm.invoke([HumanMessage(content=prompt)])
-        output = result.content.strip()
-
-        # Extract JSON array from response
-        if output.startswith("```"):
-            output = output.split("```")[1]
-            if output.startswith("json"):
-                output = output[4:]
-        output = output.strip()
-
-        reconstructed = json.loads(output)
-        print(f"[RECONSTRUCT] Got {len(reconstructed)} results")
-
-        for i, (q, text) in enumerate(zip(questions, reconstructed)):
-            if text:
-                # Normalize backslashes
-                fixed = text
-                while '\\\\' in fixed:
-                    fixed = fixed.replace('\\\\', '\\')
-                q.prompt = fixed
-                print(f"[RECONSTRUCT] [{i+1}] {fixed[:50]}...")
-
-    except Exception as e:
-        print(f"[RECONSTRUCT] Error: {e}")
-        import traceback
-        traceback.print_exc()
-
-    return questions
-
-
 def _start_placement_from_materials():
     """Start placement test using questions from uploaded materials."""
     print("[START] _start_placement_from_materials called")
@@ -1433,17 +1456,29 @@ def _start_placement_from_materials():
     context = st.session_state.exam_context
     questions = None
 
-    # Check if pre-prepared questions are ready (from upload background thread)
-    if hasattr(context, '_prepared_diagnostic') and context._prepared_diagnostic:
-        questions = context._prepared_diagnostic
-        print(f"[START] Using {len(questions)} pre-prepared questions")
-    else:
-        # Fallback: prepare now (shouldn't happen often)
-        print("[START] Pre-prepared not ready, preparing now...")
-        bank = context.question_bank if context.has_questions() else None
-        questions = build_questions_from_bank(bank, limit=5)
-        if questions:
-            questions = reconstruct_math_problems(questions)
+    try:
+        # Check if pre-prepared questions are ready (from upload background thread)
+        if hasattr(context, '_prepared_diagnostic') and context._prepared_diagnostic:
+            questions = context._prepared_diagnostic
+            # Check if questions have LaTeX (if not, cache is stale - re-run reconstruct)
+            has_latex = any('$' in q.prompt for q in questions)
+            if has_latex:
+                print(f"[START] Using {len(questions)} pre-prepared questions (has LaTeX)")
+            else:
+                print(f"[START] Cache stale (no LaTeX), re-running reconstruct...")
+                questions = reconstruct_math_problems(questions)
+                context._prepared_diagnostic = questions  # Update cache
+        else:
+            # Fallback: prepare now (shouldn't happen often)
+            print("[START] Pre-prepared not ready, preparing now...")
+            bank = context.question_bank if context.has_questions() else None
+            questions = build_questions_from_bank(bank, limit=5)
+            if questions:
+                questions = reconstruct_math_problems(questions)
+    except Exception as e:
+        print(f"[START] Error preparing questions: {e}")
+        import traceback
+        traceback.print_exc()
 
     # Fallback if still no questions
     if not questions:
@@ -1455,6 +1490,7 @@ def _start_placement_from_materials():
     st.session_state.placement_answers = [None] * len(questions)
     st.session_state.placement_current = 0
     st.session_state.placement_stage = "in_progress"
+    print(f"[START] Set placement_stage to in_progress with {len(questions)} questions")
 
 
 def _start_placement_for_track(track: str):
@@ -1850,7 +1886,7 @@ def _render_placement_test():
 ps = st.session_state.practice_state
 
 # Check practice mode FIRST (highest priority)
-if ps["mode"] == "practice":
+if ps["mode"] in ("practice", "solution"):
     render_practice_view()
 
 # Check if exam simulation is active
