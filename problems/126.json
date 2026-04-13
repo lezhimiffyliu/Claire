@@ -1,0 +1,41 @@
+[
+  {
+    "id": "126_001",
+    "question": "Find the gradient of $f(x, y) = x^2 y + y^3$ at the point $(1, 2)$.",
+    "solution_steps": [
+      "Find partial derivatives: $f_x = 2xy$, $f_y = x^2 + 3y^2$",
+      "At $(1, 2)$: $f_x(1,2) = 2(1)(2) = 4$",
+      "$f_y(1,2) = 1 + 3(4) = 13$",
+      "$\\nabla f(1,2) = \\langle 4, 13 \\rangle$"
+    ],
+    "final_answer": "$\\langle 4, 13 \\rangle$",
+    "topic": "partial_derivatives",
+    "difficulty": "easy"
+  },
+  {
+    "id": "126_002",
+    "question": "Use Lagrange multipliers to find the max of $f(x,y) = xy$ subject to $x + y = 10$.",
+    "solution_steps": [
+      "Set up: $\\nabla f = \\lambda \\nabla g$ where $g(x,y) = x + y - 10$",
+      "$\\nabla f = \\langle y, x \\rangle$, $\\nabla g = \\langle 1, 1 \\rangle$",
+      "$y = \\lambda$ and $x = \\lambda$, so $x = y$",
+      "From constraint: $2x = 10 \\Rightarrow x = 5$",
+      "Maximum is $f(5,5) = 25$"
+    ],
+    "final_answer": "$25$ at $(5, 5)$",
+    "topic": "lagrange_multipliers",
+    "difficulty": "medium"
+  },
+  {
+    "id": "126_003",
+    "question": "Evaluate $\\displaystyle\\iint_R xy \\, dA$ where $R = [0,1] \\times [0,2]$.",
+    "solution_steps": [
+      "Set up iterated integral: $\\int_0^1 \\int_0^2 xy \\, dy \\, dx$",
+      "Inner integral: $\\int_0^2 xy \\, dy = x \\cdot \\frac{y^2}{2} \\Big|_0^2 = 2x$",
+      "Outer integral: $\\int_0^1 2x \\, dx = x^2 \\Big|_0^1 = 1$"
+    ],
+    "final_answer": "$1$",
+    "topic": "double_integrals",
+    "difficulty": "easy"
+  }
+]
