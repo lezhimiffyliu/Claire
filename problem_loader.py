@@ -1,43 +1,90 @@
 """
-Problem Loader - Load problems from JSON files for each course.
+Problem Loader - Load UW Math problems from JSON files.
+
+JSON Format:
+{
+  "id": "uw_math_124_au24_p1",
+  "course": "math_124",
+  "exam": "au24_final",
+  "problem_number": 1,
+  "topic": "limits",
+  "concepts": ["limits", "algebraic_limits"],
+  "points": 12,
+  "stem": "Compute each of the following limits...",
+  "parts": [
+    {
+      "label": "a",
+      "question_text": "$\\lim_{x\\to 2} ...$",
+      "final_answer": "$\\frac{2}{3}$",
+      "has_diagram": false,
+      "diagram_image": null
+    }
+  ]
+}
 """
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
 @dataclass
-class Problem:
-    """A practice problem with solution."""
-    id: str
-    question: str  # LaTeX formatted
-    solution_steps: list[str]
+class ProblemPart:
+    """A single part of a problem (e.g., part a, b, c)."""
+    label: Optional[str]  # "a", "b", "c", or None for single-part problems
+    question_text: str
     final_answer: str
+    has_diagram: bool = False
+    diagram_image: Optional[str] = None
+    depends_on: Optional[str] = None
+
+
+@dataclass
+class Problem:
+    """A UW Math exam problem with multiple parts."""
+    id: str
+    course: str
+    exam: str
+    problem_number: int
     topic: str
-    difficulty: str  # easy, medium, hard
+    concepts: list[str]
+    points: int
+    stem: Optional[str]  # Shared instruction for all parts
+    parts: list[ProblemPart]
 
-    def get_display_text(self) -> str:
-        """Return question text for display."""
-        return self.question
+    def get_display_text(self, part_index: int = 0) -> str:
+        """Get formatted text for display."""
+        if part_index >= len(self.parts):
+            return ""
+
+        part = self.parts[part_index]
+        text = ""
+
+        # Add stem if exists
+        if self.stem:
+            text += f"{self.stem}\n\n"
+
+        # Add part label if exists
+        if part.label:
+            text += f"**({part.label})** "
+
+        text += part.question_text
+        return text
+
+    def get_source_label(self) -> str:
+        """Get human-readable source label."""
+        # "au24_final" -> "Autumn 2024 Final"
+        exam = self.exam
+        season = {"au": "Autumn", "wi": "Winter", "sp": "Spring", "su": "Summer"}.get(exam[:2], "")
+        year = "20" + exam[2:4] if len(exam) >= 4 else ""
+        exam_type = exam.split("_")[-1].title() if "_" in exam else "Exam"
+        return f"{season} {year} {exam_type} - Problem {self.problem_number}"
 
 
-def load_problems(course: str) -> list[Problem]:
-    """
-    Load problems for a specific course.
-
-    Args:
-        course: "124", "125", or "126"
-
-    Returns:
-        List of Problem objects
-    """
-    problems_dir = os.path.join(os.path.dirname(__file__), "problems")
-    filepath = os.path.join(problems_dir, f"{course}.json")
-
+def load_problems_from_file(filepath: str) -> list[Problem]:
+    """Load problems from a single JSON file."""
     if not os.path.exists(filepath):
-        print(f"[problem_loader] No problems file for course {course}")
         return []
 
     try:
@@ -46,21 +93,76 @@ def load_problems(course: str) -> list[Problem]:
 
         problems = []
         for item in data:
+            parts = []
+            for p in item.get("parts", []):
+                parts.append(ProblemPart(
+                    label=p.get("label"),
+                    question_text=p.get("question_text", ""),
+                    final_answer=p.get("final_answer", ""),
+                    has_diagram=p.get("has_diagram", False),
+                    diagram_image=p.get("diagram_image"),
+                    depends_on=p.get("depends_on"),
+                ))
+
             problems.append(Problem(
                 id=item.get("id", ""),
-                question=item.get("question", ""),
-                solution_steps=item.get("solution_steps", []),
-                final_answer=item.get("final_answer", ""),
+                course=item.get("course", ""),
+                exam=item.get("exam", ""),
+                problem_number=item.get("problem_number", 0),
                 topic=item.get("topic", ""),
-                difficulty=item.get("difficulty", "medium"),
+                concepts=item.get("concepts", []),
+                points=item.get("points", 0),
+                stem=item.get("stem"),
+                parts=parts,
             ))
 
-        print(f"[problem_loader] Loaded {len(problems)} problems for course {course}")
         return problems
 
     except Exception as e:
         print(f"[problem_loader] Error loading {filepath}: {e}")
         return []
+
+
+def load_problems(course: str) -> list[Problem]:
+    """
+    Load all problems for a course (e.g., "124").
+
+    Looks for files matching: problems/math124_*.json
+    """
+    problems_dir = os.path.join(os.path.dirname(__file__), "problems")
+
+    if not os.path.exists(problems_dir):
+        print(f"[problem_loader] Problems directory not found")
+        return []
+
+    all_problems = []
+    prefix = f"math{course}_"
+
+    for filename in os.listdir(problems_dir):
+        if filename.startswith(prefix) and filename.endswith(".json"):
+            filepath = os.path.join(problems_dir, filename)
+            problems = load_problems_from_file(filepath)
+            all_problems.extend(problems)
+            print(f"[problem_loader] Loaded {len(problems)} problems from {filename}")
+
+    # Sort by exam and problem number
+    all_problems.sort(key=lambda p: (p.exam, p.problem_number))
+
+    print(f"[problem_loader] Total: {len(all_problems)} problems for course {course}")
+    return all_problems
+
+
+def get_all_parts(course: str) -> list[tuple[Problem, int]]:
+    """
+    Get all individual parts as (Problem, part_index) tuples.
+    Useful for practice mode where each part is a separate question.
+    """
+    problems = load_problems(course)
+    parts = []
+    for problem in problems:
+        for i in range(len(problem.parts)):
+            parts.append((problem, i))
+    return parts
 
 
 def get_problem_by_id(course: str, problem_id: str) -> Optional[Problem]:
@@ -70,20 +172,3 @@ def get_problem_by_id(course: str, problem_id: str) -> Optional[Problem]:
         if p.id == problem_id:
             return p
     return None
-
-
-def get_random_problem(course: str, topic: Optional[str] = None) -> Optional[Problem]:
-    """Get a random problem, optionally filtered by topic."""
-    import random
-    problems = load_problems(course)
-
-    if not problems:
-        return None
-
-    if topic:
-        problems = [p for p in problems if p.topic == topic]
-
-    if not problems:
-        return None
-
-    return random.choice(problems)

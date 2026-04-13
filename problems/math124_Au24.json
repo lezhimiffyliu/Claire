@@ -1,0 +1,381 @@
+[
+  {
+    "id": "uw_math_124_au24_p1",
+    "course": "math_124",
+    "exam": "au24_final",
+    "problem_number": 1,
+    "topic": "limits",
+    "concepts": [
+      "limits",
+      "algebraic_limits",
+      "trigonometric_limits"
+    ],
+    "points": 12,
+    "stem": "Compute each of the following limits showing complete work or justification for your answer. If there is no finite limit, write $\\infty$, $-\\infty$, or DNE, whichever applies.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "$\\lim_{x\\to 2} \\frac{\\sqrt{4x+1}-3}{x-2}$",
+        "final_answer": "$\\frac{2}{3}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "b",
+        "question_text": "$\\lim_{\\theta\\to 0} \\frac{\\sin 3\\theta}{\\tan 2\\theta}$",
+        "final_answer": "$\\frac{3}{2}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "c",
+        "question_text": "$\\lim_{x\\to\\infty} x^{\\frac{1}{2}}\\sin\\left(\\frac{1}{x}\\right)$",
+        "final_answer": "$\\infty$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au24_p2",
+    "course": "math_124",
+    "exam": "au24_final",
+    "problem_number": 2,
+    "topic": "derivatives",
+    "concepts": [
+      "derivatives",
+      "product_rule",
+      "chain_rule",
+      "logarithmic_differentiation"
+    ],
+    "points": 12,
+    "stem": "Find the derivatives of the following functions. Do not simplify your answers.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "$f(x) = \\sin^2(\\pi x)\\cos(\\pi^2 x)$",
+        "final_answer": "$f'(x) = 2\\pi \\sin(\\pi x)\\cos(\\pi x)\\cos(\\pi^2 x) - \\pi^2 \\sin^2(\\pi x)\\sin(\\pi^2 x)$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "b",
+        "question_text": "$f(x) = x^2\\sqrt{1+\\sqrt{2x}}$",
+        "final_answer": "$f'(x) = 2x\\sqrt{1 + \\sqrt{2x}} + \\frac{x^2}{2\\sqrt{2x}\\sqrt{1 + \\sqrt{2x}}}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "c",
+        "question_text": "$f(x) = (1+\\ln x)^{\\ln x}$",
+        "final_answer": "$f'(x) = \\left(\\frac{\\ln x}{x(1 + \\ln x)} + \\frac{\\ln(1 + \\ln x)}{x}\\right) \\cdot (1 + \\ln x)^{\\ln x}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au24_p3",
+    "course": "math_124",
+    "exam": "au24_final",
+    "problem_number": 3,
+    "topic": "graph_analysis",
+    "concepts": [
+      "differentiability",
+      "composition_of_functions",
+      "derivatives_from_graphs",
+      "limits_from_graphs"
+    ],
+    "points": 8,
+    "stem": "The questions below are based on the graphs of $y = f(x)$ (solid line) and $y = g(x)$ (dashed line) below.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "List all values of $x$ where the function $f$ is not differentiable.",
+        "final_answer": "$x = -2, -1, 1, 7$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-03.png",
+        "source_page_image": "review_md/Au24_images/q-03.png"
+      },
+      {
+        "label": "b",
+        "question_text": "List all the values of $x$ in the interval $[5, 14]$ where the function $k(x) = g(f(x))$ is not differentiable.",
+        "final_answer": "$x = 7$ or $x = 11$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-03.png",
+        "source_page_image": "review_md/Au24_images/q-03.png"
+      },
+      {
+        "label": "c",
+        "question_text": "$g'(12) = $",
+        "final_answer": "$g'(12) = \\frac{1}{3}$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-03.png",
+        "source_page_image": "review_md/Au24_images/q-03.png"
+      },
+      {
+        "label": "d",
+        "question_text": "$\\lim_{x\\to 3^+} (f(g(x))) = $",
+        "final_answer": "$\\lim_{x \\to 3^+} (f(g(x))) = 3$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-03.png",
+        "source_page_image": "review_md/Au24_images/q-03.png"
+      },
+      {
+        "label": "e",
+        "question_text": "If $h(x) = \\frac{g(x)}{f(x)}$, then $h'(3) = $ and $\\lim_{x\\to 11^+} h(x) = $",
+        "final_answer": "$h'(3) = -\\frac{13}{96}$ and $\\lim_{x \\to 11^+} h(x) = -\\infty$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-03.png",
+        "source_page_image": "review_md/Au24_images/q-03.png"
+      },
+      {
+        "label": "f",
+        "question_text": "$\\lim_{x\\to 9} \\frac{g(x)}{f(x)-1} = $",
+        "final_answer": "$-\\frac{2}{3}$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-03.png",
+        "source_page_image": "review_md/Au24_images/q-03.png"
+      },
+      {
+        "label": "g",
+        "question_text": "If $k(x) = g(f(x))$, then $k'(0) = $",
+        "final_answer": "$-\\frac{2}{3}$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-03.png",
+        "source_page_image": "review_md/Au24_images/q-03.png"
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au24_p4",
+    "course": "math_124",
+    "exam": "au24_final",
+    "problem_number": 4,
+    "topic": "implicit_differentiation",
+    "concepts": [
+      "implicit_differentiation",
+      "tangent_line",
+      "second_derivative"
+    ],
+    "points": 12,
+    "stem": "A curve is given implicitly by the equation $2(x^2+y^2)^2 = 25(x^2-y^2)$.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "Find the equation of the tangent line to the curve at the point $(3, 1)$.",
+        "final_answer": "$y - 1 = -\\frac{9}{13}(x - 3)$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "b",
+        "question_text": "Compute the value of $y''$ at the point $(3, 1)$.",
+        "final_answer": "$y'' = -\\frac{3000}{2197}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au24_p5",
+    "course": "math_124",
+    "exam": "au24_final",
+    "problem_number": 5,
+    "topic": "linear_approximation",
+    "concepts": [
+      "parametric_equations",
+      "linearization",
+      "derivatives"
+    ],
+    "points": 13,
+    "stem": "Consider the curve defined by the parametric equations $x(t) = 2t + \\ln t$ and $y(t) = t^3 - 2t$, where $t > 0$. Note that $(2, -1)$ is the point on the curve where $t = 1$.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "Through linearization find an approximation of the $y$-coordinate of point $(1.9, y)$ on the curve.",
+        "final_answer": "$y = f(1.9) \\approx -1 + \\frac{1}{3}(1.9 - 2) = -\\frac{31}{30} \\approx -1.033$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "b",
+        "question_text": "Is it an over- or under-estimate? Justify your answer.",
+        "final_answer": "Under-estimate",
+        "depends_on": "a",
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au24_p6",
+    "course": "math_124",
+    "exam": "au24_final",
+    "problem_number": 6,
+    "topic": "related_rates",
+    "concepts": [
+      "related_rates",
+      "geometry",
+      "area"
+    ],
+    "points": 12,
+    "stem": null,
+    "parts": [
+      {
+        "label": null,
+        "question_text": "Consider the given isosceles triangle of base 10 inches and side lengths $x$ inches. If $x$ is increasing at the rate of 3 in/min., at what rate is the triangle's area increasing when $x = 13$ inches?",
+        "final_answer": "$\\frac{dA}{dt} = \\frac{65}{4}$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-06.png",
+        "source_page_image": "review_md/Au24_images/q-06.png"
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au24_p7",
+    "course": "math_124",
+    "exam": "au24_final",
+    "problem_number": 7,
+    "topic": "optimization",
+    "concepts": [
+      "optimization",
+      "geometry",
+      "trigonometry"
+    ],
+    "points": 13,
+    "stem": null,
+    "parts": [
+      {
+        "label": null,
+        "question_text": "Starting with a rectangle 4 inches high and 6 inches wide, construct the interior line segments as pictured. Find the location P so that the angle $\\theta$ is as big as possible. Hint: $\\alpha + \\theta + \\beta = \\pi$ radians.",
+        "final_answer": "$x = -2 + 2\\sqrt{6} \\approx 2.899$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-07.png",
+        "source_page_image": "review_md/Au24_images/q-07.png"
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au24_p8",
+    "course": "math_124",
+    "exam": "au24_final",
+    "problem_number": 8,
+    "topic": "curve_sketching",
+    "concepts": [
+      "curve_sketching",
+      "intercepts",
+      "asymptotes",
+      "critical_points",
+      "intervals_of_increase_decrease",
+      "local_extrema",
+      "concavity",
+      "inflection_points",
+      "graphing"
+    ],
+    "points": 18,
+    "stem": "Consider the function $f(x) = 3xe^{-x^2/6}$.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "Find the $y$-intercept of the function.",
+        "final_answer": "$(0, 0)$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "b",
+        "question_text": "Find the asymptote(s) of the function if any.",
+        "final_answer": "No vertical intercepts",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "c",
+        "question_text": "Find all critical numbers of $f(x)$.",
+        "final_answer": "$x = -\\sqrt{3}, \\sqrt{3}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "d",
+        "question_text": "List all intervals where $f$ is increasing and all intervals where $f$ is decreasing.",
+        "final_answer": "$f(x)$ is increasing if $-\\sqrt{3} < x < \\sqrt{3}$; decreasing if $x < -\\sqrt{3}$ or $x > \\sqrt{3}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "e",
+        "question_text": "Determine all points $(a, b)$ (both coordinates) where $f$ has a local maximum or a local minimum.",
+        "final_answer": "Relative minimum at $x = -\\sqrt{3}$, points $(-\\sqrt{3}, -3\\sqrt{3}e^{-1/2})$; Relative maximum at $x = \\sqrt{3}$, points $(\\sqrt{3}, 3\\sqrt{3}e^{-1/2})$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "f",
+        "question_text": "List all intervals, where $f$ is concave up and all intervals where $f$ is concave down.",
+        "final_answer": "$f''(x) = 0$ gives $x = -3, 0, 3$; $f$ is concave down if $x \\in (-\\infty, -3) \\cup (0, 3)$; concave up if $x \\in (-3, 0) \\cup (3, \\infty)$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "g",
+        "question_text": "Determine all points $(a, b)$ that are inflection points of $f$.",
+        "final_answer": "Inflection points are $(-3, -9e^{-3/2})$, $(0, 0)$, and $(3, 9e^{-3/2})$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "h",
+        "question_text": "Sketch the graph of $y = f(x)$ on the grid provided below. Be sure to include any asymptotes in your picture, and to mark the coordinates of all local maxima, local minima, and inflection points (if any exist).",
+        "final_answer": "Graph with extrema and inflection points marked",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au24_images/q-08.png",
+        "source_page_image": "review_md/Au24_images/q-08.png"
+      }
+    ]
+  }
+]

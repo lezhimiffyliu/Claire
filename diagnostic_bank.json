@@ -1,0 +1,358 @@
+{
+  "version": "2.0",
+  "description": "Static diagnostic question bank with verified answers. Topics aligned with math124_taxonomy.py",
+  "questions": [
+    {
+      "id": "deriv_001",
+      "track": "calc_i",
+      "topic": "derivative_rules",
+      "concepts": ["power_rule", "sum_difference_rule"],
+      "difficulty": "easy",
+      "prompt": "What is $\\frac{d}{dx}\\bigl[x^3 - 4x + 7\\bigr]$?",
+      "choices": [
+        "$3x^2 - 4$",
+        "$3x^2 - 4x$",
+        "$x^2 - 4$",
+        "$3x^2 - 4 + C$"
+      ],
+      "correct_index": 0,
+      "explanation": "Power rule: d/dx[xⁿ] = nxⁿ⁻¹. So d/dx[x³] = 3x², d/dx[-4x] = -4, d/dx[7] = 0."
+    },
+    {
+      "id": "deriv_002",
+      "track": "calc_i",
+      "topic": "chain_rule_and_implicit",
+      "concepts": ["chain_rule", "chain_rule_with_trig"],
+      "difficulty": "medium",
+      "prompt": "Find $\\frac{d}{dx}\\bigl[\\sin(x^2)\\bigr]$.",
+      "choices": [
+        "$2x\\cos(x^2)$",
+        "$\\cos(x^2)$",
+        "$2x\\sin(x^2)$",
+        "$\\cos(2x)$"
+      ],
+      "correct_index": 0,
+      "explanation": "Chain rule: d/dx[sin(u)] = cos(u)·du/dx. Here u = x², so du/dx = 2x. Result: 2x·cos(x²)."
+    },
+    {
+      "id": "deriv_003",
+      "track": "calc_i",
+      "topic": "derivative_rules",
+      "concepts": ["product_rule", "exponential_derivative"],
+      "difficulty": "medium",
+      "prompt": "Find $\\frac{d}{dx}\\bigl[x \\cdot e^x\\bigr]$.",
+      "choices": [
+        "$e^x + xe^x$",
+        "$xe^x$",
+        "$e^x$",
+        "$x + e^x$"
+      ],
+      "correct_index": 0,
+      "explanation": "Product rule: (fg)' = f'g + fg'. Here f = x, g = eˣ. So f' = 1, g' = eˣ. Result: 1·eˣ + x·eˣ = eˣ + xeˣ."
+    },
+    {
+      "id": "opt_001",
+      "track": "calc_i",
+      "topic": "extrema_and_shape",
+      "concepts": ["second_derivative_test", "local_extrema", "critical_points"],
+      "difficulty": "medium",
+      "prompt": "At $x = a$ you find $f'(a) = 0$ and $f''(a) > 0$. What can you conclude about $x = a$?",
+      "choices": [
+        "Local minimum at $x = a$",
+        "Local maximum at $x = a$",
+        "Inflection point at $x = a$",
+        "The second derivative test is inconclusive"
+      ],
+      "correct_index": 0,
+      "explanation": "Second derivative test: f''(a) > 0 means the curve is concave up at a critical point → local minimum."
+    },
+    {
+      "id": "opt_002",
+      "track": "calc_i",
+      "topic": "extrema_and_shape",
+      "concepts": ["absolute_extrema", "closed_interval_method", "critical_points"],
+      "difficulty": "medium",
+      "prompt": "To find the **absolute maximum** of $f(x) = x^2 - 4x$ on $[0,\\,5]$, what do you need to check?",
+      "choices": [
+        "Critical points inside $(0,5)$ **and** both endpoints $x=0$, $x=5$",
+        "Only where $f'(x) = 0$",
+        "Only the endpoints $x = 0$ and $x = 5$",
+        "Where $f''(x) = 0$ (inflection points)"
+      ],
+      "correct_index": 0,
+      "explanation": "Closed Interval Method: on [a,b], check interior critical points AND endpoints, then compare all values."
+    },
+    {
+      "id": "lim_001",
+      "track": "calc_i",
+      "topic": "limits_and_continuity",
+      "concepts": ["trig_limits", "limit_laws"],
+      "difficulty": "easy",
+      "prompt": "Evaluate $\\displaystyle\\lim_{x \\to 0} \\frac{\\sin(3x)}{x}$.",
+      "choices": [
+        "$3$",
+        "$1$",
+        "$0$",
+        "Does not exist"
+      ],
+      "correct_index": 0,
+      "explanation": "Standard limit: lim(x→0) sin(kx)/x = k. Rewrite as 3·sin(3x)/(3x) → 3·1 = 3."
+    },
+    {
+      "id": "lim_002",
+      "track": "calc_i",
+      "topic": "lhopitals_rule",
+      "concepts": ["indeterminate_zero_over_zero", "lhopital_application"],
+      "difficulty": "medium",
+      "prompt": "To evaluate $\\displaystyle\\lim_{x \\to 0} \\frac{e^x - 1}{x}$ using L'Hôpital's Rule, what must you first verify?",
+      "choices": [
+        "The limit has the form $\\frac{0}{0}$ or $\\frac{\\infty}{\\infty}$",
+        "Both functions are differentiable everywhere",
+        "The limit exists",
+        "The functions are continuous at $x = 0$"
+      ],
+      "correct_index": 0,
+      "explanation": "L'Hôpital's Rule requires the indeterminate form 0/0 or ∞/∞. Direct substitution gives (1-1)/0 = 0/0, so it applies."
+    },
+    {
+      "id": "related_001",
+      "track": "calc_i",
+      "topic": "related_rates",
+      "concepts": ["related_rates_setup", "implicit_time_differentiation", "geometric_related_rates"],
+      "difficulty": "medium",
+      "prompt": "A ladder 10 ft long leans against a wall. The bottom slides away at 2 ft/s. To find how fast the top slides down when the bottom is 6 ft from the wall, you should:",
+      "choices": [
+        "Use $x^2 + y^2 = 100$, differentiate with respect to $t$, then substitute $x=6$ and $dx/dt=2$",
+        "Solve for $y$ explicitly and differentiate with respect to $x$",
+        "Use L'Hôpital's Rule on the position function",
+        "Find the critical points of the ladder's height function"
+      ],
+      "correct_index": 0,
+      "explanation": "Related rates: write the geometric relationship (Pythagorean theorem), differentiate implicitly with respect to time, plug in known values."
+    },
+    {
+      "id": "opt_003",
+      "track": "calc_i",
+      "topic": "optimization",
+      "concepts": ["optimization_setup", "constraint_equation", "objective_function"],
+      "difficulty": "medium",
+      "prompt": "A farmer wants to fence a rectangular area with 200 ft of fencing. What is the first step to maximize the area?",
+      "choices": [
+        "Write constraint $2x + 2y = 200$ and objective $A = xy$, then substitute to get $A(x)$",
+        "Set $dA/dx = 0$ immediately",
+        "Use the second derivative test on $A = xy$",
+        "Graph the function and find the maximum visually"
+      ],
+      "correct_index": 0,
+      "explanation": "Optimization setup: identify constraint equation (perimeter), objective function (area), then use substitution to reduce to one variable."
+    },
+    {
+      "id": "curve_001",
+      "track": "calc_i",
+      "topic": "curve_sketching",
+      "concepts": ["asymptote_analysis", "monotonicity_analysis", "concavity_analysis"],
+      "difficulty": "medium",
+      "prompt": "To sketch $f(x) = \\frac{x^2}{x-1}$, which of these should you find?",
+      "choices": [
+        "Domain, asymptotes, intercepts, intervals of increase/decrease, concavity",
+        "Only the x-intercepts",
+        "Only where $f'(x) = 0$",
+        "The antiderivative of $f$"
+      ],
+      "correct_index": 0,
+      "explanation": "Curve sketching checklist: domain, symmetry, intercepts, asymptotes, f' analysis (monotonicity), f'' analysis (concavity), then sketch."
+    },
+    {
+      "id": "int_001",
+      "track": "calc_ii",
+      "topic": "integration_by_parts",
+      "concepts": [],
+      "difficulty": "medium",
+      "prompt": "For $\\displaystyle\\int x e^x\\,dx$, which technique works best?",
+      "choices": [
+        "Integration by parts ($u = x$, $dv = e^x\\,dx$)",
+        "$u$-substitution with $u = xe^x$",
+        "Partial fractions",
+        "Trigonometric substitution"
+      ],
+      "correct_index": 0,
+      "explanation": "x·eˣ is a polynomial × exponential — the classic integration-by-parts setup. Use LIATE: u = x (Algebraic), dv = eˣdx."
+    },
+    {
+      "id": "int_002",
+      "track": "calc_ii",
+      "topic": "u_substitution",
+      "concepts": [],
+      "difficulty": "easy",
+      "prompt": "For $\\displaystyle\\int 2x\\cos(x^2)\\,dx$, which substitution works?",
+      "choices": [
+        "Let $u = x^2$, so $du = 2x\\,dx$",
+        "Let $u = \\cos(x^2)$",
+        "Integration by parts with $u = 2x$",
+        "No substitution needed"
+      ],
+      "correct_index": 0,
+      "explanation": "Notice 2x dx is exactly du when u = x². The integral becomes ∫cos(u)du = sin(u) + C = sin(x²) + C."
+    },
+    {
+      "id": "int_003",
+      "track": "calc_ii",
+      "topic": "integration_by_parts",
+      "concepts": [],
+      "difficulty": "easy",
+      "prompt": "For $\\displaystyle\\int x\\ln(x)\\,dx$, which technique fits best?",
+      "choices": [
+        "Integration by parts ($u = \\ln x$, $dv = x\\,dx$)",
+        "$u$-substitution with $u = \\ln x$",
+        "Partial fractions",
+        "Trigonometric substitution"
+      ],
+      "correct_index": 0,
+      "explanation": "ln(x) lacks a simple antiderivative on its own. By LIATE, choose u = ln(x) (Logarithmic), dv = x dx."
+    },
+    {
+      "id": "series_001",
+      "track": "calc_ii",
+      "topic": "convergence_tests",
+      "concepts": [],
+      "difficulty": "medium",
+      "prompt": "Which test would you apply first to $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{n}{2^n}$?",
+      "choices": [
+        "Ratio Test: check $\\lim_{n\\to\\infty} |a_{n+1}/a_n|$",
+        "Integral Test",
+        "Divergence Test: check $\\lim_{n\\to\\infty} a_n$",
+        "Alternating Series Test"
+      ],
+      "correct_index": 0,
+      "explanation": "Exponential denominator 2ⁿ suggests Ratio Test. The limit is 1/2 < 1, so the series converges."
+    },
+    {
+      "id": "series_002",
+      "track": "calc_ii",
+      "topic": "power_series",
+      "concepts": [],
+      "difficulty": "hard",
+      "prompt": "For $\\displaystyle\\sum_{n=0}^{\\infty}\\frac{x^n}{n!}$, what is the radius of convergence $R$?",
+      "choices": [
+        "$R = \\infty$ (converges for all $x$)",
+        "$R = 1$",
+        "$R = 0$",
+        "$R = e$"
+      ],
+      "correct_index": 0,
+      "explanation": "This is the Taylor series for eˣ. By Ratio Test: |aₙ₊₁/aₙ| = |x|/(n+1) → 0 < 1 for all x. So R = ∞."
+    },
+    {
+      "id": "improper_001",
+      "track": "calc_ii",
+      "topic": "improper_integrals",
+      "concepts": [],
+      "difficulty": "medium",
+      "prompt": "Why is $\\displaystyle\\int_1^{\\infty}\\frac{1}{x^2}\\,dx$ called an improper integral, and how do you handle it?",
+      "choices": [
+        "The upper limit is $\\infty$; replace it with $b$ and take $\\lim_{b\\to\\infty}$",
+        "The integrand blows up at $x=0$; split there",
+        "The function is not continuous, so you cannot integrate it",
+        "Apply L'Hôpital's rule directly on $1/x^2$"
+      ],
+      "correct_index": 0,
+      "explanation": "Infinite upper bound → improper integral. Evaluate ∫₁ᵇ (1/x²)dx = [-1/x]₁ᵇ = -1/b + 1, then take limit as b→∞ to get 1."
+    },
+    {
+      "id": "partial_001",
+      "track": "calc_iii",
+      "topic": "partial_derivatives",
+      "concepts": [],
+      "difficulty": "easy",
+      "prompt": "Compute $\\dfrac{\\partial}{\\partial x}\\bigl[x^2 y + e^y\\bigr]$.",
+      "choices": [
+        "$2xy$",
+        "$2xy + e^y$",
+        "$x^2 + ye^y$",
+        "$2x + e^y$"
+      ],
+      "correct_index": 0,
+      "explanation": "Treat y as constant: ∂/∂x[x²y] = 2xy (y is constant coefficient), ∂/∂x[eʸ] = 0 (no x dependence)."
+    },
+    {
+      "id": "lagrange_001",
+      "track": "calc_iii",
+      "topic": "lagrange_multipliers",
+      "concepts": [],
+      "difficulty": "medium",
+      "prompt": "To maximize $f(x,y)$ subject to $g(x,y) = 0$, what is the standard Calc III method?",
+      "choices": [
+        "Lagrange multipliers: solve $\\nabla f = \\lambda\\,\\nabla g$",
+        "Set $f_x = 0$ and $f_y = 0$, ignoring the constraint",
+        "Substitute the constraint and reduce to one variable only",
+        "Apply the second derivative test to $f$ alone"
+      ],
+      "correct_index": 0,
+      "explanation": "Equality constraints in Calc III use Lagrange multipliers: ∇f = λ∇g together with g = 0."
+    },
+    {
+      "id": "double_001",
+      "track": "calc_iii",
+      "topic": "double_integrals",
+      "concepts": [],
+      "difficulty": "medium",
+      "prompt": "You need $\\iint_D f(x,y)\\,dA$ where $D: x^2+y^2\\le 4$. Which coordinate system is usually best?",
+      "choices": [
+        "Polar coordinates ($x = r\\cos\\theta$, $y = r\\sin\\theta$, $dA = r\\,dr\\,d\\theta$)",
+        "Cartesian — it always works fine",
+        "Cylindrical (that's only for 3-D)",
+        "Spherical coordinates"
+      ],
+      "correct_index": 0,
+      "explanation": "Circular region → polar coordinates simplify both the boundary (r ≤ 2) and often the integrand."
+    },
+    {
+      "id": "gradient_001",
+      "track": "calc_iii",
+      "topic": "directional_derivative",
+      "concepts": [],
+      "difficulty": "medium",
+      "prompt": "The directional derivative of $f$ in direction $\\hat{u}$ equals $D_{\\hat{u}}f = \\nabla f \\cdot \\hat{u}$. What does this measure?",
+      "choices": [
+        "The rate of change of $f$ as you move in direction $\\hat{u}$",
+        "The maximum value of $f$ along $\\hat{u}$",
+        "The surface area of $z = f(x,y)$ in direction $\\hat{u}$",
+        "The curvature of $f$ along $\\hat{u}$"
+      ],
+      "correct_index": 0,
+      "explanation": "Directional derivative = instantaneous rate of change of f as you walk in direction û."
+    },
+    {
+      "id": "extrema_001",
+      "track": "calc_iii",
+      "topic": "extrema_on_bounded_region",
+      "concepts": [],
+      "difficulty": "hard",
+      "prompt": "Finding extrema of $f(x,y) = x^2+y^2-xy$ on the closed triangle $x\\ge 0,\\; y\\ge 0,\\; x+y\\le 2$. What must you check?",
+      "choices": [
+        "Interior critical points ($f_x = f_y = 0$) **and** values on all three boundary edges",
+        "Only where $f_x = 0$",
+        "Only the three corner vertices",
+        "Only the interior — boundaries don't matter for smooth functions"
+      ],
+      "correct_index": 0,
+      "explanation": "Closed bounded region: Extreme Value Theorem guarantees max/min exist. Check interior critical points AND all boundary segments."
+    },
+    {
+      "id": "crit_multi_001",
+      "track": "calc_iii",
+      "topic": "critical_points_multivariable",
+      "concepts": [],
+      "difficulty": "medium",
+      "prompt": "At a critical point of $f(x,y)$, you compute $f_{xx} = 4$, $f_{yy} = 1$, $f_{xy} = -3$. The discriminant $D = f_{xx}f_{yy} - (f_{xy})^2$ is:",
+      "choices": [
+        "$D = -5$, so this is a saddle point",
+        "$D = 5$, so this is a local minimum",
+        "$D = 5$, so this is a local maximum",
+        "$D = 0$, so the test is inconclusive"
+      ],
+      "correct_index": 0,
+      "explanation": "D = 4·1 - (-3)² = 4 - 9 = -5 < 0, which means saddle point."
+    }
+  ]
+}

@@ -1,0 +1,296 @@
+[
+  {
+    "id": "uw_math_124_au25_p1",
+    "course": "math_124",
+    "exam": "au25_final",
+    "problem_number": 1,
+    "topic": "limits",
+    "concepts": [
+      "limits",
+      "indeterminate_forms"
+    ],
+    "points": 12,
+    "stem": "Find the following limits or explain why the limit does not exist. Give exact answers.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "$\\lim_{x\\to\\infty} x\\ln(x+2) - x\\ln(x)$",
+        "final_answer": "$2$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "b",
+        "question_text": "$\\lim_{x\\to 0^+} x^x$",
+        "final_answer": "$1$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "c",
+        "question_text": "$\\lim_{x\\to \\frac{\\pi}{2}} \\frac{\\sin(3x) + 1 + 3\\cos(x)}{\\cos(5x) + 1 - \\sin(x)}$",
+        "final_answer": "$\\frac{3}{5}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au25_p2",
+    "course": "math_124",
+    "exam": "au25_final",
+    "problem_number": 2,
+    "topic": "differentiation",
+    "concepts": [
+      "derivatives",
+      "chain_rule",
+      "product_rule",
+      "quotient_rule"
+    ],
+    "points": 15,
+    "stem": "Differentiate the following functions using the rules of differentiation. Do not simplify.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "$f(x) = e^{-\\frac{x^2}{2}} + x^2 \\cos(x)$",
+        "final_answer": "$f'(x) = (-x) \\cdot e^{-\\frac{x^2}{2}} + (2x) \\cdot \\cos(x) + (\\sin x) \\cdot (x^2)$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "b",
+        "question_text": "$g(x) = \\left(\\sin(x^3)\\right)^{\\ln(x)}$",
+        "final_answer": "$g'(x) = \\sin(x^3)^{\\ln(x)} \\cdot \\left(\\left(\\frac{1}{\\sin(x^3)} \\cdot \\cos(x^3) \\cdot 3x^2\\right) \\cdot (\\ln(x)) + \\left(\\ln(\\sin(x^3))\\right) \\cdot \\left(\\frac{1}{x}\\right)\\right)$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "c",
+        "question_text": "$h(x) = \\frac{\\arctan x}{x}$",
+        "final_answer": "$h'(x) = \\frac{\\left(\\frac{x}{1+x^2}\\right) - \\arctan(x)}{x^2}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au25_p3",
+    "course": "math_124",
+    "exam": "au25_final",
+    "problem_number": 3,
+    "topic": "linear_approximation",
+    "concepts": [
+      "linear_approximation",
+      "derivatives"
+    ],
+    "points": 9,
+    "stem": "In this problem, we will use linear approximations to estimate the value of $(8.1)^{1/3}$.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "Compute $dy/dx$ for $y = x^{1/3}$, and use this to give the linear approximation $L(x)$ to this function near the point $a = 8$.",
+        "final_answer": "$L(x) = 2 + \\frac{1}{12}(x-8)$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "b",
+        "question_text": "Using this linear approximation, estimate $(8.12)^{1/3}$. State your answer in exact form.",
+        "final_answer": "$(8.12)^{1/3} \\approx 2.01$",
+        "depends_on": "a",
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au25_p4",
+    "course": "math_124",
+    "exam": "au25_final",
+    "problem_number": 4,
+    "topic": "implicit_differentiation",
+    "concepts": [
+      "implicit_differentiation",
+      "tangent_line"
+    ],
+    "points": 10,
+    "stem": "Consider the curve defined implicitly by\n\n$$xe^y + y\\sin(x) - y^2 = -1$$\n\nFind the equation of tangent line to the above curve at the point $(0, 1)$.",
+    "parts": [
+      {
+        "label": null,
+        "question_text": "Find the equation of tangent line to the above curve at the point $(0, 1)$.",
+        "final_answer": "$y - 1 = \\frac{e+1}{2}x$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au25_p5",
+    "course": "math_124",
+    "exam": "au25_final",
+    "problem_number": 5,
+    "topic": "parametric_curves",
+    "concepts": [
+      "parametric_equations",
+      "tangent_line",
+      "derivatives"
+    ],
+    "points": 12,
+    "stem": "Answer the following questions based on the parametric curve\n\n$$x(t) = \\cos(2t) \\qquad y(t) = \\sin(3t)$$\n\nwhere $-\\frac{\\pi}{2} < t < \\frac{\\pi}{2}$. Its graph is given on the right.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "Find the coordinates of all the points on the curve where the tangent line is horizontal.",
+        "final_answer": "$(0.5, \\pm 1)$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au25_images/q-05.png",
+        "source_page_image": "review_md/Au25_images/q-05.png"
+      },
+      {
+        "label": "b",
+        "question_text": "The curve intersects itself at the point $(-1/2, 0)$. Find the equations of the tangent lines at this point. Give your final answers in the form $y = mx + b$.",
+        "final_answer": "$y = \\sqrt{3}x \\pm \\frac{\\sqrt{3}}{2}$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au25_images/q-05.png",
+        "source_page_image": "review_md/Au25_images/q-05.png"
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au25_p6",
+    "course": "math_124",
+    "exam": "au25_final",
+    "problem_number": 6,
+    "topic": "related_rates",
+    "concepts": [
+      "related_rates",
+      "derivatives",
+      "geometry"
+    ],
+    "points": 12,
+    "stem": "There are elastic ropes between points $PQ$ and $PR$. The distance $QO$ is 8 centimeters and the distance $OR$ is 5 centimeters. Point $P$ is being pulled up so it is rising at a rate of 6 centimeters per second. At what rate is the angle $\\theta$ at the corner $P$ changing when the distance $OP$ is 10 centimeters?\n\nPicture is not to scale.",
+    "parts": [
+      {
+        "label": null,
+        "question_text": "At what rate is the angle $\\theta$ at the corner $P$ changing when the distance $OP$ is 10 centimeters?",
+        "final_answer": "$\\frac{d\\theta}{dt} = -\\frac{546}{1025}$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au25_images/q-06.png",
+        "source_page_image": "review_md/Au25_images/q-06.png"
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au25_p7",
+    "course": "math_124",
+    "exam": "au25_final",
+    "problem_number": 7,
+    "topic": "optimization",
+    "concepts": [
+      "optimization",
+      "max_min",
+      "volume",
+      "cylinder",
+      "cone"
+    ],
+    "points": 11,
+    "stem": "Find the dimensions of the cylinder of maximum volume contained in a cone of height 6 and radius 8 units. Make sure you verify that your answer indeed gives maximum volume.",
+    "parts": [
+      {
+        "label": null,
+        "question_text": "Find the dimensions of the cylinder of maximum volume contained in a cone of height 6 and radius 8 units. Make sure you verify that your answer indeed gives maximum volume.",
+        "final_answer": "$h = 2$ and $r = \\frac{16}{3}$",
+        "depends_on": null,
+        "has_diagram": true,
+        "diagram_image": "review_md/Au25_images/q-07.png",
+        "source_page_image": "review_md/Au25_images/q-07.png"
+      }
+    ]
+  },
+  {
+    "id": "uw_math_124_au25_p8",
+    "course": "math_124",
+    "exam": "au25_final",
+    "problem_number": 8,
+    "topic": "curve_sketching",
+    "concepts": [
+      "intercepts",
+      "asymptotes",
+      "critical_points",
+      "intervals_of_increase_decrease",
+      "concavity",
+      "inflection_points",
+      "curve_sketching"
+    ],
+    "points": 19,
+    "stem": "Let $f(x) = \\frac{3x^2 - 1}{3x^3}$.",
+    "parts": [
+      {
+        "label": "a",
+        "question_text": "Determine all $x$ and $y$-intercepts for the curve. If there are none, say so.",
+        "final_answer": "$x = \\pm 1/\\sqrt{3}$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "b",
+        "question_text": "Determine any vertical asymptotes and horizontal asymptotes for the curve $y = f(x)$. If there are none, say so.",
+        "final_answer": "$x = 0$ is the vertical asymptote, $y = 0$ is the horizontal asymptote",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "c",
+        "question_text": "Find all critical numbers for $f(x)$. Find the intervals on which $f(x)$ is increasing, and the intervals on which $f(x)$ is decreasing. Determine $x$ and $y$-coordinates of all local minimum(s) and local maximum(s).",
+        "final_answer": "$f$ is increasing on $(-1, 0)$ and $(0, 1)$ and decreasing on $(-\\infty, -1)$ and $(1, \\infty)$. Local minimum at $(-1, -2/3)$ and local maximum at $(1, 2/3)$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "d",
+        "question_text": "Find the intervals on which $f(x)$ is concave up and concave down. Find the $x$ and $y$-coordinates of all of the inflection points.",
+        "final_answer": "Concave up on $(-\\sqrt{2}, 0)$ and $(\\sqrt{2}, \\infty)$ and concave down on $(-\\infty, -\\sqrt{2})$ and $(0, \\sqrt{2})$. Inflection points at $(-\\sqrt{2}, -5\\sqrt{2}/12)$ and $(\\sqrt{2}, 5\\sqrt{2}/12)$",
+        "depends_on": null,
+        "has_diagram": false,
+        "diagram_image": null,
+        "source_page_image": null
+      },
+      {
+        "label": "e",
+        "question_text": "Sketch the curve using ALL of the information in (a)-(d). Mark any important points that came up in your computations.",
+        "final_answer": "Graph showing all features including asymptotes, intercepts, local extrema, and inflection points",
+        "depends_on": "a",
+        "has_diagram": true,
+        "diagram_image": "review_md/Au25_images/q-08.png",
+        "source_page_image": "review_md/Au25_images/q-08.png"
+      }
+    ]
+  }
+]
