@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 import streamlit as st
 
 # Limits
-ANON_FREE_QUERIES = 3       # Anonymous users get 3 total
-USER_FREE_PREMIUM = 5       # Logged-in users get 5 premium/day
+ANON_FREE_QUERIES = 5       # Anonymous users get 5 Claude queries total
+USER_FREE_PREMIUM = 5       # Logged-in users get 5 Claude queries/day
+# After quota: switch to DeepSeek (unlimited basic tier)
 
 _supabase = None
 
@@ -144,7 +145,7 @@ def _get_user_usage(user_id: str) -> dict:
         return {"premium_today": 0, "last_date": _today_key()}
 
     try:
-        resp = client.table("user_quota").select("*").eq("user_id", user_id).execute()
+        resp = client.table("daily_quota").select("*").eq("user_id", user_id).execute()
         if resp.data:
             row = resp.data[0]
             # Reset if it's a new day
@@ -167,7 +168,7 @@ def _set_user_usage(user_id: str, premium_today: int):
         return
 
     try:
-        client.table("user_quota").upsert({
+        client.table("daily_quota").upsert({
             "user_id": user_id,
             "premium_today": premium_today,
             "last_date": _today_key(),
@@ -249,3 +250,54 @@ def get_quota_status() -> dict:
             "limit": ANON_FREE_QUERIES,
             "can_premium": remaining > 0,
         }
+
+
+# ────────────────────────────────────────────────────────────
+# Pro User Check (Supabase payments table)
+# ────────────────────────────────────────────────────────────
+
+def is_pro_user(force_refresh: bool = False) -> bool:
+    """
+    Check if current user is a Pro subscriber.
+
+    Checks Supabase `payments` table for active subscription.
+    Result is cached in session_state for performance.
+
+    Pro benefits:
+    - Claude Sonnet for all queries
+    - Course-specific problem generation
+    - Unlimited usage
+    """
+    # Return cached result unless force refresh
+    if not force_refresh and "is_pro" in st.session_state:
+        return st.session_state.is_pro
+
+    user_id = get_user_id()
+    if not user_id:
+        st.session_state.is_pro = False
+        return False
+
+    client = _client()
+    if not client:
+        st.session_state.is_pro = False
+        return False
+
+    try:
+        # Check for active subscription
+        resp = client.table("payments").select("status").eq("user_id", user_id).eq("status", "active").limit(1).execute()
+        if resp.data:
+            st.session_state.is_pro = True
+            st.session_state.stripe_customer_id = resp.data[0].get("stripe_customer_id")
+            print(f"[quota] User {user_id[:8]}... is Pro")
+            return True
+    except Exception as e:
+        print(f"[quota] Error checking pro status: {e}")
+
+    st.session_state.is_pro = False
+    return False
+
+
+def clear_pro_cache():
+    """Clear cached pro status. Call after payment to force re-check."""
+    if "is_pro" in st.session_state:
+        del st.session_state.is_pro

@@ -217,7 +217,7 @@ def analyze_files(files: list[tuple[str, bytes]]) -> ExamContext:
     # Extract text from each file
     for filename, file_bytes in files:
         try:
-            text = extract_text_from_file(file_bytes, filename)
+            text, _page_info = extract_text_from_file(file_bytes, filename)
             texts.append(text)
             names.append(filename)
         except Exception as e:

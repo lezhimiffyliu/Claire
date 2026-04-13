@@ -42,8 +42,8 @@
   "second_derivative_test_multivariable": ["optimization"],
   "absolute_extrema_multivariable": ["optimization"],
 
-  "lagrange_multipliers": ["lagrange_multipliers"],
-  "constrained_optimization": ["lagrange_multipliers"],
+  "lagrange_multipliers": ["lagrange_multipliers", "constrained_optimization"],
+  "constrained_optimization": ["constrained_optimization", "lagrange_multipliers"],
 
   "antiderivatives": ["integration"],
   "indefinite_integrals": ["integration"],

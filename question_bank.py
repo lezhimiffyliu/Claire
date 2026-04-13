@@ -17,6 +17,85 @@ from pattern_tools import detect_pattern, PATTERNS
 
 
 # ============================================================
+# EXTRACTION DEBUG STATS
+# ============================================================
+
+# Module-level stats for debugging extraction issues
+_extraction_stats = {}
+
+
+def _reset_extraction_stats(filename: str):
+    """Reset stats for a new file extraction."""
+    _extraction_stats.clear()
+    _extraction_stats.update({
+        "file": filename,
+        "pages": 0,
+        "raw_text_length": 0,
+        # Main question segmentation (new pre-processing step)
+        "main_questions_detected": 0,
+        "main_question_numbers": [],
+        "used_main_segmentation": False,
+        # Pattern matching stats
+        "pattern_matches": {"pattern0": 0, "pattern1": 0, "pattern2": 0},
+        "pattern_match_ids": {"pattern0": [], "pattern1": [], "pattern2": []},
+        # Filtering stats
+        "filtered_too_short": 0,
+        "filtered_duplicate": 0,
+        "filtered_not_calculus": 0,
+        "fallback_paragraph_used": False,
+        # Final results
+        "questions_final": 0,
+        "question_ids_final": [],
+    })
+
+
+def _print_extraction_stats():
+    """Print extraction stats summary."""
+    if not _extraction_stats:
+        return
+
+    stats = _extraction_stats
+    total_matches = sum(stats["pattern_matches"].values())
+    total_filtered = (
+        stats["filtered_too_short"] +
+        stats["filtered_duplicate"] +
+        stats["filtered_not_calculus"]
+    )
+
+    print("\n" + "=" * 60)
+    print("[EXTRACTION DEBUG]")
+    print("=" * 60)
+    print(f"  file:                {stats['file']}")
+    print(f"  pages:               {stats['pages']}")
+    print(f"  raw_text_length:     {stats['raw_text_length']}")
+    print("-" * 40)
+    print("  [Main Question Segmentation]")
+    print(f"  main_q_detected:     {stats['main_questions_detected']}")
+    print(f"  main_q_numbers:      {stats['main_question_numbers']}")
+    print(f"  used_main_segment:   {stats['used_main_segmentation']}")
+    print("-" * 40)
+    print("  [Pattern Matching - only if main segmentation failed]")
+    print(f"  pattern0 matches:    {stats['pattern_matches']['pattern0']}  (Problem/Question N.)")
+    print(f"    → IDs:             {stats['pattern_match_ids']['pattern0']}")
+    print(f"  pattern1 matches:    {stats['pattern_matches']['pattern1']}  (N. + keyword)")
+    print(f"    → IDs:             {stats['pattern_match_ids']['pattern1']}")
+    print(f"  pattern2 matches:    {stats['pattern_matches']['pattern2']}  ((a)(b)(c) subparts)")
+    print(f"    → IDs:             {stats['pattern_match_ids']['pattern2']}")
+    print("-" * 40)
+    print("  [Filtering]")
+    print(f"  filtered_too_short:  {stats['filtered_too_short']}")
+    print(f"  filtered_duplicate:  {stats['filtered_duplicate']}")
+    print(f"  filtered_not_calc:   {stats['filtered_not_calculus']}")
+    print(f"  total_filtered:      {total_filtered}")
+    print(f"  fallback_paragraph:  {stats['fallback_paragraph_used']}")
+    print("-" * 40)
+    print("  [Final Result]")
+    print(f"  questions_final:     {stats['questions_final']}")
+    print(f"  question_ids_final:  {stats['question_ids_final']}")
+    print("=" * 60 + "\n")
+
+
+# ============================================================
 # DATA STRUCTURES
 # ============================================================
 
@@ -61,6 +140,8 @@ class Question:
     pattern: str                     # Legacy coarse pattern (for backwards compat)
     problem_id: str = ""             # Problem identifier (e.g., "Problem 1", "Q2", "(a)")
     difficulty: str = "medium"       # easy/medium/hard
+    question_type: str = "open"      # tf, mcq, or open
+    correct_answer: Optional[str] = None  # For tf/mcq: "True", "B", etc.
     categories: list = field(default_factory=list)  # User-friendly category labels
     topics: list = field(default_factory=list)      # Fine-grained topic IDs (NEW)
     heuristic_file: str = ""         # Path to heuristic .md file
@@ -145,17 +226,57 @@ class Question:
             return [t.replace("_", " ").title() for t in self.topics[:4]]
 
     def format_source(self) -> str:
-        """Format a readable source citation like 'SP18 Midterm 2 Q2'."""
-        # Clean up filename to readable form
+        """Format a readable source citation like 'MATH 125 Final AU24 Problem 2'."""
+        import re
         name = Path(self.source).stem  # Remove extension
 
-        # Common exam naming patterns
-        name = name.replace("_", " ").replace("-", " ")
+        # Parse common exam filename patterns like "125finalA24", "math125_midterm1_sp23"
+        # Extract: course number, exam type, term/year
+        parts = []
 
-        # Add problem identifier if available
+        # Always prefix with MATH if it looks like a course number
+        course_match = re.search(r'(\d{3})', name)
+        if course_match:
+            parts.append(f"MATH {course_match.group(1)}")
+
+        # Detect exam type
+        name_lower = name.lower()
+        if 'final' in name_lower:
+            parts.append("Final")
+        elif 'midterm' in name_lower or 'mid' in name_lower:
+            mid_match = re.search(r'midterm\s*(\d)', name_lower) or re.search(r'mid\s*(\d)', name_lower)
+            if mid_match:
+                parts.append(f"Midterm {mid_match.group(1)}")
+            else:
+                parts.append("Midterm")
+        elif 'quiz' in name_lower:
+            quiz_match = re.search(r'quiz\s*(\d)', name_lower)
+            if quiz_match:
+                parts.append(f"Quiz {quiz_match.group(1)}")
+            else:
+                parts.append("Quiz")
+
+        # Detect term/year (e.g., A24, AU24, SP23, F22, W23)
+        term_match = re.search(r'([ASWF]U?)\s*(\d{2})', name, re.IGNORECASE)
+        if term_match:
+            term_code = term_match.group(1).upper()
+            year = term_match.group(2)
+            term_map = {'A': 'AU', 'AU': 'AU', 'S': 'SP', 'SP': 'SP', 'W': 'WI', 'WI': 'WI', 'F': 'FA', 'FA': 'FA'}
+            term = term_map.get(term_code, term_code)
+            parts.append(f"{term}{year}")
+
+        # Add problem identifier
         if self.problem_id:
-            return f"{name} {self.problem_id}"
-        return name
+            parts.append(self.problem_id)
+
+        # Fallback if nothing matched
+        if not parts:
+            name = name.replace("_", " ").replace("-", " ")
+            if self.problem_id:
+                return f"{name} {self.problem_id}"
+            return name
+
+        return " ".join(parts)
 
     def get_short_id(self) -> str:
         """Get a short identifier for quick reference."""
@@ -299,35 +420,86 @@ class QuestionBank:
 # PDF PARSING
 # ============================================================
 
-def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Extract text from PDF bytes using PyMuPDF."""
+def extract_text_from_pdf(pdf_bytes: bytes) -> tuple[str, list[dict]]:
+    """
+    Extract text from PDF bytes using PyMuPDF.
+
+    Returns:
+        (full_text, page_info_list)
+        page_info_list: [{"page_num": 1, "text": "...", "has_questions": bool}, ...]
+    """
     try:
         import fitz  # PyMuPDF
     except ImportError:
         raise ImportError("PyMuPDF not installed. Run: pip install pymupdf")
 
-    text_parts = []
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page_info = []
 
-    for page in doc:
+    # Pattern to detect question starts: "1." or "1)" at line start
+    question_pattern = re.compile(r'^\s*(\d{1,2})\.\s*\(', re.MULTILINE)
+
+    for i, page in enumerate(doc):
         text = page.get_text()
-        text_parts.append(text)
+
+        # Detect if this page has question patterns
+        matches = question_pattern.findall(text)
+        has_questions = len(matches) > 0
+
+        # Filter out cover pages and mostly empty pages
+        is_cover = (
+            i == 0 and
+            ('name:' in text.lower() or 'exam' in text.lower()) and
+            len(matches) == 0
+        )
+        is_empty = len(text.strip()) < 100
+
+        page_info.append({
+            "page_num": i + 1,
+            "text": text,
+            "has_questions": has_questions,
+            "question_nums": [int(m) for m in matches],
+            "is_cover": is_cover,
+            "is_empty": is_empty,
+        })
+
+        print(f"[PDF DEBUG] Page {i+1}: {len(text)} chars, questions={matches}, cover={is_cover}, empty={is_empty}")
+
+    # Track stats
+    if _extraction_stats:
+        _extraction_stats["pages"] = len(doc)
 
     doc.close()
-    return "\n\n".join(text_parts)
+
+    # Build full text from non-cover, non-empty pages
+    valid_pages = [p for p in page_info if not p["is_cover"] and not p["is_empty"]]
+    full_text = "\n\n".join(p["text"] for p in valid_pages)
+
+    if _extraction_stats:
+        _extraction_stats["raw_text_length"] = len(full_text)
+        _extraction_stats["valid_pages"] = len(valid_pages)
+
+    return full_text, page_info
 
 
-def extract_text_from_file(file_bytes: bytes, filename: str) -> str:
-    """Extract text from file based on extension."""
+def extract_text_from_file(file_bytes: bytes, filename: str) -> tuple[str, list[dict]]:
+    """
+    Extract text from file based on extension.
+
+    Returns:
+        (text, page_info) - page_info is empty list for non-PDF files
+    """
     ext = Path(filename).suffix.lower()
 
     if ext == ".pdf":
         return extract_text_from_pdf(file_bytes)
     elif ext in [".txt", ".md", ".text", ".markdown"]:
-        return file_bytes.decode("utf-8", errors="ignore")
+        text = file_bytes.decode("utf-8", errors="ignore")
+        return text, []
     else:
         # Try as text
-        return file_bytes.decode("utf-8", errors="ignore")
+        text = file_bytes.decode("utf-8", errors="ignore")
+        return text, []
 
 
 # ============================================================
@@ -367,15 +539,33 @@ CRITICAL REQUIREMENTS:
    - Multivariable: partial_derivatives, gradient, double_integrals_rectangular, double_integrals_polar
    - Vector Calc: line_integrals_vector, greens_theorem, stokes_theorem, divergence_theorem
 
+6. Classify question_type as ONE of:
+   - "tf": True/False question
+   - "mcq": Multiple choice with (A)(B)(C)(D) or similar options
+   - "open": Open-ended problem (computation, proof, multi-part with a) b) c), etc.)
+
+7. For "tf" and "mcq" questions, determine the correct answer:
+   - "correct_answer": the correct choice (e.g., "True", "B", "2x")
+   - If you cannot determine the correct answer reliably, set to null
+
 OUTPUT FORMAT (strict JSON, no explanation):
 {
   "questions": [
     {
       "id": "Q1",
-      "text": "Evaluate $\\\\int_0^1 \\\\sqrt{x+y^2} \\\\, dx$",
-      "topics": ["double_integrals_rectangular"],
-      "difficulty": "medium",
-      "is_true_false": false
+      "text": "The derivative of $\\\\sin(x)$ is $\\\\cos(x)$.",
+      "topics": ["derivatives"],
+      "difficulty": "easy",
+      "question_type": "tf",
+      "correct_answer": "True"
+    },
+    {
+      "id": "Q2",
+      "text": "What is $\\\\frac{d}{dx}[x^2]$? (A) $x$ (B) $2x$ (C) $2$ (D) $x^2$",
+      "topics": ["derivatives"],
+      "difficulty": "easy",
+      "question_type": "mcq",
+      "correct_answer": "B"
     }
   ]
 }
@@ -469,6 +659,14 @@ def parse_questions_with_llm(raw_text: str, source: str) -> list[Question]:
             # Get legacy pattern from first topic
             pattern = _topics_to_pattern(topics) if topics else "derivatives"
 
+            # Get question type (tf, mcq, open)
+            question_type = q_data.get("question_type", "open")
+            if question_type not in ("tf", "mcq", "open"):
+                question_type = "open"
+
+            # Get correct answer for tf/mcq
+            correct_answer = q_data.get("correct_answer")
+
             questions.append(Question(
                 id=q_data.get("id", f"Q{i+1}"),
                 text=q_text,
@@ -476,6 +674,8 @@ def parse_questions_with_llm(raw_text: str, source: str) -> list[Question]:
                 pattern=pattern,
                 problem_id=q_data.get("id", f"Problem {i+1}"),
                 difficulty=q_data.get("difficulty", "medium"),
+                question_type=question_type,
+                correct_answer=correct_answer,
                 topics=topics,
             ))
 
@@ -512,6 +712,143 @@ def _extract_json(text: str) -> dict:
             pass
 
     return {}
+
+
+# ============================================================
+# PER-QUESTION LLM REFINEMENT
+# ============================================================
+
+def _refine_question_with_llm(question: Question) -> Question:
+    """
+    Refine a single main question block with LLM.
+
+    - Cleans up math notation (proper LaTeX)
+    - Extracts subparts (a), (b), (c) if present
+    - Mutates and returns the same Question object
+
+    On failure: silently returns original question unchanged.
+    """
+    llm = _get_parsing_llm()
+    if not llm:
+        return question
+
+    prompt = f"""STRICT TRANSCRIPTION: Convert math symbols to LaTeX. Do NOT modify content.
+
+YOU ARE A TRANSCRIBER, NOT A WRITER.
+
+ALLOWED transformations (ONLY these):
+- Z → $\\int$  (corrupted integral symbol)
+- x2 → $x^2$  (missing superscript)
+- √ → $\\sqrt{{}}$
+- lim → $\\lim$
+- sin, cos, ln → $\\sin$, $\\cos$, $\\ln$
+
+FORBIDDEN (will cause rejection):
+- Adding subparts (a), (b), (c) that don't exist in input
+- Changing what the problem asks
+- Guessing missing information
+- Reordering or restructuring
+- Adding "Find", "Evaluate", etc. if not in original
+
+If input has NO (a), (b), (c) → output must have NO (a), (b), (c)
+If something is unclear → keep it exactly as-is, do NOT guess
+
+Input:
+{question.text}
+
+Output JSON (subparts array ONLY if they exist in input):
+{{"cleaned_text": "...", "subparts": []}}"""
+
+    try:
+        original_text = question.text
+        original_len = len(original_text)
+
+        # DEBUG: Show input to LLM
+        print(f"\n{'='*60}")
+        print(f"[refine DEBUG] {question.problem_id} - INPUT:")
+        print(f"{'='*60}")
+        print(original_text[:500] + ("..." if len(original_text) > 500 else ""))
+        print(f"{'='*60}\n")
+
+        response = llm.invoke(prompt)
+
+        # DEBUG: Show raw LLM response
+        print(f"\n{'='*60}")
+        print(f"[refine DEBUG] {question.problem_id} - LLM RAW RESPONSE:")
+        print(f"{'='*60}")
+        print(response.content[:800] + ("..." if len(response.content) > 800 else ""))
+        print(f"{'='*60}\n")
+
+        data = _extract_json(response.content)
+
+        if data and "cleaned_text" in data:
+            cleaned = data["cleaned_text"]
+            cleaned_len = len(cleaned)
+
+            # DEBUG: Show cleaned text
+            print(f"\n{'='*60}")
+            print(f"[refine DEBUG] {question.problem_id} - CLEANED TEXT:")
+            print(f"{'='*60}")
+            print(cleaned[:500] + ("..." if len(cleaned) > 500 else ""))
+            print(f"{'='*60}\n")
+
+            # Safety check: reject if output lost too much content (< 50% of original)
+            if cleaned_len < original_len * 0.5:
+                print(f"[refine] ✗ {question.problem_id} - rejected: output too short ({cleaned_len} < {original_len * 0.5:.0f})")
+                question.metadata["refined"] = False
+                return question
+
+            # Safety check: subparts must match exactly
+            orig_subparts = set(re.findall(r'\([a-z]\)', original_text, re.IGNORECASE))
+            new_subparts = set(re.findall(r'\([a-z]\)', cleaned, re.IGNORECASE))
+
+            # CRITICAL: If LLM added subparts that don't exist in original, reject
+            invented_subparts = new_subparts - orig_subparts
+            if invented_subparts:
+                print(f"[refine] ✗ {question.problem_id} - rejected: LLM invented subparts {invented_subparts}")
+                question.metadata["refined"] = False
+                return question
+
+            # If original has subparts but output lost some, reject
+            if orig_subparts and len(new_subparts) < len(orig_subparts):
+                print(f"[refine] ✗ {question.problem_id} - rejected: lost subparts ({new_subparts} < {orig_subparts})")
+                question.metadata["refined"] = False
+                return question
+
+            question.text = cleaned
+            question.metadata["subparts"] = data.get("subparts", [])
+            question.metadata["refined"] = True
+            print(f"[refine] ✓ {question.problem_id} refined, {len(question.metadata.get('subparts', []))} subparts")
+        else:
+            print(f"[refine] ✗ {question.problem_id} - no valid JSON returned")
+            print(f"[refine DEBUG] Extracted data: {data}")
+
+    except Exception as e:
+        print(f"[refine] ✗ {question.problem_id} - error: {e}")
+        import traceback
+        traceback.print_exc()
+
+    return question
+
+
+def start_background_refinement(questions: list[Question]) -> None:
+    """
+    Start background thread to refine all questions.
+
+    Non-blocking - returns immediately.
+    Questions are mutated in-place as refinement completes.
+    """
+    import threading
+
+    def refine_all():
+        print(f"[refine] Starting background refinement for {len(questions)} questions...")
+        for i, q in enumerate(questions, 1):
+            print(f"[refine] Processing {i}/{len(questions)}: {q.problem_id}")
+            _refine_question_with_llm(q)
+        print(f"[refine] Background refinement complete.")
+
+    thread = threading.Thread(target=refine_all, daemon=True)
+    thread.start()
 
 
 def _topics_to_pattern(topics: list[str]) -> str:
@@ -596,6 +933,95 @@ def _topic_to_pattern(topic: str) -> str:
 
 
 # ============================================================
+# MAIN QUESTION SEGMENTATION (pre-processing step)
+# ============================================================
+
+def _segment_main_questions(text: str, page_info: list[dict] = None) -> list[tuple[str, str]]:
+    """
+    Segment raw text into main question blocks.
+
+    Strategy: Find ALL "N. (" patterns, then find the longest consecutive sequence.
+
+    Returns list of (question_id, block_text) tuples.
+    """
+    # Pattern: "N. (" at line start - standard exam format
+    main_q_pattern = re.compile(
+        r'(?:^|\n)\s{0,2}(\d{1,2})\.\s*\(',
+        re.MULTILINE
+    )
+
+    matches = list(main_q_pattern.finditer(text))
+
+    print(f"[_segment DEBUG] Found {len(matches)} raw matches")
+    for m in matches:
+        ctx = text[m.start():m.start()+60].replace('\n', ' ')
+        print(f"  - Q{m.group(1)} @ {m.start()}: {ctx!r}")
+
+    if len(matches) < 2:
+        print(f"[_segment DEBUG] Too few matches, skipping segmentation")
+        return []
+
+    # Build list of (question_num, match_obj)
+    numbered = [(int(m.group(1)), m) for m in matches]
+
+    # Find the longest consecutive sequence
+    # Try starting from each position
+    best_sequence = []
+    for start_idx in range(len(numbered)):
+        sequence = [numbered[start_idx]]
+        expected_next = numbered[start_idx][0] + 1
+
+        for j in range(start_idx + 1, len(numbered)):
+            if numbered[j][0] == expected_next:
+                sequence.append(numbered[j])
+                expected_next += 1
+
+        if len(sequence) > len(best_sequence):
+            best_sequence = sequence
+
+    print(f"[_segment DEBUG] Best sequence: {[q[0] for q in best_sequence]}")
+
+    if len(best_sequence) < 2:
+        print(f"[_segment DEBUG] No good sequence found")
+        return []
+
+    # Extract blocks from best sequence
+    valid_matches = []
+    for i, (q_num, m) in enumerate(best_sequence):
+        start_pos = m.start()
+
+        # End at next question in sequence, or end of text
+        if i + 1 < len(best_sequence):
+            end_pos = best_sequence[i + 1][1].start()
+        else:
+            end_pos = len(text)
+
+        block_text = text[start_pos:end_pos].strip()
+
+        # Basic validation
+        if len(block_text) < 30:
+            print(f"[_segment DEBUG] Q{q_num} too short, skipping")
+            continue
+
+        valid_matches.append((str(q_num), block_text, start_pos, end_pos))
+
+    print(f"[_segment DEBUG] Extracted {len(valid_matches)} questions")
+
+    # Must have at least 2 main questions to be confident this is structured
+    if len(valid_matches) < 2:
+        print(f"[_segment DEBUG] Only {len(valid_matches)} questions found, falling back")
+        return []
+
+    # Track stats
+    if _extraction_stats:
+        _extraction_stats["main_questions_detected"] = len(valid_matches)
+        _extraction_stats["main_question_numbers"] = [q[0] for q in valid_matches]
+
+    # Return (question_id, block_text) pairs
+    return [(f"Problem {q[0]}", q[1]) for q in valid_matches]
+
+
+# ============================================================
 # REGEX FALLBACK (when LLM is unavailable)
 # ============================================================
 
@@ -628,19 +1054,172 @@ def is_calculus_question(text: str) -> bool:
     return any(kw in text_lower for kw in CALCULUS_KEYWORDS)
 
 
-def _extract_questions_regex(text: str, source: str) -> list[Question]:
+def _detect_has_figure(text: str) -> bool:
     """
-    Fallback: Extract questions using regex patterns.
-    Used when LLM is unavailable.
+    Detect if question references a figure, graph, or diagram.
+    Returns True if the question likely requires visual content.
+    """
+    text_lower = text.lower()
+    # Common figure reference patterns
+    figure_patterns = [
+        "figure", "fig.", "fig ", "graph", "diagram", "sketch",
+        "shown above", "shown below", "see the", "as shown",
+        "picture", "illustration", "plot", "curve shown",
+        "region shown", "shaded region", "the following graph",
+    ]
+    return any(pattern in text_lower for pattern in figure_patterns)
+
+
+def _detect_corrupted_math(text: str) -> bool:
+    """
+    Detect if text has corrupted math symbols from PDF extraction.
+
+    Common corruptions:
+    - ∫ becomes Z or empty
+    - √ becomes √ or v or empty
+    - Fractions split across lines
+    - Exponents lost
+    """
+    # Patterns that indicate corrupted integral
+    # "dx" or "dy" alone without ∫ suggests integral was lost
+    has_dx_dy = bool(re.search(r'\bdx\b|\bdy\b', text, re.IGNORECASE))
+    has_integral_symbol = '∫' in text or '\\int' in text
+
+    # "Z" at start of expression often means corrupted ∫
+    has_suspicious_z = bool(re.search(r'\bZ\s*[a-z\d(]', text))
+
+    # Fragmented math: isolated operators or symbols
+    has_fragments = bool(re.search(r'\n\s*[+\-*/√]\s*\n', text))
+
+    # "evaluate" + "integral" but no ∫ symbol
+    mentions_integral = 'integral' in text.lower()
+
+    is_corrupted = (
+        (has_dx_dy and not has_integral_symbol and mentions_integral) or
+        has_suspicious_z or
+        has_fragments
+    )
+
+    if is_corrupted:
+        print(f"[CORRUPTED MATH] Detected: dx/dy={has_dx_dy}, ∫={has_integral_symbol}, Z={has_suspicious_z}, fragments={has_fragments}")
+
+    return is_corrupted
+
+
+def _extract_questions_regex(text: str, source: str, page_info: list[dict] = None) -> list[Question]:
+    """
+    Extract questions using regex patterns.
+
+    Flow:
+    1. Try main question segmentation (structured exams)
+    2. If that fails, fall back to pattern matching
     """
     questions = []
     seen_texts = set()
 
+    # ============================================================
+    # STEP 1: Try main question segmentation first
+    # ============================================================
+    main_questions = _segment_main_questions(text, page_info)
+
+    # DEBUG: Show what was extracted from PDF
+    if main_questions:
+        print(f"\n{'#'*60}")
+        print(f"[PDF EXTRACTION DEBUG] Found {len(main_questions)} main questions:")
+        print(f"{'#'*60}")
+        for i, (pid, block) in enumerate(main_questions):
+            print(f"\n--- {pid} (raw block, first 400 chars) ---")
+            print(block[:400] + ("..." if len(block) > 400 else ""))
+        print(f"{'#'*60}\n")
+
+    if main_questions:
+        if _extraction_stats:
+            _extraction_stats["used_main_segmentation"] = True
+
+        for problem_id, block_text in main_questions:
+            # Normalize whitespace
+            q_text = re.sub(r'\s+', ' ', block_text).strip()
+
+            if len(q_text) < 20:
+                if _extraction_stats:
+                    _extraction_stats["filtered_too_short"] += 1
+                continue
+
+            if q_text in seen_texts:
+                if _extraction_stats:
+                    _extraction_stats["filtered_duplicate"] += 1
+                continue
+
+            # For structured main questions, use relaxed calculus check:
+            # Either has calculus keywords OR is long enough to be a real problem
+            is_calc = is_calculus_question(q_text)
+            is_substantial = len(q_text) > 100  # Long enough to likely be a real question
+
+            if not is_calc and not is_substantial:
+                if _extraction_stats:
+                    _extraction_stats["filtered_not_calculus"] += 1
+                continue
+
+            seen_texts.add(q_text)
+            calc_pattern = detect_pattern(q_text)
+            formatted_text = format_math_text(q_text)
+            has_figure = _detect_has_figure(q_text)
+            needs_vision = _detect_corrupted_math(q_text)
+
+            metadata = {}
+            if has_figure:
+                metadata["has_figure"] = True
+            if needs_vision:
+                metadata["needs_vision"] = True
+                print(f"[EXTRACT] {problem_id} marked for vision reconstruction")
+
+            questions.append(Question(
+                id="",
+                text=formatted_text,
+                source=source,
+                pattern=calc_pattern,
+                problem_id=problem_id,
+                metadata=metadata,
+            ))
+
+        # If main segmentation found questions, we're done
+        if questions:
+            if _extraction_stats:
+                _extraction_stats["questions_final"] = len(questions)
+                _extraction_stats["question_ids_final"] = [q.problem_id for q in questions]
+
+                # Add extraction quality warnings
+                warnings = []
+                pages = _extraction_stats.get("pages", 0)
+                if pages >= 3 and len(questions) < 3:
+                    warnings.append(f"Only {len(questions)} questions from {pages}-page document")
+
+                q_nums = _extraction_stats.get("main_question_numbers", [])
+                if q_nums:
+                    expected = list(range(1, len(q_nums) + 1))
+                    actual = [int(n) for n in q_nums if n.isdigit()]
+                    if actual and actual != expected[:len(actual)]:
+                        warnings.append(f"Non-sequential questions: {q_nums}")
+
+                fig_count = sum(1 for q in questions if q.metadata.get("has_figure"))
+                if fig_count > 0:
+                    warnings.append(f"{fig_count} question(s) reference figures (may need visual context)")
+
+                if warnings:
+                    _extraction_stats["warnings"] = warnings
+
+            return questions
+
+    # ============================================================
+    # STEP 2: Fall back to pattern matching
+    # ============================================================
     for pattern_idx, pattern in enumerate(QUESTION_PATTERNS):
         matches = re.findall(pattern, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
+        pattern_key = f"pattern{pattern_idx}"
 
         for match in matches:
             problem_id = ""
+            identifier = ""
             if isinstance(match, tuple) and len(match) >= 2:
                 identifier = match[0]
                 q_text = match[-1].strip()
@@ -654,11 +1233,26 @@ def _extract_questions_regex(text: str, source: str) -> list[Question]:
             else:
                 q_text = match.strip() if isinstance(match, str) else str(match)
 
+            # Track pattern match (before filtering)
+            if _extraction_stats:
+                _extraction_stats["pattern_matches"][pattern_key] += 1
+                if identifier:
+                    _extraction_stats["pattern_match_ids"][pattern_key].append(identifier)
+
             q_text = re.sub(r'\s+', ' ', q_text).strip()
 
-            if len(q_text) < 20 or q_text in seen_texts:
+            # Track filtering reasons
+            if len(q_text) < 20:
+                if _extraction_stats:
+                    _extraction_stats["filtered_too_short"] += 1
+                continue
+            if q_text in seen_texts:
+                if _extraction_stats:
+                    _extraction_stats["filtered_duplicate"] += 1
                 continue
             if not is_calculus_question(q_text):
+                if _extraction_stats:
+                    _extraction_stats["filtered_not_calculus"] += 1
                 continue
 
             seen_texts.add(q_text)
@@ -666,6 +1260,7 @@ def _extract_questions_regex(text: str, source: str) -> list[Question]:
 
             # Apply basic formatting (not LLM)
             formatted_text = format_math_text(q_text)
+            has_figure = _detect_has_figure(q_text)
 
             questions.append(Question(
                 id="",
@@ -673,10 +1268,14 @@ def _extract_questions_regex(text: str, source: str) -> list[Question]:
                 source=source,
                 pattern=calc_pattern,
                 problem_id=problem_id,
+                metadata={"has_figure": has_figure} if has_figure else {},
             ))
 
     # Fallback: split by paragraphs
     if not questions:
+        if _extraction_stats:
+            _extraction_stats["fallback_paragraph_used"] = True
+
         paragraphs = re.split(r'\n\n+', text)
         for para in paragraphs:
             para = para.strip()
@@ -690,24 +1289,56 @@ def _extract_questions_regex(text: str, source: str) -> list[Question]:
             seen_texts.add(para)
             calc_pattern = detect_pattern(para)
             formatted_text = format_math_text(para)
+            has_figure = _detect_has_figure(para)
 
             questions.append(Question(
                 id="",
                 text=formatted_text,
                 source=source,
                 pattern=calc_pattern,
+                metadata={"has_figure": has_figure} if has_figure else {},
             ))
+
+    # Track final results
+    if _extraction_stats:
+        _extraction_stats["questions_final"] = len(questions)
+        _extraction_stats["question_ids_final"] = [q.problem_id for q in questions if q.problem_id]
+
+        # Extraction quality warnings
+        warnings = []
+
+        # Check 1: Very few questions from multi-page document
+        pages = _extraction_stats.get("pages", 0)
+        if pages >= 3 and len(questions) < 3:
+            warnings.append(f"Only {len(questions)} questions from {pages}-page document")
+
+        # Check 2: Non-sequential question numbers (gaps)
+        if _extraction_stats.get("used_main_segmentation"):
+            q_nums = _extraction_stats.get("main_question_numbers", [])
+            if q_nums:
+                expected = list(range(1, len(q_nums) + 1))
+                actual = [int(n) for n in q_nums if n.isdigit()]
+                if actual and actual != expected[:len(actual)]:
+                    warnings.append(f"Non-sequential questions: {q_nums}")
+
+        # Check 3: Figure references but no visual content warning
+        fig_count = sum(1 for q in questions if q.metadata.get("has_figure"))
+        if fig_count > 0:
+            warnings.append(f"{fig_count} question(s) reference figures (may need visual context)")
+
+        if warnings:
+            _extraction_stats["warnings"] = warnings
 
     return questions
 
 
-def extract_questions_from_text(text: str, source: str) -> list[Question]:
+def extract_questions_from_text(text: str, source: str, page_info: list[dict] = None) -> list[Question]:
     """
     Extract questions from text - uses FAST regex parsing only.
     LLM cleaning happens in background, not here.
     """
     # Fast regex parsing only - no LLM wait
-    return _extract_questions_regex(text, source)
+    return _extract_questions_regex(text, source, page_info)
 
 
 # ============================================================
@@ -727,12 +1358,15 @@ def build_question_bank(files: list[tuple[str, bytes]]) -> QuestionBank:
     bank = QuestionBank()
 
     for filename, file_bytes in files:
-        try:
-            # Extract text
-            text = extract_text_from_file(file_bytes, filename)
+        # Reset debug stats for this file
+        _reset_extraction_stats(filename)
 
-            # Extract questions
-            questions = extract_questions_from_text(text, filename)
+        try:
+            # Extract text and page info
+            text, page_info = extract_text_from_file(file_bytes, filename)
+
+            # Extract questions (pass page_info for better segmentation)
+            questions = extract_questions_from_text(text, filename, page_info)
 
             # Add to bank
             for q in questions:
@@ -740,7 +1374,12 @@ def build_question_bank(files: list[tuple[str, bytes]]) -> QuestionBank:
 
         except Exception as e:
             print(f"Error processing {filename}: {e}")
+            import traceback
+            traceback.print_exc()
             continue
+        finally:
+            # Always print debug stats
+            _print_extraction_stats()
 
     return bank
 

@@ -11,6 +11,7 @@ from exam_context import analyze_files, ExamContext
 from placement_test import (
     build_questions_from_bank,
     get_fallback_questions,
+    get_static_diagnostic_questions,
     score_placement,
     PlacementQuestion,
 )
@@ -22,6 +23,7 @@ from auth import handle_oauth_callback, get_user, show_login_button, sign_out
 from quota import (
     can_use_premium, record_query, get_quota_status,
     inject_localstorage_sync, ANON_FREE_QUERIES, USER_FREE_PREMIUM,
+    is_pro_user,
 )
 from exam_mode import (
     ExamSession, ExamQuestion, ExamResult,
@@ -82,6 +84,131 @@ THINKING_MESSAGES = [
     "🔍 Checking key conditions...",
     "✏️ Generating solution steps...",
 ]
+
+
+def _render_upgrade_button(key: str = "upgrade"):
+    """Render upgrade to Pro button. Redirects to Stripe Checkout."""
+    from auth import get_user
+    user = get_user()
+
+    if not user:
+        # Not logged in - prompt login first
+        if st.button("⚡ Upgrade to Pro", key=key, type="primary"):
+            st.warning("Please sign in first to upgrade.")
+        return
+
+    if st.button("⚡ Upgrade to Pro", key=key, type="primary"):
+        from stripe_checkout import create_checkout_session
+        checkout_url = create_checkout_session(
+            user_id=user.id,
+            user_email=user.email if hasattr(user, 'email') else None
+        )
+        if checkout_url:
+            st.markdown(f'<meta http-equiv="refresh" content="0;url={checkout_url}">', unsafe_allow_html=True)
+        else:
+            st.error("Could not start checkout. Please try again.")
+
+
+def pro_badge(text: str = "Pro") -> str:
+    """
+    Return an inline HTML badge for Pro features.
+    Usage: st.markdown(f"Feature name {pro_badge()}", unsafe_allow_html=True)
+    """
+    return (
+        f"<span style='background: linear-gradient(135deg, #667eea, #764ba2); "
+        f"color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; "
+        f"border-radius: 4px; margin-left: 4px; vertical-align: middle;'>{text}</span>"
+    )
+
+
+def render_plan_status_card(location: str = "sidebar", agent=None):
+    """
+    Render a unified plan status card.
+
+    Args:
+        location: "sidebar" (compact) or "main" (full width)
+        agent: ClaireAgent instance to check model_tier
+    """
+    from auth import get_user
+
+    user = get_user()
+    is_pro = is_pro_user()
+    quota = get_quota_status()
+
+    # Determine current model tier
+    model_tier = "premium"
+    if agent:
+        model_tier = agent.model_tier
+    elif not quota["can_premium"] and not is_pro:
+        model_tier = "basic"
+
+    # Pro users - minimal card
+    if is_pro:
+        if location == "sidebar":
+            st.markdown(
+                f"<div style='background: linear-gradient(135deg, #667eea, #764ba2); "
+                f"padding: 12px; border-radius: 8px; color: white; margin-bottom: 12px;'>"
+                f"<div style='font-weight: 600;'>✨ Pro Plan</div>"
+                f"<div style='font-size: 12px; opacity: 0.9;'>Unlimited premium access</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+        return
+
+    # Free users
+    remaining = quota["remaining"]
+    limit = quota["limit"]
+    is_logged_in = quota["is_logged_in"]
+    using_basic = model_tier == "basic"
+
+    if location == "sidebar":
+        # Compact sidebar version
+        plan_name = "Free Plan" if is_logged_in else "Guest"
+
+        # Status color based on remaining
+        if remaining == 0:
+            status_color = "#ff6b6b"
+            status_text = "Basic model active"
+        elif remaining <= 2:
+            status_color = "#ffd93d"
+            status_text = f"{remaining}/{limit} premium left"
+        else:
+            status_color = "#6bcf7f"
+            status_text = f"{remaining}/{limit} premium left"
+
+        st.markdown(
+            f"<div style='background: #f8f9fa; border: 1px solid #e9ecef; "
+            f"padding: 12px; border-radius: 8px; margin-bottom: 12px;'>"
+            f"<div style='font-weight: 600; color: #333; margin-bottom: 4px;'>{plan_name}</div>"
+            f"<div style='font-size: 12px; color: {status_color}; margin-bottom: 8px;'>{status_text}</div>"
+            + (f"<div style='font-size: 11px; color: #666;'>{'🚀 Claude (Best)' if not using_basic else '⚙️ Basic model'}</div>" if is_logged_in else "")
+            + f"</div>",
+            unsafe_allow_html=True
+        )
+
+        # Upgrade button (compact)
+        _render_upgrade_button(key=f"upgrade_{location}")
+
+        # Sign in prompt for guests
+        if not is_logged_in:
+            st.caption("Sign in for 5 premium/day")
+
+    else:
+        # Main area version - more prominent when quota exhausted
+        if using_basic:
+            st.markdown(
+                "<div style='background: #fff3cd; border: 1px solid #ffc107; "
+                "padding: 16px; border-radius: 8px; margin-bottom: 16px;'>"
+                "<div style='font-weight: 600; color: #856404; margin-bottom: 4px;'>"
+                "📊 Using Basic Model</div>"
+                "<div style='font-size: 14px; color: #856404;'>"
+                "You've used your daily premium quota. Some advanced features are limited.</div>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+            col1, col2 = st.columns([2, 1])
+            with col2:
+                _render_upgrade_button(key=f"upgrade_{location}")
 
 
 # render_with_hidden_solution REMOVED - now using structured JSON responses
@@ -577,6 +704,26 @@ def _start_exam_from_parsed():
 # Handle Google OAuth callback (must be before any other st calls)
 handle_oauth_callback()
 
+# ────────────────────────────────────────────────────────────
+# Handle Stripe checkout return
+# ────────────────────────────────────────────────────────────
+if "upgraded" in st.query_params:
+    session_id = st.query_params.get("session_id")
+    if session_id:
+        from stripe_checkout import verify_checkout_session
+        from quota import clear_pro_cache
+        result = verify_checkout_session(session_id)
+        if result["status"] == "complete":
+            clear_pro_cache()  # Force re-check pro status
+            st.success("🎉 " + result["message"])
+            st.balloons()
+        elif result["status"] == "pending":
+            st.info("⏳ " + result["message"])
+        else:
+            st.warning(result["message"])
+    # Clear URL params
+    st.query_params.clear()
+
 if "session_id" not in st.session_state:
     params = st.query_params
     sid = params.get("s", None)
@@ -641,6 +788,8 @@ if "query_count" not in st.session_state:
     st.session_state.query_count = 0
 if "show_tier_notice" not in st.session_state:
     st.session_state.show_tier_notice = False
+if "tier_notice_shown" not in st.session_state:
+    st.session_state.tier_notice_shown = False  # Only show once per session
 # "hidden" → "showing" (after upload) → "done" (user clicked through)
 if "exam_scope_stage" not in st.session_state:
     st.session_state.exam_scope_stage = "hidden"
@@ -844,7 +993,15 @@ Then STOP."""
 # ============================================================
 
 def start_practice(problem):
-    """Initialize practice state."""
+    """Initialize practice state. Priority-refines if needed."""
+    # Priority refine: if this question hasn't been refined yet, do it now
+    if hasattr(problem, 'metadata') and not problem.metadata.get('refined'):
+        try:
+            from question_bank import _refine_question_with_llm
+            _refine_question_with_llm(problem)
+        except Exception as e:
+            print(f"[priority-refine] failed: {e}")
+
     problem_text = problem.text if hasattr(problem, 'text') else str(problem)
     st.session_state.practice_state = {
         "mode": "practice",
@@ -1066,47 +1223,33 @@ def maybe_show_feedback_prompt():
 
 def maybe_show_premium_prompt():
     """
-    Show premium prompt if:
-    - User has engaged (diagnostic done OR 2+ interactions)
-    - Not dismissed this session
+    Show a subtle premium prompt after engagement.
+    This is a secondary CTA - the main one is in render_plan_status_card.
     """
-    # Check if dismissed
-    if st.session_state.premium_prompt_dismissed:
+    # Skip if Pro user or dismissed
+    if is_pro_user() or st.session_state.premium_prompt_dismissed:
         return
 
-    # Check if already showing (avoid double render)
+    # Skip if already shown or not enough engagement
     if st.session_state.premium_prompt_shown:
         return
 
-    # Check engagement
     diagnostic_done = st.session_state.placement_stage in ("done", "completed", "skipped")
-    has_practiced = st.session_state.user_interaction_count >= 2
+    has_practiced = st.session_state.user_interaction_count >= 3  # Raised threshold
 
-    if not (diagnostic_done or has_practiced):
+    if not (diagnostic_done and has_practiced):
         return
 
     # Mark as shown
     st.session_state.premium_prompt_shown = True
 
-    # Render premium prompt
-    st.markdown("")
-    st.markdown(
-        "<div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); "
-        "padding: 20px; border-radius: 12px; color: white; margin: 16px 0;'>"
-        "<div style='font-size: 16px; font-weight: 600; margin-bottom: 8px;'>✨ Premium Features</div>"
-        "<div style='font-size: 14px; opacity: 0.95; margin-bottom: 6px;'>"
-        "Unlock better step-by-step guidance and stronger models.</div>"
-        "<div style='font-size: 12px; opacity: 0.8;'>Free for early users during testing.</div>"
-        "</div>",
-        unsafe_allow_html=True
-    )
-
-    col1, col2 = st.columns(2)
+    # Subtle inline prompt (not a big gradient card)
+    st.markdown("---")
+    col1, col2 = st.columns([3, 1])
     with col1:
-        if st.button("Explore premium", key="premium_explore_btn", type="primary", use_container_width=True):
-            st.success("🎉 You're already using premium features for free as an early tester! Enjoy!")
+        st.caption("💡 **Enjoying Claire?** Upgrade for unlimited Claude access and advanced features.")
     with col2:
-        if st.button("Not now", key="premium_dismiss_btn", use_container_width=True):
+        if st.button("Maybe later", key="premium_dismiss_btn", use_container_width=True):
             st.session_state.premium_prompt_dismissed = True
             st.rerun()
 
@@ -1148,6 +1291,13 @@ def render_practice_view():
         else:
             st.caption("🎯 **Calculus**")
 
+    # Persistent status when using basic model (main area card)
+    if agent.model_tier == "basic" and not is_pro_user():
+        render_plan_status_card(location="main", agent=agent)
+        # Clear the one-time notice flag
+        st.session_state.tier_notice_shown = True
+        st.session_state.show_tier_notice = False
+
     # Context hint (connects to larger flow)
     exam_summary = st.session_state.get("exam_summary")
     if exam_summary and topic:
@@ -1173,9 +1323,19 @@ def render_practice_view():
     # Problem display
     st.markdown("### 📝 Here's your problem:")
     if problem_obj and hasattr(problem_obj, 'get_formatted_text'):
-        st.markdown(problem_obj.get_formatted_text())
+        display_text = problem_obj.get_formatted_text()
+        # DEBUG: Log what we're actually displaying
+        print(f"[DISPLAY DEBUG] problem_obj.text = {problem_obj.text[:200] if problem_obj.text else 'None'}...")
+        print(f"[DISPLAY DEBUG] refined = {problem_obj.metadata.get('refined', 'N/A')}")
+        st.markdown(display_text)
     else:
         st.markdown(state["problem"])
+
+    # Source citation
+    if problem_obj and hasattr(problem_obj, 'format_source'):
+        source = problem_obj.format_source()
+        if source:
+            st.caption(f"*Source: {source}*")
 
     st.markdown("---")
 
@@ -1234,9 +1394,23 @@ def render_practice_view():
 
         # After solution, offer next action
         st.markdown("---")
-        if st.button("✨ Try a similar problem", use_container_width=True):
-            st.session_state.pending_similar = True
-            st.rerun()
+
+        # Check if this is course-specific generation (Pro feature)
+        has_materials = exam_context.has_questions() if exam_context else False
+
+        # Similar problem button with Pro badge for non-pro users
+        if has_materials and not is_pro_user():
+            st.markdown(
+                f"Generate problems from your course materials {pro_badge('Pro')}",
+                unsafe_allow_html=True
+            )
+            if st.button("✨ Try a similar problem", use_container_width=True):
+                st.session_state.pending_similar = True
+                st.rerun()
+        else:
+            if st.button("✨ Try a similar problem", use_container_width=True):
+                st.session_state.pending_similar = True
+                st.rerun()
 
     # Show prompts (if eligible)
     maybe_show_premium_prompt()
@@ -1256,6 +1430,11 @@ with st.sidebar:
 
     st.divider()
 
+    # Plan status card (always visible)
+    render_plan_status_card(location="sidebar", agent=agent)
+
+    st.divider()
+
     # Course materials
     st.caption("📂 Course Materials")
     current_user = get_user()
@@ -1264,6 +1443,10 @@ with st.sidebar:
         if st.button("Sign out", use_container_width=True, key="signout"):
             sign_out()
             st.rerun()
+
+    # Show upload guidance if no materials yet
+    if not exam_context.has_questions():
+        st.caption("Paste in your past exams, notes, or syllabus. Claire will read them and build your practice set.")
 
     # Always show file uploader
     uploaded = st.file_uploader(
@@ -1289,16 +1472,15 @@ with st.sidebar:
             # Start background tasks (user doesn't wait)
             import threading
 
-            # Task 1: Prepare 5 diagnostic questions (store in context object)
+            # Task 1: Prepare diagnostic questions from static bank (verified answers)
+            # NOTE: We no longer use uploaded materials for diagnostic scoring
             def _prepare_diagnostic_bg():
                 try:
-                    if context.has_questions():
-                        bank = context.question_bank
-                        qs = build_questions_from_bank(bank, limit=5)
-                        if qs:
-                            qs = reconstruct_math_problems(qs)
-                            context._prepared_diagnostic = qs  # Store in context, not session_state
-                            print(f"[BG] Prepared {len(qs)} diagnostic questions")
+                    track = st.session_state.get("calc_track", "calc_i")
+                    qs = get_static_diagnostic_questions(track, limit=5)
+                    if qs:
+                        context._prepared_diagnostic = qs
+                        print(f"[BG] Prepared {len(qs)} static diagnostic questions")
                 except Exception as e:
                     print(f"[BG] Error preparing diagnostic: {e}")
 
@@ -1307,8 +1489,15 @@ with st.sidebar:
                 from exam_context import start_background_cleaning
                 start_background_cleaning(context)
 
+            # Task 3: LLM refinement of main questions (subparts, math cleanup)
+            def _refine_questions_bg():
+                if context.question_bank and context.question_bank.questions:
+                    from question_bank import start_background_refinement
+                    start_background_refinement(context.question_bank.questions)
+
             threading.Thread(target=_prepare_diagnostic_bg, daemon=True).start()
             threading.Thread(target=_clean_rest_bg, daemon=True).start()
+            threading.Thread(target=_refine_questions_bg, daemon=True).start()
 
             track(st.session_state.session_id, "file_upload", {
                 "file_count": len(files),
@@ -1480,11 +1669,11 @@ def _start_placement_from_materials():
         import traceback
         traceback.print_exc()
 
-    # Fallback if still no questions
+    # Fallback if still no questions - use static diagnostic bank
     if not questions:
         track = st.session_state.calc_track or "calc_i"
-        questions = get_fallback_questions(track)
-        print(f"[START] Using {len(questions)} fallback questions")
+        questions = get_static_diagnostic_questions(track, limit=5)
+        print(f"[START] Using {len(questions)} static diagnostic questions")
 
     st.session_state.placement_questions = questions
     st.session_state.placement_answers = [None] * len(questions)
@@ -1496,7 +1685,8 @@ def _start_placement_from_materials():
 def _start_placement_for_track(track: str):
     """Start placement test for a specific calc track (no materials)."""
     st.session_state.calc_track = track
-    questions = get_fallback_questions(track)
+    # Use static diagnostic bank for deterministic, verified answers
+    questions = get_static_diagnostic_questions(track, limit=5)
     st.session_state.placement_questions = questions
     st.session_state.placement_answers = [None] * len(questions)
     st.session_state.placement_current = 0
@@ -1536,6 +1726,44 @@ def _skip_placement():
     st.session_state.placement_stage = "skipped"
     agent.set_user_level("intermediate")
     _save_current_session()
+
+
+def _show_hero_section():
+    """Show hero section for new users (no materials uploaded)."""
+    st.markdown("### Your AI study partner for calc exam week.")
+    st.markdown("""
+📂 **Upload your past exams** → Claire extracts every problem
+🎯 **5-min diagnostic** → finds exactly where you're weak
+🧑‍🏫 **Step-by-step practice** → teaches method, not just answers
+""")
+    st.markdown("")
+
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        if st.button("📂 Upload your exam PDF →", type="primary", use_container_width=True):
+            st.session_state["_highlight_uploader"] = True
+            st.rerun()
+    with col2:
+        if st.button("No PDF? Try an example", use_container_width=True):
+            # Start with a sample problem using existing flow
+            from dataclasses import dataclass
+            @dataclass
+            class SimpleProblem:
+                text: str
+                difficulty: str = "medium"
+                categories: list = None
+                def format_source(self): return "Example"
+                def get_formatted_text(self): return self.text
+            start_practice(SimpleProblem(
+                text="Find the critical points of f(x,y) = x² + y² - 4x and classify each.",
+                categories=["critical_points"]
+            ))
+            st.rerun()
+
+    # Show highlight message if user clicked upload button
+    if st.session_state.get("_highlight_uploader"):
+        st.info("👈 Use the **sidebar uploader** on the left to upload your PDF.")
+        st.session_state["_highlight_uploader"] = False
 
 
 def _inject_welcome_message(result):
@@ -1863,6 +2091,13 @@ def _render_placement_test():
                         st.caption(f"💡 {q.explanation}")
                 st.divider()
 
+        # Post-diagnostic guidance
+        has_materials = exam_context.has_questions()
+        if has_materials:
+            st.success("✅ Here's your personalized practice queue → click any problem to start")
+        else:
+            st.info("📂 Upload your past exams to get problems tailored to your actual course →")
+
         if st.button("Let's start practicing! →", type="primary", use_container_width=True):
             st.session_state.placement_stage = "completed"
             # Inject a personalized opening message into chat
@@ -1932,11 +2167,16 @@ elif ps["mode"] == "browse":
         st.success(f"📂 {q_count} problems loaded from your materials")
 
     else:
-        # No materials - gentle nudge
+        # No materials - show hero section
         st.markdown("---")
-        st.info("📂 **Tip:** Upload your past exams or problem sets in the sidebar for personalized practice")
+        _show_hero_section()
 
     st.markdown("")
+
+    # Show browse prompt if diagnostic is done
+    diagnostic_done = st.session_state.placement_stage in ("done", "completed", "skipped")
+    if diagnostic_done and not has_materials:
+        st.caption("💡 Ask me anything, or pick a problem below to practice.")
 
     # ⭐ PRIMARY ACTION
     if has_materials:

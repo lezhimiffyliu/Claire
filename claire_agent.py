@@ -7,6 +7,8 @@ Exam prep agent: Pattern Detection → Heuristic Teaching → Guided Practice
 import os
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
+import json
+import re
 
 load_dotenv()
 
@@ -175,10 +177,34 @@ REMEMBER: Output ONLY valid JSON, nothing else.
 - When they get it right, move on quickly. Don't over-explain what they already know.""",
     }
 
+    # Tier-based explanation depth instructions
+    TIER_INSTRUCTIONS = {
+        "premium": """
+EXPLANATION STYLE (Premium):
+- Full step-by-step derivation with clear structure (Step 1, Step 2, ...)
+- Explain WHY each step works, not just what to do
+- Show intermediate calculations explicitly
+- Like a patient teacher walking through every detail
+- Take your time — clarity over brevity
+""",
+        "basic": """
+EXPLANATION STYLE (Basic — be concise):
+- Give the key idea and final result only
+- Show 1–2 critical steps MAX, skip the rest
+- Do NOT expand full derivations or show all algebra
+- Assume student can fill in routine steps themselves
+- Keep responses SHORT — leave gaps for student to complete
+- If they ask for more detail, give a small hint, not full solution
+"""
+    }
+
     @property
     def system_prompt(self) -> str:
-        """Build system prompt based on current user level and weak topics."""
+        """Build system prompt based on current user level, weak topics, and model tier."""
         level_text = self.LEVEL_INSTRUCTIONS.get(self.user_level, self.LEVEL_INSTRUCTIONS["intermediate"])
+
+        # Add tier-based explanation depth
+        tier_text = self.TIER_INSTRUCTIONS.get(self.model_tier, "")
 
         weak_section = ""
         if self.weak_topics:
@@ -195,7 +221,7 @@ REMEMBER: Output ONLY valid JSON, nothing else.
                 pass
 
         return self.SYSTEM_PROMPT_TEMPLATE.format(
-            level_instructions=level_text + weak_section
+            level_instructions=level_text + tier_text + weak_section
         )
 
     def __init__(self):
@@ -428,7 +454,7 @@ REMEMBER: Output ONLY valid JSON, nothing else.
         """
         Process a problem with structured JSON output for practice mode.
 
-        Returns JSON with: problem_type, hint, solution
+        Returns JSON with: problem_type, hint, solution, verification
         """
         try:
             # Build prompt with level instructions
@@ -450,11 +476,26 @@ REMEMBER: Output ONLY valid JSON, nothing else.
             result = self.llm.invoke(messages)
             output = result.content
 
+            # Try to verify the solution if it's a verifiable problem type
+            verification = self._verify_solution(problem_text, output)
+
+            # If verification failed, try once more
+            if verification and not verification.get("verified") and verification.get("method") != "failed":
+                # Retry with explicit instruction to check work
+                retry_messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=f"Problem:\n{problem_text}\n\nIMPORTANT: Double-check all calculations. A previous attempt had an error.")
+                ]
+                retry_result = self.llm.invoke(retry_messages)
+                output = retry_result.content
+                verification = self._verify_solution(problem_text, output)
+
             return {
                 "output": output,
                 "intermediate_steps": [],
                 "pattern": None,
-                "heuristic": None
+                "heuristic": None,
+                "verification": verification
             }
 
         except Exception as e:
@@ -465,8 +506,289 @@ REMEMBER: Output ONLY valid JSON, nothing else.
                 "output": f'{{"problem_type": "Unknown", "hint": "Think about what techniques might apply.", "solution": "Error generating solution: {str(e)}"}}',
                 "intermediate_steps": [],
                 "pattern": None,
-                "heuristic": None
+                "heuristic": None,
+                "verification": None
             }
+
+    def _verify_solution(self, problem_text: str, llm_output: str) -> Optional[Dict]:
+        """
+        Attempt to verify the LLM's solution using SymPy.
+
+        Returns verification result dict or None if not applicable.
+        """
+        try:
+            from verifier import verify_derivative, verify_indefinite_integral, verify_definite_integral, verify_limit
+
+            problem_lower = problem_text.lower()
+
+            # Parse the LLM output to extract the solution
+            try:
+                parsed = json.loads(llm_output)
+                solution = parsed.get("solution", "")
+            except json.JSONDecodeError:
+                solution = llm_output
+
+            # Detect problem type and extract relevant expressions
+            # This is a best-effort extraction - may not work for all formats
+
+            # Check for derivative problems
+            if any(kw in problem_lower for kw in ["derivative", "differentiate", "d/dx", "find f'", "f'(x)"]):
+                extracted = self._extract_derivative_components(problem_text, solution)
+                if extracted:
+                    result = verify_derivative(extracted["original"], extracted["derivative"])
+                    return {
+                        "verified": result.verified,
+                        "method": result.method,
+                        "reason": result.reason,
+                        "type": "derivative"
+                    }
+
+            # Check for indefinite integral problems
+            if any(kw in problem_lower for kw in ["integrate", "antiderivative", "indefinite integral"]):
+                if "from" not in problem_lower and "to" not in problem_lower:
+                    extracted = self._extract_integral_components(problem_text, solution)
+                    if extracted:
+                        result = verify_indefinite_integral(extracted["integrand"], extracted["antiderivative"])
+                        return {
+                            "verified": result.verified,
+                            "method": result.method,
+                            "reason": result.reason,
+                            "type": "indefinite_integral"
+                        }
+
+            # Check for definite integral problems
+            if any(kw in problem_lower for kw in ["definite integral", "evaluate the integral"]) or \
+               ("integral" in problem_lower and any(kw in problem_lower for kw in ["from", "to", "between"])):
+                extracted = self._extract_definite_integral_components(problem_text, solution)
+                if extracted:
+                    result = verify_definite_integral(
+                        extracted["integrand"],
+                        extracted["lower"],
+                        extracted["upper"],
+                        extracted["value"]
+                    )
+                    return {
+                        "verified": result.verified,
+                        "method": result.method,
+                        "reason": result.reason,
+                        "type": "definite_integral"
+                    }
+
+            # Check for limit problems
+            if any(kw in problem_lower for kw in ["limit", "lim", "approaches"]):
+                extracted = self._extract_limit_components(problem_text, solution)
+                if extracted:
+                    result = verify_limit(
+                        extracted["expression"],
+                        extracted.get("variable", "x"),
+                        extracted["approaching"],
+                        extracted["value"]
+                    )
+                    return {
+                        "verified": result.verified,
+                        "method": result.method,
+                        "reason": result.reason,
+                        "type": "limit"
+                    }
+
+            return None  # Not a verifiable problem type
+
+        except ImportError:
+            return None
+        except Exception as e:
+            return {"verified": False, "method": "failed", "reason": str(e), "type": "unknown"}
+
+    def _extract_derivative_components(self, problem: str, solution: str) -> Optional[Dict]:
+        """Extract original function and derivative from problem/solution."""
+        try:
+            # Try to find the original function in the problem
+            # Common patterns: "derivative of f(x) = ...", "d/dx[...]", "f(x) = ..."
+            patterns = [
+                r"(?:derivative\s+of|differentiate)\s*[:\s]*\$?([^$\n]+)\$?",
+                r"f\s*\(\s*x\s*\)\s*=\s*\$?([^$\n]+)\$?",
+                r"d/dx\s*\[\s*([^\]]+)\s*\]",
+                r"y\s*=\s*\$?([^$\n]+)\$?"
+            ]
+
+            original = None
+            for pat in patterns:
+                match = re.search(pat, problem, re.IGNORECASE)
+                if match:
+                    original = match.group(1).strip()
+                    break
+
+            if not original:
+                return None
+
+            # Try to find the derivative in the solution
+            # Look for patterns like "= 3x^2" or "derivative is 3x^2" or final expression
+            deriv_patterns = [
+                r"(?:derivative|answer|result)\s*(?:is|=)\s*\$?([^$\n,]+)\$?",
+                r"=\s*\$?([^$\n=]+)\$?\s*$",
+                r"f'\s*\(\s*x\s*\)\s*=\s*\$?([^$\n]+)\$?"
+            ]
+
+            derivative = None
+            for pat in deriv_patterns:
+                match = re.search(pat, solution, re.IGNORECASE | re.MULTILINE)
+                if match:
+                    derivative = match.group(1).strip()
+                    # Clean up LaTeX
+                    derivative = re.sub(r'\\[a-z]+\{([^}]+)\}', r'\1', derivative)
+                    break
+
+            if original and derivative:
+                return {"original": original, "derivative": derivative}
+            return None
+        except Exception:
+            return None
+
+    def _extract_integral_components(self, problem: str, solution: str) -> Optional[Dict]:
+        """Extract integrand and antiderivative from problem/solution."""
+        try:
+            # Find integrand in problem
+            patterns = [
+                r"(?:integrate|integral\s+of)\s*\$?([^$\n]+)\$?\s*(?:dx|$)",
+                r"∫\s*([^d]+)\s*dx",
+                r"antiderivative\s+of\s*\$?([^$\n]+)\$?"
+            ]
+
+            integrand = None
+            for pat in patterns:
+                match = re.search(pat, problem, re.IGNORECASE)
+                if match:
+                    integrand = match.group(1).strip()
+                    break
+
+            if not integrand:
+                return None
+
+            # Find antiderivative in solution
+            antideriv_patterns = [
+                r"(?:antiderivative|integral|answer|result)\s*(?:is|=)\s*\$?([^$\n+C]+)",
+                r"=\s*\$?([^$\n=]+)\$?\s*\+\s*C",
+                r"=\s*\$?([^$\n=]+)\$?\s*$"
+            ]
+
+            antiderivative = None
+            for pat in antideriv_patterns:
+                match = re.search(pat, solution, re.IGNORECASE | re.MULTILINE)
+                if match:
+                    antiderivative = match.group(1).strip()
+                    antiderivative = re.sub(r'\s*\+\s*C\s*$', '', antiderivative, flags=re.IGNORECASE)
+                    break
+
+            if integrand and antiderivative:
+                return {"integrand": integrand, "antiderivative": antiderivative}
+            return None
+        except Exception:
+            return None
+
+    def _extract_definite_integral_components(self, problem: str, solution: str) -> Optional[Dict]:
+        """Extract definite integral components from problem/solution."""
+        try:
+            # Find bounds in problem
+            bound_patterns = [
+                r"from\s*\$?([^$\s]+)\$?\s*to\s*\$?([^$\s]+)\$?",
+                r"\[\s*([^,\]]+)\s*,\s*([^\]]+)\s*\]",
+                r"_\{?\s*([^}]+)\s*\}?\s*\^\{?\s*([^}]+)\s*\}?"
+            ]
+
+            lower, upper = None, None
+            for pat in bound_patterns:
+                match = re.search(pat, problem, re.IGNORECASE)
+                if match:
+                    lower = match.group(1).strip()
+                    upper = match.group(2).strip()
+                    break
+
+            if not lower or not upper:
+                return None
+
+            # Find integrand
+            integ_patterns = [
+                r"∫[^∫]*?([^d]+)\s*dx",
+                r"integral\s+of\s*\$?([^$]+)\$?\s*(?:from|dx)"
+            ]
+
+            integrand = None
+            for pat in integ_patterns:
+                match = re.search(pat, problem, re.IGNORECASE)
+                if match:
+                    integrand = match.group(1).strip()
+                    break
+
+            # Find value in solution
+            value_patterns = [
+                r"(?:=|is)\s*\$?([^$\n]+)\$?\s*$",
+                r"(?:answer|result|value)\s*(?:is|=)\s*\$?([^$\n]+)\$?"
+            ]
+
+            value = None
+            for pat in value_patterns:
+                match = re.search(pat, solution, re.IGNORECASE | re.MULTILINE)
+                if match:
+                    value = match.group(1).strip()
+                    break
+
+            if integrand and lower and upper and value:
+                return {"integrand": integrand, "lower": lower, "upper": upper, "value": value}
+            return None
+        except Exception:
+            return None
+
+    def _extract_limit_components(self, problem: str, solution: str) -> Optional[Dict]:
+        """Extract limit components from problem/solution."""
+        try:
+            # Find approaching value
+            approach_patterns = [
+                r"(?:as\s+)?x\s*(?:→|->|approaches)\s*\$?([^$\s,]+)\$?",
+                r"lim\s*_?\{?\s*x\s*(?:→|->|\\to)\s*([^}]+)\s*\}?",
+                r"x\s*→\s*([^\s,]+)"
+            ]
+
+            approaching = None
+            for pat in approach_patterns:
+                match = re.search(pat, problem, re.IGNORECASE)
+                if match:
+                    approaching = match.group(1).strip()
+                    break
+
+            if not approaching:
+                return None
+
+            # Find expression
+            expr_patterns = [
+                r"lim(?:it)?\s+(?:of\s+)?\$?([^$]+)\$?\s+as",
+                r"lim\s*_[^$]*\$?\s*([^$]+)\$?",
+                r"limit\s+of\s+\$?([^$]+)\$?"
+            ]
+
+            expression = None
+            for pat in expr_patterns:
+                match = re.search(pat, problem, re.IGNORECASE)
+                if match:
+                    expression = match.group(1).strip()
+                    break
+
+            # Find value in solution
+            value_patterns = [
+                r"(?:limit\s+)?(?:=|is)\s*\$?([^$\n]+)\$?\s*$",
+                r"(?:answer|result|limit)\s*(?:is|=)\s*\$?([^$\n]+)\$?"
+            ]
+
+            value = None
+            for pat in value_patterns:
+                match = re.search(pat, solution, re.IGNORECASE | re.MULTILINE)
+                if match:
+                    value = match.group(1).strip()
+                    break
+
+            if expression and approaching and value:
+                return {"expression": expression, "variable": "x", "approaching": approaching, "value": value}
+            return None
+        except Exception:
+            return None
 
     def _build_continuation_input(self, user_input: str) -> str:
         """Build input for when student is answering a previous question."""

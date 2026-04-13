@@ -17,41 +17,119 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 # Map diagnostic topic names → question_bank pattern names
+# Includes both coarse patterns and fine-grained patterns
 TOPIC_TO_PATTERN: dict[str, list[str]] = {
-    # Calc I
+    # -------------------------------------------------------------------------
+    # COARSE PATTERNS (legacy)
+    # -------------------------------------------------------------------------
     "derivatives":              ["derivatives"],
     "optimization":             ["optimization"],
     "limits":                   ["limits"],
     "integration":              ["integration"],
-    # Calc II extras
     "series":                   ["series", "limits"],
-    "improper_integrals":       ["integration", "limits"],
     "volume":                   ["integration"],
-    # Calc III extras
-    "partial_derivatives":      ["derivatives"],
-    "constrained_optimization": ["constrained_optimization"],
-    "multivariable_integration": ["integration"],
-    "gradient":                 ["derivatives"],
-    "multivariable_optimization": ["optimization", "constrained_optimization"],
-    # related rates always high-value
     "related_rates":            ["related_rates"],
+
+    # -------------------------------------------------------------------------
+    # FINE-GRAINED PATTERNS (new)
+    # -------------------------------------------------------------------------
+
+    # Multivariable calculus
+    "directional_derivative":   ["derivatives", "gradient"],
+    "gradient":                 ["derivatives"],
+    "tangent_plane":            ["derivatives"],
+    "partial_derivatives":      ["derivatives"],
+    "lagrange_multipliers":     ["constrained_optimization"],
+    "constrained_optimization": ["constrained_optimization"],
+
+    # Optimization
+    "critical_points":          ["optimization"],
+    "critical_points_multivariable": ["optimization"],
+    "second_derivative_test":   ["optimization"],
+    "absolute_extrema":         ["optimization"],
+    "extrema_on_bounded_region": ["optimization", "constrained_optimization"],
+    "multivariable_optimization": ["optimization", "constrained_optimization"],
+
+    # Integration techniques
+    "u_substitution":           ["integration"],
+    "integration_by_parts":     ["integration"],
+    "partial_fractions":        ["integration"],
+    "trig_substitution":        ["integration"],
+    "double_integrals":         ["integration"],
+    "triple_integrals":         ["integration"],
+    "improper_integrals":       ["integration", "limits"],
+    "multivariable_integration": ["integration"],
+
+    # Derivatives
+    "chain_rule":               ["derivatives"],
+    "product_rule":             ["derivatives"],
+    "implicit_differentiation": ["derivatives"],
+
+    # Limits
+    "lhopitals_rule":           ["limits"],
+
+    # Series
+    "taylor_series":            ["limits", "series"],
+    "power_series":             ["limits", "series"],
+    "convergence_tests":        ["limits", "series"],
 }
 
 # Human-readable topic labels
+# Includes both coarse patterns and fine-grained patterns
 TOPIC_LABELS: dict[str, str] = {
+    # -------------------------------------------------------------------------
+    # COARSE PATTERNS (legacy)
+    # -------------------------------------------------------------------------
     "derivatives":              "Derivatives",
     "optimization":             "Optimization (max/min)",
     "limits":                   "Limits",
     "integration":              "Integration",
     "series":                   "Series & Convergence",
-    "improper_integrals":       "Improper Integrals",
     "volume":                   "Volume of Revolution",
-    "partial_derivatives":      "Partial Derivatives",
-    "constrained_optimization": "Lagrange Multipliers",
-    "multivariable_integration":"Multivariable Integration",
-    "gradient":                 "Gradient & Directional Derivatives",
-    "multivariable_optimization":"Multivariable Optimization",
     "related_rates":            "Related Rates",
+
+    # -------------------------------------------------------------------------
+    # FINE-GRAINED PATTERNS (new)
+    # -------------------------------------------------------------------------
+
+    # Multivariable calculus
+    "directional_derivative":   "Directional Derivatives",
+    "gradient":                 "Gradient",
+    "tangent_plane":            "Tangent Planes",
+    "partial_derivatives":      "Partial Derivatives",
+    "lagrange_multipliers":     "Lagrange Multipliers",
+    "constrained_optimization": "Constrained Optimization",
+
+    # Optimization
+    "critical_points":          "Critical Points",
+    "critical_points_multivariable": "Critical Points (Multivariable)",
+    "second_derivative_test":   "Second Derivative Test",
+    "absolute_extrema":         "Absolute Extrema",
+    "extrema_on_bounded_region": "Extrema on Bounded Region",
+    "multivariable_optimization": "Multivariable Optimization",
+
+    # Integration techniques
+    "u_substitution":           "U-Substitution",
+    "integration_by_parts":     "Integration by Parts",
+    "partial_fractions":        "Partial Fractions",
+    "trig_substitution":        "Trig Substitution",
+    "double_integrals":         "Double Integrals",
+    "triple_integrals":         "Triple Integrals",
+    "improper_integrals":       "Improper Integrals",
+    "multivariable_integration": "Multivariable Integration",
+
+    # Derivatives
+    "chain_rule":               "Chain Rule",
+    "product_rule":             "Product Rule",
+    "implicit_differentiation": "Implicit Differentiation",
+
+    # Limits
+    "lhopitals_rule":           "L'Hôpital's Rule",
+
+    # Series
+    "taylor_series":            "Taylor Series",
+    "power_series":             "Power Series",
+    "convergence_tests":        "Convergence Tests",
 }
 
 _POINTS_RE = re.compile(
@@ -152,10 +230,22 @@ def prioritize_questions(
     return [s.question for s in scored[:limit]]
 
 
-def format_study_plan(result, prioritized_questions: list, *, max_preview: int = 5) -> str:
+def format_study_plan(
+    result,
+    prioritized_questions: list,
+    *,
+    max_preview: int = 5,
+    has_materials: bool = True,
+) -> str:
     """
     Return a markdown string summarising the diagnostic outcome and
     the top practice problems, suitable for injecting into the chat.
+
+    Args:
+        result: PlacementResult with score, level, weak/strong topics
+        prioritized_questions: List of Question objects to recommend
+        max_preview: Max number of questions to show
+        has_materials: Whether user uploaded course materials
     """
     level_emoji = {"beginner": "🌱", "intermediate": "📚", "advanced": "🚀"}.get(
         result.level, "📚"
@@ -175,7 +265,7 @@ def format_study_plan(result, prioritized_questions: list, *, max_preview: int =
     lines.append("")
     lines.append(result.summary)
 
-    if prioritized_questions:
+    if prioritized_questions and has_materials:
         lines.append("")
         lines.append(f"**Recommended practice order** (top {min(max_preview, len(prioritized_questions))}):")
         for i, q in enumerate(prioritized_questions[:max_preview], 1):
@@ -189,7 +279,10 @@ def format_study_plan(result, prioritized_questions: list, *, max_preview: int =
             lines.append(f"{i}. {diff_icon} **{label}**{pts_str}")
 
     lines.append("")
-    lines.append("Just paste or click any problem to start. I'll teach based on your weak areas first.")
+    if has_materials:
+        lines.append("Just paste or click any problem to start. I'll teach based on your weak areas first.")
+    else:
+        lines.append("Paste any calculus problem to start. I'll teach based on your weak areas.")
     return "\n".join(lines)
 
 
