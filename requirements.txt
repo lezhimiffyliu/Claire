@@ -14,10 +14,17 @@ langchain-anthropic>=0.1.0
 langchain-openai>=0.1.0
 langgraph>=0.2.0
 
+# Gemini vision
+google-generativeai>=0.5.0
+Pillow>=10.0.0
+
 # API dependencies
 fastapi>=0.109.0
 uvicorn>=0.27.0
 pydantic>=2.0.0
+
+# QR code generation
+qrcode[pil]>=7.4
 
 # Development dependencies
 pytest>=8.0.0

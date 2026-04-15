@@ -121,13 +121,14 @@ Output ONLY valid JSON."""
         return ParsedSolution(steps=[], final_answer=None, raw_text=f"[Error: {e}]")
 
 
-def grade_solution(parsed: ParsedSolution, problem: dict) -> GradingResult:
+def grade_solution(parsed: ParsedSolution, problem: dict, diagram_url: Optional[str] = None) -> GradingResult:
     """
     Compare student solution to correct solution.
 
     Args:
         parsed: ParsedSolution from parse_image()
         problem: Problem dict with solution_steps and final_answer
+        diagram_url: Optional URL to problem diagram (for vision)
 
     Returns:
         GradingResult with feedback
@@ -187,7 +188,16 @@ Error types:
 
 Output ONLY valid JSON."""
 
-        result = llm.invoke([HumanMessage(content=prompt)])
+        # Build message content - include diagram if available
+        content = []
+        if diagram_url:
+            content.append({
+                "type": "image",
+                "source": {"type": "url", "url": diagram_url},
+            })
+        content.append({"type": "text", "text": prompt})
+
+        result = llm.invoke([HumanMessage(content=content)])
         output = result.content.strip()
 
         # Extract JSON

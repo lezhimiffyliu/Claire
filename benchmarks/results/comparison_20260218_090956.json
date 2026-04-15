@@ -1,0 +1,105 @@
+{
+  "timestamp": "20260218_090956",
+  "models": [
+    "claire",
+    "gpt-4"
+  ],
+  "filters": {
+    "category": null,
+    "difficulty": null
+  },
+  "results": {
+    "claire": {
+      "accuracy": 1.0,
+      "correct": 20,
+      "total": 20,
+      "avg_latency_ms": 3201.665234565735,
+      "total_tokens": 0,
+      "by_category": {
+        "derivative": {
+          "total": 6,
+          "correct": 6,
+          "accuracy": 1.0
+        },
+        "integral": {
+          "total": 6,
+          "correct": 6,
+          "accuracy": 1.0
+        },
+        "limit": {
+          "total": 4,
+          "correct": 4,
+          "accuracy": 1.0
+        },
+        "equation": {
+          "total": 4,
+          "correct": 4,
+          "accuracy": 1.0
+        }
+      },
+      "by_difficulty": {
+        "easy": {
+          "total": 6,
+          "correct": 6,
+          "accuracy": 1.0
+        },
+        "medium": {
+          "total": 7,
+          "correct": 7,
+          "accuracy": 1.0
+        },
+        "hard": {
+          "total": 7,
+          "correct": 7,
+          "accuracy": 1.0
+        }
+      }
+    },
+    "gpt-4": {
+      "accuracy": 0.4,
+      "correct": 8,
+      "total": 20,
+      "avg_latency_ms": 1450.164520740509,
+      "total_tokens": 1219,
+      "by_category": {
+        "derivative": {
+          "total": 6,
+          "correct": 4,
+          "accuracy": 0.6666666666666666
+        },
+        "integral": {
+          "total": 6,
+          "correct": 4,
+          "accuracy": 0.6666666666666666
+        },
+        "limit": {
+          "total": 4,
+          "correct": 0,
+          "accuracy": 0.0
+        },
+        "equation": {
+          "total": 4,
+          "correct": 0,
+          "accuracy": 0.0
+        }
+      },
+      "by_difficulty": {
+        "easy": {
+          "total": 6,
+          "correct": 4,
+          "accuracy": 0.6666666666666666
+        },
+        "medium": {
+          "total": 7,
+          "correct": 2,
+          "accuracy": 0.2857142857142857
+        },
+        "hard": {
+          "total": 7,
+          "correct": 2,
+          "accuracy": 0.2857142857142857
+        }
+      }
+    }
+  }
+}

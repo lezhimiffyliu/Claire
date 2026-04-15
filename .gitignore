@@ -138,3 +138,7 @@ tests/test_usage.db
 
 # Streamlit secrets (never commit!)
 .streamlit/secrets.toml
+
+# UW exam source data (raw PDFs, images, JSONs)
+uw_data/
+supabase/.temp/

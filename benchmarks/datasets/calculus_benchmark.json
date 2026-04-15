@@ -1,0 +1,172 @@
+{
+  "metadata": {
+    "name": "Claire Calculus Benchmark",
+    "version": "1.0",
+    "description": "Calculus problems for evaluating Claire's math capabilities",
+    "categories": ["derivative", "integral", "limit", "equation"]
+  },
+  "problems": [
+    {
+      "id": "deriv_001",
+      "category": "derivative",
+      "difficulty": "easy",
+      "problem": "Find the derivative of x^3",
+      "answer": "3*x^2",
+      "answer_latex": "3x^2",
+      "solution_steps": ["Apply power rule: d/dx(x^n) = n*x^(n-1)", "d/dx(x^3) = 3*x^2"]
+    },
+    {
+      "id": "deriv_002",
+      "category": "derivative",
+      "difficulty": "easy",
+      "problem": "What is the derivative of sin(x)?",
+      "answer": "cos(x)",
+      "answer_latex": "\\cos(x)"
+    },
+    {
+      "id": "deriv_003",
+      "category": "derivative",
+      "difficulty": "medium",
+      "problem": "Find d/dx of e^(2x)",
+      "answer": "2*exp(2*x)",
+      "answer_latex": "2e^{2x}"
+    },
+    {
+      "id": "deriv_004",
+      "category": "derivative",
+      "difficulty": "medium",
+      "problem": "Differentiate x^2 * sin(x)",
+      "answer": "2*x*sin(x) + x^2*cos(x)",
+      "answer_latex": "2x\\sin(x) + x^2\\cos(x)"
+    },
+    {
+      "id": "deriv_005",
+      "category": "derivative",
+      "difficulty": "hard",
+      "problem": "Find the derivative of ln(x^2 + 1)",
+      "answer": "2*x/(x^2 + 1)",
+      "answer_latex": "\\frac{2x}{x^2+1}"
+    },
+    {
+      "id": "deriv_006",
+      "category": "derivative",
+      "difficulty": "hard",
+      "problem": "Differentiate arctan(x)",
+      "answer": "1/(x^2 + 1)",
+      "answer_latex": "\\frac{1}{x^2+1}"
+    },
+    {
+      "id": "integ_001",
+      "category": "integral",
+      "difficulty": "easy",
+      "problem": "Calculate the integral of x^2",
+      "answer": "x^3/3",
+      "answer_latex": "\\frac{x^3}{3} + C"
+    },
+    {
+      "id": "integ_002",
+      "category": "integral",
+      "difficulty": "easy",
+      "problem": "What is the integral of cos(x)?",
+      "answer": "sin(x)",
+      "answer_latex": "\\sin(x) + C"
+    },
+    {
+      "id": "integ_003",
+      "category": "integral",
+      "difficulty": "medium",
+      "problem": "Find the integral of 1/x",
+      "answer": "log(x)",
+      "answer_latex": "\\ln|x| + C"
+    },
+    {
+      "id": "integ_004",
+      "category": "integral",
+      "difficulty": "medium",
+      "problem": "Calculate the integral of e^(3x)",
+      "answer": "exp(3*x)/3",
+      "answer_latex": "\\frac{e^{3x}}{3} + C"
+    },
+    {
+      "id": "integ_005",
+      "category": "integral",
+      "difficulty": "hard",
+      "problem": "Find the integral of x*e^x",
+      "answer": "(x - 1)*exp(x)",
+      "answer_latex": "(x-1)e^x + C"
+    },
+    {
+      "id": "integ_006",
+      "category": "integral",
+      "difficulty": "hard",
+      "problem": "Calculate the definite integral of x^2 from 0 to 2",
+      "answer": "8/3",
+      "answer_latex": "\\frac{8}{3}",
+      "bounds": {"lower": 0, "upper": 2}
+    },
+    {
+      "id": "limit_001",
+      "category": "limit",
+      "difficulty": "easy",
+      "problem": "Find the limit of 1/x as x approaches infinity",
+      "answer": "0",
+      "answer_latex": "0"
+    },
+    {
+      "id": "limit_002",
+      "category": "limit",
+      "difficulty": "medium",
+      "problem": "Find the limit of sin(x)/x as x approaches 0",
+      "answer": "1",
+      "answer_latex": "1"
+    },
+    {
+      "id": "limit_003",
+      "category": "limit",
+      "difficulty": "medium",
+      "problem": "Find the limit of (e^x - 1)/x as x approaches 0",
+      "answer": "1",
+      "answer_latex": "1"
+    },
+    {
+      "id": "limit_004",
+      "category": "limit",
+      "difficulty": "hard",
+      "problem": "Find the limit of (1 + 1/n)^n as n approaches infinity",
+      "answer": "E",
+      "answer_latex": "e"
+    },
+    {
+      "id": "eq_001",
+      "category": "equation",
+      "difficulty": "easy",
+      "problem": "Solve x^2 - 4 = 0",
+      "answer": "[-2, 2]",
+      "answer_latex": "x = \\pm 2"
+    },
+    {
+      "id": "eq_002",
+      "category": "equation",
+      "difficulty": "medium",
+      "problem": "Solve x^2 - 5x + 6 = 0",
+      "answer": "[2, 3]",
+      "answer_latex": "x = 2, 3"
+    },
+    {
+      "id": "eq_003",
+      "category": "equation",
+      "difficulty": "hard",
+      "problem": "Solve e^x = 5",
+      "answer": "log(5)",
+      "answer_latex": "x = \\ln(5)"
+    },
+    {
+      "id": "eq_004",
+      "category": "equation",
+      "difficulty": "hard",
+      "problem": "Solve sin(x) = 1/2 for x in [0, 2*pi]",
+      "answer": "[pi/6, 5*pi/6]",
+      "answer_latex": "x = \\frac{\\pi}{6}, \\frac{5\\pi}{6}"
+    }
+  ]
+}

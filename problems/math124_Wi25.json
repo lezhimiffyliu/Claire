@@ -48,7 +48,7 @@
     "course": "math_124",
     "exam": "wi25_final",
     "problem_number": 2,
-    "topic": "derivatives",
+    "topic": "derivative_rules",
     "concepts": [
       "derivatives",
       "product_rule",
@@ -93,7 +93,7 @@
     "course": "math_124",
     "exam": "wi25_final",
     "problem_number": 3,
-    "topic": "graph_interpretation",
+    "topic": "curve_analysis",
     "concepts": [
       "derivatives",
       "graphical_analysis",
@@ -311,7 +311,7 @@
     "course": "math_124",
     "exam": "wi25_final",
     "problem_number": 8,
-    "topic": "curve_sketching",
+    "topic": "curve_analysis",
     "concepts": [
       "curve_sketching",
       "intercepts",

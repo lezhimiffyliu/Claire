@@ -46,7 +46,7 @@
     "course": "math_124",
     "exam": "au25_final",
     "problem_number": 2,
-    "topic": "differentiation",
+    "topic": "derivative_rules",
     "concepts": [
       "derivatives",
       "chain_rule",
@@ -147,7 +147,7 @@
     "course": "math_124",
     "exam": "au25_final",
     "problem_number": 5,
-    "topic": "parametric_curves",
+    "topic": "parametric_equations",
     "concepts": [
       "parametric_equations",
       "tangent_line",
@@ -233,7 +233,7 @@
     "course": "math_124",
     "exam": "au25_final",
     "problem_number": 8,
-    "topic": "curve_sketching",
+    "topic": "curve_analysis",
     "concepts": [
       "intercepts",
       "asymptotes",

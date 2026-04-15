@@ -1,0 +1,269 @@
+{
+  "model_name": "Claire",
+  "timestamp": "2026-02-18T08:56:50.912990",
+  "total_problems": 20,
+  "correct": 17,
+  "accuracy": 0.85,
+  "by_category": {
+    "derivative": {
+      "total": 6,
+      "correct": 6,
+      "accuracy": 1.0
+    },
+    "integral": {
+      "total": 6,
+      "correct": 6,
+      "accuracy": 1.0
+    },
+    "limit": {
+      "total": 4,
+      "correct": 4,
+      "accuracy": 1.0
+    },
+    "equation": {
+      "total": 4,
+      "correct": 1,
+      "accuracy": 0.25
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "total": 6,
+      "correct": 5,
+      "accuracy": 0.8333333333333334
+    },
+    "medium": {
+      "total": 7,
+      "correct": 6,
+      "accuracy": 0.8571428571428571
+    },
+    "hard": {
+      "total": 7,
+      "correct": 6,
+      "accuracy": 0.8571428571428571
+    }
+  },
+  "avg_latency_ms": 4469.35967206955,
+  "problems": [
+    {
+      "id": "deriv_001",
+      "category": "derivative",
+      "difficulty": "easy",
+      "problem": "Find the derivative of x^3",
+      "expected": "3*x^2",
+      "extracted": "3*x^2",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3231.3241958618164
+    },
+    {
+      "id": "deriv_002",
+      "category": "derivative",
+      "difficulty": "easy",
+      "problem": "What is the derivative of sin(x)?",
+      "expected": "cos(x)",
+      "extracted": "cos(x)",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 2929.0170669555664
+    },
+    {
+      "id": "deriv_003",
+      "category": "derivative",
+      "difficulty": "medium",
+      "problem": "Find d/dx of e^(2x)",
+      "expected": "2*exp(2*x)",
+      "extracted": "2*e^(2*x)",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 2969.8219299316406
+    },
+    {
+      "id": "deriv_004",
+      "category": "derivative",
+      "difficulty": "medium",
+      "problem": "Differentiate x^2 * sin(x)",
+      "expected": "2*x*sin(x) + x^2*cos(x)",
+      "extracted": "x^2*cos(x) + 2*x*sin(x)",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3320.6090927124023
+    },
+    {
+      "id": "deriv_005",
+      "category": "derivative",
+      "difficulty": "hard",
+      "problem": "Find the derivative of ln(x^2 + 1)",
+      "expected": "2*x/(x^2 + 1)",
+      "extracted": "2*x/(x^2 + 1)",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 2929.353952407837
+    },
+    {
+      "id": "deriv_006",
+      "category": "derivative",
+      "difficulty": "hard",
+      "problem": "Differentiate arctan(x)",
+      "expected": "1/(x^2 + 1)",
+      "extracted": "1/(x^2 + 1)",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 5983.072757720947
+    },
+    {
+      "id": "integ_001",
+      "category": "integral",
+      "difficulty": "easy",
+      "problem": "Calculate the integral of x^2",
+      "expected": "x^3/3",
+      "extracted": "x^3/3 + C",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3201.9710540771484
+    },
+    {
+      "id": "integ_002",
+      "category": "integral",
+      "difficulty": "easy",
+      "problem": "What is the integral of cos(x)?",
+      "expected": "sin(x)",
+      "extracted": "sin(x) + C",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3087.459087371826
+    },
+    {
+      "id": "integ_003",
+      "category": "integral",
+      "difficulty": "medium",
+      "problem": "Find the integral of 1/x",
+      "expected": "log(x)",
+      "extracted": "log(x) + C",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3063.629627227783
+    },
+    {
+      "id": "integ_004",
+      "category": "integral",
+      "difficulty": "medium",
+      "problem": "Calculate the integral of e^(3x)",
+      "expected": "exp(3*x)/3",
+      "extracted": "e^(3*x)/3 + C",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3143.1148052215576
+    },
+    {
+      "id": "integ_005",
+      "category": "integral",
+      "difficulty": "hard",
+      "problem": "Find the integral of x*e^x",
+      "expected": "(x - 1)*exp(x)",
+      "extracted": "(x - 1)*e^x + C",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3255.533218383789
+    },
+    {
+      "id": "integ_006",
+      "category": "integral",
+      "difficulty": "hard",
+      "problem": "Calculate the definite integral of x^2 from 0 to 2",
+      "expected": "8/3",
+      "extracted": "8/3",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3217.573881149292
+    },
+    {
+      "id": "limit_001",
+      "category": "limit",
+      "difficulty": "easy",
+      "problem": "Find the limit of 1/x as x approaches infinity",
+      "expected": "0",
+      "extracted": "0",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3638.598918914795
+    },
+    {
+      "id": "limit_002",
+      "category": "limit",
+      "difficulty": "medium",
+      "problem": "Find the limit of sin(x)/x as x approaches 0",
+      "expected": "1",
+      "extracted": "1",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3227.5421619415283
+    },
+    {
+      "id": "limit_003",
+      "category": "limit",
+      "difficulty": "medium",
+      "problem": "Find the limit of (e^x - 1)/x as x approaches 0",
+      "expected": "1",
+      "extracted": "1",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 6498.439073562622
+    },
+    {
+      "id": "limit_004",
+      "category": "limit",
+      "difficulty": "hard",
+      "problem": "Find the limit of (1 + 1/n)^n as n approaches infinity",
+      "expected": "E",
+      "extracted": "e",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 6346.682786941528
+    },
+    {
+      "id": "eq_001",
+      "category": "equation",
+      "difficulty": "easy",
+      "problem": "Solve x^2 - 4 = 0",
+      "expected": "[-2, 2]",
+      "extracted": "2",
+      "is_correct": false,
+      "error": null,
+      "latency_ms": 7502.816915512085
+    },
+    {
+      "id": "eq_002",
+      "category": "equation",
+      "difficulty": "medium",
+      "problem": "Solve x^2 - 5x + 6 = 0",
+      "expected": "[2, 3]",
+      "extracted": "3",
+      "is_correct": false,
+      "error": null,
+      "latency_ms": 7344.002962112427
+    },
+    {
+      "id": "eq_003",
+      "category": "equation",
+      "difficulty": "hard",
+      "problem": "Solve e^x = 5",
+      "expected": "log(5)",
+      "extracted": "log(5)",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 7168.850898742676
+    },
+    {
+      "id": "eq_004",
+      "category": "equation",
+      "difficulty": "hard",
+      "problem": "Solve sin(x) = 1/2 for x in [0, 2*pi]",
+      "expected": "[pi/6, 5*pi/6]",
+      "extracted": "pi/6",
+      "is_correct": false,
+      "error": null,
+      "latency_ms": 7327.779054641724
+    }
+  ]
+}

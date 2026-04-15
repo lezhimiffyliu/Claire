@@ -58,6 +58,27 @@ def _client():
     return _supabase
 
 
+def get_authenticated_client():
+    """
+    Get Supabase client with current user's session.
+    This is needed for RLS to work properly.
+    """
+    client = _client()
+    if not client:
+        return None
+
+    # Get stored session
+    session = st.session_state.get("supabase_session")
+    if session:
+        try:
+            # Set the session on the client
+            client.auth.set_session(session.access_token, session.refresh_token)
+        except Exception as e:
+            print(f"[AUTH DEBUG] Failed to set session: {e}")
+
+    return client
+
+
 def handle_oauth_callback() -> bool:
     """Call once at the top of app.py. Returns True if a login just happened."""
     params = st.query_params

@@ -6,12 +6,27 @@ UW Calculus Practice + Photo Grading
 import streamlit as st
 from problem_loader import load_problems, get_all_parts, Problem, ProblemPart
 from grader import parse_image, grade_solution, GradingResult
-from quota import can_use_premium, record_query, get_quota_status, is_pro_user
+from quota import can_use_premium, record_query, get_quota_status, is_pro_user, clear_pro_cache
 from student_profile import (
     StudentProfile, get_profile, save_profile, create_profile,
-    update_profile_from_diagnostic, update_profile_from_grading
+    update_profile_from_diagnostic, update_profile_from_grading,
+    get_or_create_workspace, load_from_supabase, sync_profile_to_supabase,
+    get_current_workspace_id, set_current_workspace_id
 )
+from attempt_tracker import record_handwritten_attempt
 from recommender import recommend_next_problem, get_recommendation_reason
+from auth import handle_oauth_callback, get_user, show_login_button, sign_out
+from stripe_checkout import create_checkout_session, verify_checkout_session, get_customer_portal_url
+from mobile_upload import (
+    create_upload_session, get_session_status, get_signed_urls,
+    close_session, get_session_by_id
+)
+from qr_generator import generate_qr_code, get_upload_url
+from vision_analyzer import (
+    analyze_handwritten_solution, analysis_to_grading_result, get_combined_feedback
+)
+import os
+import random
 
 # Page config
 st.set_page_config(
@@ -19,6 +34,29 @@ st.set_page_config(
     page_icon="📐",
     layout="centered"
 )
+
+# ============================================================
+# AUTH & PAYMENT CALLBACKS (must be early)
+# ============================================================
+
+# Handle OAuth callback (?code=xxx)
+if handle_oauth_callback():
+    st.rerun()
+
+# Handle Stripe payment callback (?upgraded=true&session_id=xxx)
+if st.query_params.get("upgraded") == "true":
+    session_id = st.query_params.get("session_id")
+    if session_id:
+        result = verify_checkout_session(session_id)
+        if result["status"] == "complete":
+            st.success("🎉 Welcome to Claire Pro! Your account has been upgraded.")
+            clear_pro_cache()  # Force re-check pro status
+        elif result["status"] == "pending":
+            st.warning(result["message"])
+        else:
+            st.error(result["message"])
+        # Clear query params
+        st.query_params.clear()
 
 # Custom CSS
 st.markdown("""
@@ -87,10 +125,120 @@ if "show_solution" not in st.session_state:
 if "seen_problem_indices" not in st.session_state:
     st.session_state.seen_problem_indices = set()  # Track problems seen this session
 
+if "qr_upload_session" not in st.session_state:
+    st.session_state.qr_upload_session = None  # Current QR upload session
+
+if "qr_upload_token" not in st.session_state:
+    st.session_state.qr_upload_token = None  # Raw token for QR code URL
+
+if "workspace_id" not in st.session_state:
+    st.session_state.workspace_id = None  # Current workspace ID for logged-in users
+
+if "teaching_context" not in st.session_state:
+    st.session_state.teaching_context = None  # Context for Socratic teaching after wrong answer
+
+if "teaching_mode" not in st.session_state:
+    st.session_state.teaching_mode = False  # True when in teaching dialogue
+
 
 # ============================================================
 # HELPER FUNCTIONS
 # ============================================================
+
+def build_teaching_context(
+    problem: Problem,
+    analysis,  # SolutionAnalysis
+    part_index: int = 0,
+) -> dict:
+    """
+    Build teaching context from analysis results for Socratic teaching.
+
+    Args:
+        problem: The Problem object
+        analysis: SolutionAnalysis from vision_analyzer
+        part_index: Which part to focus on
+
+    Returns:
+        Dict with all context needed for teaching agent
+    """
+    part = analysis.parts[part_index] if part_index < len(analysis.parts) else analysis.parts[0]
+    problem_part = problem.parts[part_index] if part_index < len(problem.parts) else problem.parts[0]
+
+    return {
+        # Problem info
+        "problem_id": problem.id,
+        "problem_stem": problem.stem,
+        "question_text": problem_part.question_text,
+        "official_answer": problem_part.final_answer,
+        "topic": problem.topic,
+        "concepts": getattr(problem, "concepts", []),
+
+        # Student's work
+        "student_answer": part.student_final_answer,
+        "student_steps": part.steps,
+
+        # Verifier result
+        "is_correct": part.is_correct,
+        "is_uncertain": part.is_uncertain,
+        "verifier_result": part.verifier_result,
+
+        # Error analysis
+        "error_type": part.error_type,
+        "error_candidates": part.error_candidates,
+        "feedback": part.feedback,
+        "hint": part.hint,
+        "confidence": part.confidence,
+    }
+
+
+def start_teaching_session(teaching_context: dict) -> str:
+    """
+    Start a Socratic teaching session based on the teaching context.
+
+    Args:
+        teaching_context: Dict from build_teaching_context()
+
+    Returns:
+        Initial teaching message from agent
+    """
+    from claire_agent import ClaireAgent
+
+    # Get or create agent
+    if "claire_agent" not in st.session_state:
+        st.session_state.claire_agent = ClaireAgent()
+
+    agent = st.session_state.claire_agent
+
+    # Build the initial prompt for the agent
+    prompt = f"""A student just submitted a handwritten solution that was analyzed.
+
+**Problem:** {teaching_context.get('question_text', '')}
+
+**Official Answer:** {teaching_context.get('official_answer', 'Not provided')}
+
+**Student's Answer:** {teaching_context.get('student_answer', 'Not extracted')}
+
+**Student's Steps:**
+{chr(10).join(teaching_context.get('student_steps', ['No steps extracted']))}
+
+**Analysis Result:**
+- Correct: {teaching_context.get('is_correct', False)}
+- Error Type: {teaching_context.get('error_type', 'unknown')}
+- Suspected Issues: {teaching_context.get('error_candidates', [])}
+
+**Your Task:**
+The student's answer is INCORRECT. Using Socratic method:
+1. Do NOT reveal the correct answer directly
+2. Ask a guiding question to help them discover their mistake
+3. Focus on the specific step or concept where they went wrong
+4. Be encouraging but direct them to think
+
+Start with a single guiding question."""
+
+    # Call agent
+    result = agent.process_query(prompt)
+    return result.get("output", "Let me help you understand where you went wrong...")
+
 
 def load_diagnostic_bank():
     """Load diagnostic questions from JSON."""
@@ -112,7 +260,17 @@ def get_diagnostic_questions(course: str, count: int = 8) -> list:
     questions.sort(key=lambda q: difficulty_order.get(q["difficulty"], 1))
 
     # Take up to count questions
-    return questions[:count]
+    selected = questions[:count]
+
+    # Shuffle choices for each question so correct answer isn't always first
+    for q in selected:
+        correct_answer = q["choices"][q["correct_index"]]
+        shuffled = q["choices"].copy()
+        random.shuffle(shuffled)
+        q["choices"] = shuffled
+        q["correct_index"] = shuffled.index(correct_answer)
+
+    return selected
 
 
 def select_course(course: str):
@@ -121,11 +279,30 @@ def select_course(course: str):
     st.session_state.mode = "diagnostic"
     st.session_state.diagnostic_questions = get_diagnostic_questions(course)
     st.session_state.diagnostic_idx = 0
+
+    # For logged-in users: create/load workspace and profile from Supabase
+    user = get_user()
+    if user:
+        workspace_id = get_or_create_workspace(str(user.id), course)
+        if workspace_id:
+            set_current_workspace_id(workspace_id)
+            # Load existing profile from Supabase
+            profile = load_from_supabase(workspace_id)
+            if profile:
+                save_profile(profile)
     st.session_state.diagnostic_answers = {}
     st.session_state.weak_topics = []
 
     # Create student profile (stored in session for anonymous users)
     create_profile(course)
+
+
+def skip_diagnostic():
+    """Skip diagnostic and go directly to practice."""
+    st.session_state.weak_topics = []
+    st.session_state.strong_topics = []
+    start_practice(recommended=False)
+    st.session_state.mode = "practice"
 
 
 def finish_diagnostic():
@@ -189,12 +366,17 @@ def start_practice(recommended: bool = True):
 
 
 def next_part():
-    """Move to next part using smart recommendation."""
+    """Move to next problem using smart recommendation."""
     if st.session_state.parts_list:
-        # Mark current as seen
-        st.session_state.seen_problem_indices.add(st.session_state.current_part_idx)
+        # Get current problem
+        current_problem, _ = st.session_state.parts_list[st.session_state.current_part_idx]
 
-        # Use recommender to pick next problem
+        # Mark ALL parts of current problem as seen
+        for i, (p, _) in enumerate(st.session_state.parts_list):
+            if p.id == current_problem.id:
+                st.session_state.seen_problem_indices.add(i)
+
+        # Use recommender to pick next problem (it will skip seen parts)
         st.session_state.current_part_idx = recommend_next_problem(
             st.session_state.parts_list,
             st.session_state.current_part_idx,
@@ -225,6 +407,211 @@ def render_error_badge(error_type: str) -> str:
         "careless": "Careless Slip",
     }
     return f'<span class="error-{error_type}">{labels.get(error_type, error_type)}</span>'
+
+
+def render_qr_upload_section(problem: Problem):
+    """Render QR code mobile upload section."""
+    user = get_user()
+
+    if not user:
+        st.info("Sign in to use QR mobile upload.")
+        show_login_button("Sign in with Google")
+        return
+
+    # Get app URL for QR code
+    try:
+        app_url = st.secrets.get("APP_URL")
+    except Exception:
+        app_url = None
+    if not app_url:
+        app_url = os.environ.get("APP_URL", "http://localhost:8501")
+
+    # Check if we have an active session for this problem
+    session = st.session_state.qr_upload_session
+    token = st.session_state.qr_upload_token
+
+    # Invalidate session if it's for a different problem
+    if session and session.question_id != problem.id:
+        session = None
+        token = None
+        st.session_state.qr_upload_session = None
+        st.session_state.qr_upload_token = None
+
+    # Generate QR code button
+    if not session:
+        st.markdown("Scan the QR code with your phone to upload photos of your handwritten work.")
+
+        if st.button("Generate QR Code", type="primary", use_container_width=True):
+            # Build problem display text
+            display_parts = []
+            if problem.stem:
+                display_parts.append(problem.stem)
+            for p in problem.parts:
+                if p.label:
+                    display_parts.append(f"({p.label}) {p.question_text}")
+                else:
+                    display_parts.append(p.question_text)
+            display_text = "\n\n".join(display_parts)
+
+            # Create session
+            new_session, raw_token = create_upload_session(
+                user_id=str(user.id),
+                solve_session_id=f"solve_{problem.id}_{user.id}",
+                question_id=problem.id,
+                course=st.session_state.course or "unknown",
+                display_text=display_text[:500],  # Truncate for mobile display
+            )
+
+            if new_session:
+                st.session_state.qr_upload_session = new_session
+                st.session_state.qr_upload_token = raw_token
+                st.rerun()
+            else:
+                st.error("Failed to create upload session. Please try again.")
+        return
+
+    # Show QR code and status
+    st.markdown("**Scan with your phone:**")
+
+    # Generate and display QR code
+    qr_bytes = generate_qr_code(token, app_url, size=250)
+    st.image(qr_bytes, width=250)
+
+    # Show upload URL for manual entry
+    upload_url = get_upload_url(token, app_url)
+    with st.expander("Can't scan? Copy link"):
+        st.code(upload_url, language=None)
+
+    st.markdown("---")
+
+    # Poll for status
+    status_data = get_session_status(session.id)
+    status = status_data.get("status", "unknown")
+    image_count = status_data.get("image_count", 0)
+    images = status_data.get("images", [])
+
+    # Status indicator
+    if status == "waiting":
+        st.info("Waiting for phone to connect...")
+    elif status == "paired":
+        st.success("Phone connected! Waiting for photos...")
+    elif status == "receiving_images":
+        st.success(f"Received {image_count} photo(s)")
+    elif status in ["closed", "expired"]:
+        st.warning("Session ended. Generate a new QR code to continue.")
+        if st.button("Generate New QR Code", use_container_width=True):
+            st.session_state.qr_upload_session = None
+            st.session_state.qr_upload_token = None
+            st.rerun()
+        return
+
+    # Show image thumbnails if any
+    if images:
+        st.markdown("**Uploaded photos:**")
+        signed_urls = get_signed_urls(session.id)
+        if signed_urls:
+            cols = st.columns(min(len(signed_urls), 3))
+            for i, url in enumerate(signed_urls):
+                with cols[i % 3]:
+                    st.image(url, use_container_width=True)
+
+        st.markdown("")
+
+        # Analyze button
+        if st.button("✅ Analyze Solution", type="primary", use_container_width=True):
+            with st.spinner("Analyzing your handwritten work..."):
+                # Check quota
+                used_premium = can_use_premium()
+
+                # Get signed URLs for vision analysis
+                image_urls = get_signed_urls(session.id, expires_in=300)
+
+                if not image_urls:
+                    st.error("Could not retrieve uploaded images.")
+                    return
+
+                # Analyze with vision model
+                analysis = analyze_handwritten_solution(problem, image_urls)
+
+                if not analysis:
+                    st.error("Analysis failed. Please try again.")
+                    return
+
+                # Convert to GradingResult for display
+                result = analysis_to_grading_result(analysis, part_index=0)
+
+                # Record usage
+                record_query(used_premium=used_premium)
+
+                # Update stats
+                if result.is_correct:
+                    st.session_state.error_stats["correct"] += 1
+                elif result.error_type:
+                    st.session_state.error_stats[result.error_type] = (
+                        st.session_state.error_stats.get(result.error_type, 0) + 1
+                    )
+
+                # Update student profile
+                update_profile_from_grading(
+                    topic=problem.topic,
+                    correct=result.is_correct,
+                    error_type=result.error_type if not result.is_correct else None
+                )
+
+                # For logged-in users: record attempt and sync profile to Supabase
+                workspace_id = get_current_workspace_id()
+                if workspace_id and user:
+                    # Record attempt to database
+                    record_handwritten_attempt(
+                        user_id=str(user.id),
+                        workspace_id=workspace_id,
+                        question_id=problem.id,
+                        analysis_result={
+                            "parts": [
+                                {
+                                    "is_correct": p.is_correct,
+                                    "error_type": p.error_type,
+                                    "feedback": p.feedback,
+                                    "hint": p.hint,
+                                }
+                                for p in analysis.parts
+                            ],
+                            "overall_summary": analysis.overall_summary,
+                        },
+                        upload_session_id=str(session.id),
+                    )
+                    # Sync profile to Supabase
+                    sync_profile_to_supabase()
+
+                # Close the upload session
+                close_session(session.id)
+                st.session_state.qr_upload_session = None
+                st.session_state.qr_upload_token = None
+
+                st.session_state.grading_result = result
+
+                # If incorrect, prepare teaching context for Socratic dialogue
+                if not result.is_correct:
+                    teaching_ctx = build_teaching_context(problem, analysis, part_index=0)
+                    st.session_state.teaching_context = teaching_ctx
+                    st.session_state.teaching_mode = True
+                else:
+                    st.session_state.teaching_context = None
+                    st.session_state.teaching_mode = False
+
+                st.rerun()
+
+    # Refresh button
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.rerun()
+    with col2:
+        if st.button("Cancel", use_container_width=True):
+            close_session(session.id)
+            st.session_state.qr_upload_session = None
+            st.session_state.qr_upload_token = None
+            st.rerun()
 
 
 # ============================================================
@@ -281,7 +668,7 @@ def render_diagnostic():
     course_names = {"124": "Math 124", "125": "Math 125", "126": "Math 126"}
     course = st.session_state.course
 
-    col_back, col_title, col_progress = st.columns([1, 3, 1])
+    col_back, col_title, col_progress, col_skip = st.columns([1, 3, 1, 1])
     with col_back:
         if st.button("← Back"):
             st.session_state.course = None
@@ -291,6 +678,10 @@ def render_diagnostic():
         st.markdown(f"### {course_names.get(course, 'Calculus')} Diagnostic")
     with col_progress:
         st.caption(f"{idx + 1}/{total}")
+    with col_skip:
+        if st.button("Skip →"):
+            skip_diagnostic()
+            st.rerun()
 
     # Progress bar
     st.progress((idx + 1) / total)
@@ -429,10 +820,10 @@ def render_diagnostic_result():
             st.markdown(f"- **Initial Focus Topics:** {profile.initial_focus_topics}")
             st.markdown(f"- **Needs Foundation:** {profile.needs_foundation}")
 
-            st.markdown("**Topic Mastery:**")
-            if profile.topic_mastery:
-                for topic, mastery in profile.topic_mastery.items():
-                    st.markdown(f"  - `{topic}`: {mastery.correct}/{mastery.attempts} correct, level={mastery.mastery_level}")
+            st.markdown("**Topic Estimates:**")
+            if profile.topic_estimates:
+                for topic, estimate in profile.topic_estimates.items():
+                    st.markdown(f"  - `{topic}`: {estimate.correct}/{estimate.attempts} correct, status={estimate.status_label}")
             else:
                 st.markdown("  (empty)")
 
@@ -499,16 +890,19 @@ def render_problem_page():
         course_names = {"124": "Math 124", "125": "Math 125", "126": "Math 126"}
         st.markdown(f"### {course_names.get(st.session_state.course, 'Calculus')}")
     with col_progress:
-        total = len(st.session_state.parts_list)
-        current_num = st.session_state.current_part_idx + 1
-        st.caption(f"Q {current_num}/{total}")
+        total = len(st.session_state.problems)
+        # Find current problem index
+        current_problem_num = next(
+            (i + 1 for i, p in enumerate(st.session_state.problems) if p.id == problem.id),
+            1
+        )
+        st.caption(f"Q {current_problem_num}/{total}")
 
     st.markdown("---")
 
     # Source info
     source = problem.get_source_label()
-    part_label = f" ({part.label})" if part.label else ""
-    st.caption(f"📄 {source}{part_label} · {problem.points} pts · {problem.topic.replace('_', ' ').title()}")
+    st.caption(f"📄 {source} · {problem.points} pts · {problem.topic.replace('_', ' ').title()}")
 
     # Show recommendation reason if applicable
     reason = get_recommendation_reason(problem, get_profile())
@@ -523,73 +917,111 @@ def render_problem_page():
         st.markdown(problem.stem)
         st.markdown("")
 
-    # Show part question
-    if part.label:
-        st.markdown(f"**({part.label})** {part.question_text}")
-    else:
-        st.markdown(part.question_text)
+    # Show ALL parts of this problem
+    diagram_shown = False
+    for p in problem.parts:
+        # Show part question
+        if p.label:
+            st.markdown(f"**({p.label})** {p.question_text}")
+        else:
+            st.markdown(p.question_text)
 
-    # Show diagram if exists
-    if part.has_diagram and part.diagram_image:
-        diagram_path = f"/Users/lezhiliu/Desktop/calculus/{part.diagram_image}"
-        try:
-            st.image(diagram_path, caption="Diagram", use_container_width=True)
-        except:
-            st.caption(f"📊 Diagram: {part.diagram_image}")
+        # Show diagram if exists (only show once per problem)
+        if p.has_diagram and not diagram_shown:
+            if p.diagram_image_url:
+                st.image(p.diagram_image_url, use_container_width=True)
+            elif p.diagram_image:
+                diagram_path = f"/Users/lezhiliu/Desktop/calculus/{p.diagram_image}"
+                try:
+                    st.image(diagram_path, use_container_width=True)
+                except:
+                    st.caption(f"📊 Diagram: {p.diagram_image}")
+            diagram_shown = True
+
+        st.markdown("")  # Space between parts
 
     st.markdown("---")
 
-    # Upload section
-    st.markdown("#### 📷 Upload your work")
-    uploaded_file = st.file_uploader(
-        "Take a photo of your solution",
-        type=["png", "jpg", "jpeg"],
-        key=f"upload_{problem.id}_{part_idx}",
-        label_visibility="collapsed",
-    )
+    # Upload section with tabs
+    st.markdown("#### 📷 Submit your work")
+    upload_tab, qr_tab = st.tabs(["📁 File Upload", "📱 QR Mobile Upload"])
 
-    if uploaded_file:
-        # Show preview
-        st.image(uploaded_file, caption="Your work", use_container_width=True)
+    with upload_tab:
+        uploaded_file = st.file_uploader(
+            "Take a photo of your solution",
+            type=["png", "jpg", "jpeg"],
+            key=f"upload_{problem.id}",
+            label_visibility="collapsed",
+        )
 
-        if st.button("✅ Grade my work", type="primary", use_container_width=True):
-            with st.spinner("Analyzing your work..."):
-                # Check quota
-                used_premium = can_use_premium()
+        if uploaded_file:
+            # Show preview
+            st.image(uploaded_file, caption="Your work", use_container_width=True)
 
-                # Parse image
-                image_bytes = uploaded_file.getvalue()
-                parsed = parse_image(image_bytes)
+            if st.button("✅ Grade my work", type="primary", use_container_width=True):
+                with st.spinner("Analyzing your work..."):
+                    # Check quota
+                    used_premium = can_use_premium()
 
-                # Build problem dict for grading
-                question_text = problem.get_display_text(part_idx)
-                problem_dict = {
-                    "question": question_text,
-                    "solution_steps": [],  # Not available in this format
-                    "final_answer": part.final_answer,
-                }
-                result = grade_solution(parsed, problem_dict)
+                    # Parse image
+                    image_bytes = uploaded_file.getvalue()
+                    parsed = parse_image(image_bytes)
 
-                # Record usage
-                record_query(used_premium=used_premium)
+                    # Build full problem text with all parts
+                    question_parts = []
+                    if problem.stem:
+                        question_parts.append(problem.stem)
+                    for p in problem.parts:
+                        if p.label:
+                            question_parts.append(f"({p.label}) {p.question_text}")
+                        else:
+                            question_parts.append(p.question_text)
 
-                # Update stats
-                if result.is_correct:
-                    st.session_state.error_stats["correct"] += 1
-                elif result.error_type:
-                    st.session_state.error_stats[result.error_type] = (
-                        st.session_state.error_stats.get(result.error_type, 0) + 1
+                    # Collect all final answers
+                    final_answers = []
+                    for p in problem.parts:
+                        if p.final_answer:
+                            label = f"({p.label}) " if p.label else ""
+                            final_answers.append(f"{label}{p.final_answer}")
+
+                    problem_dict = {
+                        "question": "\n\n".join(question_parts),
+                        "solution_steps": [],
+                        "final_answer": "\n".join(final_answers) if final_answers else None,
+                    }
+
+                    # Pass first diagram URL if available
+                    diagram_url = None
+                    for p in problem.parts:
+                        if p.has_diagram and p.diagram_image_url:
+                            diagram_url = p.diagram_image_url
+                            break
+
+                    result = grade_solution(parsed, problem_dict, diagram_url=diagram_url)
+
+                    # Record usage
+                    record_query(used_premium=used_premium)
+
+                    # Update stats
+                    if result.is_correct:
+                        st.session_state.error_stats["correct"] += 1
+                    elif result.error_type:
+                        st.session_state.error_stats[result.error_type] = (
+                            st.session_state.error_stats.get(result.error_type, 0) + 1
+                        )
+
+                    # Update student profile
+                    update_profile_from_grading(
+                        topic=problem.topic,
+                        correct=result.is_correct,
+                        error_type=result.error_type if not result.is_correct else None
                     )
 
-                # Update student profile
-                update_profile_from_grading(
-                    topic=problem.topic,
-                    correct=result.is_correct,
-                    error_type=result.error_type if not result.is_correct else None
-                )
+                    st.session_state.grading_result = result
+                    st.rerun()
 
-                st.session_state.grading_result = result
-                st.rerun()
+    with qr_tab:
+        render_qr_upload_section(problem)
 
     # Grading result
     if st.session_state.grading_result:
@@ -609,7 +1041,69 @@ def render_problem_page():
             if result.hint:
                 st.info(f"💡 **Hint:** {result.hint}")
 
+            # Socratic teaching option
+            if st.session_state.teaching_context:
+                st.markdown("")
+                if st.button("🎓 Get Help Understanding This", type="secondary", use_container_width=True):
+                    st.session_state.teaching_mode = True
+                    st.rerun()
+
         st.markdown("")
+
+    # Teaching dialogue (Socratic mode)
+    if st.session_state.teaching_mode and st.session_state.teaching_context:
+        st.markdown("---")
+        st.markdown("#### 🎓 Let's Work Through This")
+
+        # Initialize teaching messages if not exists
+        if "teaching_messages" not in st.session_state:
+            st.session_state.teaching_messages = []
+
+        # Start teaching session if no messages yet
+        if not st.session_state.teaching_messages:
+            with st.spinner("Preparing guidance..."):
+                initial_response = start_teaching_session(st.session_state.teaching_context)
+                st.session_state.teaching_messages.append({
+                    "role": "assistant",
+                    "content": initial_response
+                })
+                st.rerun()
+
+        # Display teaching conversation
+        for msg in st.session_state.teaching_messages:
+            if msg["role"] == "assistant":
+                st.markdown(f"**Claire:** {msg['content']}")
+            else:
+                st.markdown(f"**You:** {msg['content']}")
+
+        # Student input
+        student_input = st.text_input("Your answer:", key="teaching_input", placeholder="Type your response...")
+        col_send, col_end = st.columns([3, 1])
+
+        with col_send:
+            if st.button("Send", use_container_width=True) and student_input:
+                # Add student message
+                st.session_state.teaching_messages.append({
+                    "role": "user",
+                    "content": student_input
+                })
+
+                # Get agent response
+                if "claire_agent" in st.session_state:
+                    agent = st.session_state.claire_agent
+                    result = agent.process_query(student_input)
+                    st.session_state.teaching_messages.append({
+                        "role": "assistant",
+                        "content": result.get("output", "Keep going...")
+                    })
+                st.rerun()
+
+        with col_end:
+            if st.button("End Session", use_container_width=True):
+                st.session_state.teaching_mode = False
+                st.session_state.teaching_messages = []
+                st.session_state.teaching_context = None
+                st.rerun()
 
     # Action buttons
     st.markdown("---")
@@ -621,15 +1115,20 @@ def render_problem_page():
             st.rerun()
 
     with col2:
-        if st.button("➡️ Next Question", type="primary", use_container_width=True):
+        if st.button("➡️ Next Problem", type="primary", use_container_width=True):
             next_part()
             st.rerun()
 
     # Show solution if requested
     if st.session_state.show_solution:
         st.markdown("---")
-        st.markdown("#### 📖 Answer")
-        st.markdown(f"**Final Answer:** {part.final_answer}")
+        st.markdown("#### 📖 Answers")
+        for p in problem.parts:
+            if p.final_answer:
+                if p.label:
+                    st.markdown(f"**({p.label})** {p.final_answer}")
+                else:
+                    st.markdown(f"**Answer:** {p.final_answer}")
 
 
 # ============================================================
@@ -641,12 +1140,46 @@ with st.sidebar:
     st.caption("UW Calculus Practice")
     st.divider()
 
-    # Quota status
-    quota = get_quota_status()
-    if is_pro_user():
-        st.markdown("✨ **Pro** - Unlimited")
+    # User account section
+    user = get_user()
+    if user:
+        # Logged in
+        st.markdown(f"👤 {user.email}")
+
+        # Pro status & quota
+        if is_pro_user():
+            st.markdown("✨ **Pro** - Unlimited")
+            # Manage subscription link
+            customer_id = st.session_state.get("stripe_customer_id")
+            if customer_id:
+                portal_url = get_customer_portal_url(customer_id)
+                if portal_url:
+                    st.link_button("Manage subscription", portal_url, use_container_width=True)
+        else:
+            quota = get_quota_status()
+            st.markdown(f"📊 {quota['remaining']}/{quota['limit']} grading left today")
+
+            # Upgrade button
+            st.markdown("")
+            if st.button("⭐ Upgrade to Pro", type="primary", use_container_width=True):
+                checkout_url = create_checkout_session(user.id, user.email)
+                if checkout_url:
+                    st.markdown(f'<meta http-equiv="refresh" content="0;url={checkout_url}">', unsafe_allow_html=True)
+                else:
+                    st.error("Could not create checkout session")
+            st.caption("$9.99/mo • Unlimited Claude grading")
+
+        st.markdown("")
+        if st.button("Sign out", use_container_width=True):
+            sign_out()
+            st.rerun()
     else:
-        st.markdown(f"📊 {quota['remaining']}/{quota['limit']} grading left today")
+        # Not logged in
+        quota = get_quota_status()
+        st.markdown(f"📊 {quota['remaining']}/{quota['limit']} grading left")
+        st.caption("Sign in to save progress")
+        st.markdown("")
+        show_login_button("Sign in with Google")
 
     st.divider()
 
@@ -692,9 +1225,15 @@ with st.sidebar:
                     # Find first part index for this problem
                     for i, (p, _) in enumerate(st.session_state.parts_list):
                         if p.id == problem.id:
-                            is_current = i == st.session_state.current_part_idx
-                            prefix = "→ " if is_current else ""
-                            btn_label = f"{prefix}P{problem.problem_number}: {problem.topic.replace('_', ' ').title()}"
+                            is_current_problem = any(
+                                st.session_state.current_part_idx == j
+                                for j, (pp, _) in enumerate(st.session_state.parts_list)
+                                if pp.id == problem.id
+                            )
+                            prefix = "→ " if is_current_problem else ""
+                            num_parts = len(problem.parts)
+                            parts_label = f" ({num_parts} parts)" if num_parts > 1 else ""
+                            btn_label = f"{prefix}P{problem.problem_number}: {problem.topic.replace('_', ' ').title()}{parts_label}"
                             if st.button(btn_label, key=f"nav_{problem.id}"):
                                 st.session_state.current_part_idx = i
                                 st.session_state.grading_result = None

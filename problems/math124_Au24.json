@@ -47,7 +47,7 @@
     "course": "math_124",
     "exam": "au24_final",
     "problem_number": 2,
-    "topic": "derivatives",
+    "topic": "derivative_rules",
     "concepts": [
       "derivatives",
       "product_rule",
@@ -91,7 +91,7 @@
     "course": "math_124",
     "exam": "au24_final",
     "problem_number": 3,
-    "topic": "graph_analysis",
+    "topic": "curve_analysis",
     "concepts": [
       "differentiability",
       "composition_of_functions",
@@ -289,7 +289,7 @@
     "course": "math_124",
     "exam": "au24_final",
     "problem_number": 8,
-    "topic": "curve_sketching",
+    "topic": "curve_analysis",
     "concepts": [
       "curve_sketching",
       "intercepts",

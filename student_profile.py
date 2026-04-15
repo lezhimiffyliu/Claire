@@ -1,13 +1,14 @@
 """
 Student Profile - tracks mastery and error patterns.
 Anonymous: stored in session state
-Logged in: persisted to Supabase
+Logged in: persisted to Supabase (via workspace)
 """
 
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 import streamlit as st
 import json
+import os
 
 
 @dataclass
@@ -148,7 +149,7 @@ class StudentProfile:
         """
         Record diagnostic results as INITIAL ESTIMATE, not definitive judgment.
         """
-        from math124_taxonomy import normalize_to_topic
+        from taxonomy import normalize_to_topic
 
         self.diagnostic_score = score
 
@@ -176,7 +177,7 @@ class StudentProfile:
 
     def record_attempt(self, topic: str, correct: bool, error_type: Optional[str] = None):
         """Record a practice attempt and update estimate."""
-        from math124_taxonomy import normalize_to_topic
+        from taxonomy import normalize_to_topic
 
         # Normalize to canonical topic
         canonical = normalize_to_topic(topic)
@@ -275,3 +276,153 @@ def update_profile_from_grading(topic: str, correct: bool, error_type: Optional[
     if profile:
         profile.record_attempt(topic, correct, error_type)
         save_profile(profile)
+
+
+# ============================================================
+# SUPABASE PERSISTENCE (logged-in users)
+# ============================================================
+
+def _get_supabase_client():
+    """Get authenticated Supabase client (with user session for RLS)."""
+    try:
+        from auth import get_authenticated_client
+        return get_authenticated_client()
+    except ImportError:
+        return None
+
+
+def get_or_create_workspace(user_id: str, course: str) -> Optional[str]:
+    """
+    Get or create a workspace for the user+course.
+    Returns workspace_id or None on error.
+    """
+    client = _get_supabase_client()
+    if not client:
+        return None
+
+    try:
+        # Try to find existing workspace
+        result = client.table("workspaces").select("id").eq(
+            "user_id", user_id
+        ).eq("course", course).execute()
+
+        if result.data:
+            return result.data[0]["id"]
+
+        # Create new workspace
+        result = client.table("workspaces").insert({
+            "user_id": user_id,
+            "course": course,
+        }).execute()
+
+        if result.data:
+            workspace_id = result.data[0]["id"]
+            # Also create empty student_profiles row (with user_id for RLS)
+            client.table("student_profiles").insert({
+                "workspace_id": workspace_id,
+                "user_id": user_id,
+                "profile_data": {},
+            }).execute()
+            return workspace_id
+
+        return None
+    except Exception as e:
+        print(f"[student_profile] get_or_create_workspace error: {e}")
+        return None
+
+
+def load_from_supabase(workspace_id: str) -> Optional[StudentProfile]:
+    """Load profile from Supabase by workspace_id."""
+    client = _get_supabase_client()
+    if not client:
+        return None
+
+    try:
+        # Get workspace to know the course
+        ws_result = client.table("workspaces").select("course").eq(
+            "id", workspace_id
+        ).execute()
+
+        if not ws_result.data:
+            return None
+
+        course = ws_result.data[0]["course"]
+
+        # Get profile data
+        result = client.table("student_profiles").select("profile_data").eq(
+            "workspace_id", workspace_id
+        ).execute()
+
+        if result.data and result.data[0]["profile_data"]:
+            data = result.data[0]["profile_data"]
+            data["course"] = course  # Ensure course is set
+            return StudentProfile.from_dict(data)
+
+        # No profile data yet, return fresh profile
+        return StudentProfile(course=course)
+
+    except Exception as e:
+        print(f"[student_profile] load_from_supabase error: {e}")
+        return None
+
+
+def save_to_supabase(workspace_id: str, profile: StudentProfile) -> bool:
+    """
+    Save profile to Supabase with merge update.
+    Only updates the fields present in profile_data, preserving others.
+    """
+    client = _get_supabase_client()
+    if not client:
+        return False
+
+    try:
+        profile_data = profile.to_dict()
+        # Remove course from profile_data (it's in workspace)
+        profile_data.pop("course", None)
+
+        # Use the merge function for partial update
+        client.rpc("merge_profile_data", {
+            "p_workspace_id": workspace_id,
+            "p_updates": profile_data,
+        }).execute()
+
+        return True
+    except Exception as e:
+        print(f"[student_profile] save_to_supabase error: {e}")
+        # Fallback: try direct upsert
+        try:
+            client.table("student_profiles").upsert({
+                "workspace_id": workspace_id,
+                "profile_data": profile.to_dict(),
+            }).execute()
+            return True
+        except Exception as e2:
+            print(f"[student_profile] save_to_supabase fallback error: {e2}")
+            return False
+
+
+def get_current_workspace_id() -> Optional[str]:
+    """Get current workspace_id from session state."""
+    return st.session_state.get("workspace_id")
+
+
+def set_current_workspace_id(workspace_id: str):
+    """Set current workspace_id in session state."""
+    st.session_state.workspace_id = workspace_id
+
+
+def sync_profile_to_supabase():
+    """
+    Sync current session profile to Supabase.
+    Call this after any profile update for logged-in users.
+    """
+    from auth import get_user
+    user = get_user()
+    if not user:
+        return  # Anonymous user, skip
+
+    workspace_id = get_current_workspace_id()
+    profile = get_profile()
+
+    if workspace_id and profile:
+        save_to_supabase(workspace_id, profile)

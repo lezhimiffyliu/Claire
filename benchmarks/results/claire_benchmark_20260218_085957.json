@@ -1,0 +1,78 @@
+{
+  "model_name": "Claire",
+  "timestamp": "2026-02-18T08:59:57.370553",
+  "total_problems": 4,
+  "correct": 4,
+  "accuracy": 1.0,
+  "by_category": {
+    "equation": {
+      "total": 4,
+      "correct": 4,
+      "accuracy": 1.0
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "total": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    },
+    "medium": {
+      "total": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    },
+    "hard": {
+      "total": 2,
+      "correct": 2,
+      "accuracy": 1.0
+    }
+  },
+  "avg_latency_ms": 4380.244314670563,
+  "problems": [
+    {
+      "id": "eq_001",
+      "category": "equation",
+      "difficulty": "easy",
+      "problem": "Solve x^2 - 4 = 0",
+      "expected": "[-2, 2]",
+      "extracted": "x = -2, x = 2",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 4727.3571491241455
+    },
+    {
+      "id": "eq_002",
+      "category": "equation",
+      "difficulty": "medium",
+      "problem": "Solve x^2 - 5x + 6 = 0",
+      "expected": "[2, 3]",
+      "extracted": "x = 2, x = 3",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 3391.8652534484863
+    },
+    {
+      "id": "eq_003",
+      "category": "equation",
+      "difficulty": "hard",
+      "problem": "Solve e^x = 5",
+      "expected": "log(5)",
+      "extracted": "x = log(5)",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 2840.287923812866
+    },
+    {
+      "id": "eq_004",
+      "category": "equation",
+      "difficulty": "hard",
+      "problem": "Solve sin(x) = 1/2 for x in [0, 2*pi]",
+      "expected": "[pi/6, 5*pi/6]",
+      "extracted": "x = pi/6, x = 5*pi/6",
+      "is_correct": true,
+      "error": null,
+      "latency_ms": 6561.466932296753
+    }
+  ]
+}

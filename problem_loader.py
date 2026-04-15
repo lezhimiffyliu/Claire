@@ -36,7 +36,8 @@ class ProblemPart:
     question_text: str
     final_answer: str
     has_diagram: bool = False
-    diagram_image: Optional[str] = None
+    diagram_image: Optional[str] = None  # Local path (legacy)
+    diagram_image_url: Optional[str] = None  # Supabase public URL
     depends_on: Optional[str] = None
 
 
@@ -101,6 +102,7 @@ def load_problems_from_file(filepath: str) -> list[Problem]:
                     final_answer=p.get("final_answer", ""),
                     has_diagram=p.get("has_diagram", False),
                     diagram_image=p.get("diagram_image"),
+                    diagram_image_url=p.get("diagram_image_url"),
                     depends_on=p.get("depends_on"),
                 ))
 

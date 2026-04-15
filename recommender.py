@@ -12,7 +12,7 @@ Error patterns are used for feedback style, not selection.
 from typing import Optional
 from student_profile import StudentProfile, get_profile
 from problem_loader import Problem, ProblemPart
-from math124_taxonomy import normalize_to_topic, FOUNDATION_TOPICS, get_topic_display_name
+from taxonomy import normalize_to_topic, FOUNDATION_TOPICS, get_topic_display_name
 
 # Difficulty order for progression
 DIFFICULTY_ORDER = {"easy": 0, "medium": 1, "hard": 2}
@@ -48,6 +48,16 @@ def recommend_next_problem(
     if seen_indices is None:
         seen_indices = set()
 
+    # Get course from profile or first problem
+    course = profile.course if profile else "124"
+    if not course and parts_list:
+        first_problem = parts_list[0][0]
+        # course field is like "math_124", extract "124"
+        course = first_problem.course.replace("math_", "") if hasattr(first_problem, 'course') else "124"
+
+    # Get foundation topics for this course
+    foundation_topics = FOUNDATION_TOPICS.get(course, FOUNDATION_TOPICS.get("124", []))
+
     # Build candidate list (exclude current)
     candidates = []
     for i, (problem, part_idx) in enumerate(parts_list):
@@ -56,7 +66,7 @@ def recommend_next_problem(
 
         # Normalize the problem's topic to canonical form
         raw_topic = problem.topic
-        canonical_topic = normalize_to_topic(raw_topic)
+        canonical_topic = normalize_to_topic(raw_topic, course)
 
         # Also get concepts if available
         concepts = getattr(problem, 'concepts', [])
@@ -101,8 +111,8 @@ def recommend_next_problem(
             score += max(0, 50 - rank * 10)  # Top priority = +50
 
         # Priority 2: Foundation topics if suggested (0-30 points)
-        if profile.suggest_foundation_review and topic in FOUNDATION_TOPICS:
-            foundation_rank = FOUNDATION_TOPICS.index(topic)
+        if profile.suggest_foundation_review and topic in foundation_topics:
+            foundation_rank = foundation_topics.index(topic)
             score += 30 - (foundation_rank * 10)
 
         # Priority 3: Initial focus from diagnostic (0-20 points)
@@ -192,8 +202,12 @@ def get_recommendation_reason(
     if profile is None:
         return None
 
+    # Get course for foundation topics lookup
+    course = profile.course if profile.course else "124"
+    foundation_topics = FOUNDATION_TOPICS.get(course, FOUNDATION_TOPICS.get("124", []))
+
     # Normalize problem topic
-    topic = normalize_to_topic(problem.topic)
+    topic = normalize_to_topic(problem.topic, course)
     display = get_topic_display_name(topic)
 
     # Check if we have an estimate for this topic
@@ -212,7 +226,7 @@ def get_recommendation_reason(
         return f"{display} — from diagnostic"
 
     # Check foundation
-    if profile.suggest_foundation_review and topic in FOUNDATION_TOPICS:
+    if profile.suggest_foundation_review and topic in foundation_topics:
         return f"{display} — foundation topic"
 
     return None

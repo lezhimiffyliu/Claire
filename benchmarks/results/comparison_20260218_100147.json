@@ -1,0 +1,361 @@
+{
+  "timestamp": "20260218_100147",
+  "dataset": "/Users/lezhiliu/Desktop/calculus/benchmarks/datasets/math_calculus.json",
+  "num_problems": 15,
+  "models": [
+    "claire",
+    "gpt-4"
+  ],
+  "summary": {
+    "claire": {
+      "accuracy": 0.7333333333333333,
+      "correct": 11,
+      "total": 15,
+      "avg_latency_ms": 13893.236017227173,
+      "total_tokens": 0
+    },
+    "gpt-4": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 15,
+      "avg_latency_ms": 27023.71654510498,
+      "total_tokens": 13326
+    }
+  },
+  "results": {
+    "claire": [
+      {
+        "problem_id": "math_0000",
+        "problem": "Let $\\mathbf{u}$ and $\\mathbf{v}$ be vectors such that $\\|\\mathbf{u}\\| = \\|\\mathbf{v}\\| = 2$ and $\\mathbf{u} \\cdot \\mathbf{v} = -1.$  If $\\theta$ is the angle between the vectors $\\mathbf{u} + \\mathbf{v}$ and $2 \\mathbf{u} - \\mathbf{v},$ then find $\\cos \\theta.$",
+        "expected": "\\frac{1}{4}",
+        "predicted": "1/4",
+        "is_correct": true,
+        "latency_ms": 28247.012853622437,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0001",
+        "problem": "A line has slope $\\frac{2}{5}.$  Which of the following vectors are possible direction vectors for the line?\n\n[asy]\nusepackage(\"amsmath\");\n\nunitsize(1 cm);\n\npair x = (3,0), y = (0,2);\n\nlabel(\"(A) $\\begin{pmatrix} 2 \\\\ 5 \\end{pmatrix}$\", y);\nlabel(\"(B) $\\begin{pmatrix} 5 \\\\ 2 \\end{pmatrix}$\", x + y);\nlabel(\"(C) $\\begin{pmatrix} 0 \\\\ 0 \\end{pmatrix}$\", 2*x + y);\nlabel(\"(D) $\\begin{pmatrix} -2 \\\\ -5 \\end{pmatrix}$\", 3*x + y);\nlabel(\"(E) $\\begin{pmatrix} -5 \\\\ -2 \\end{pmatrix}$\", (0,0));\nlabel(\"(F) $\\begin{pmatrix} 2/5 \\\\ 1 \\end{pmatrix}$\", x);\nlabel(\"(G) $\\begin{pmatrix} 40 \\\\ 16 \\end{pmatrix}$\", 2*x);\nlabel(\"(H) $\\begin{pmatrix} 4 \\\\ 10 \\end{pmatrix}$\", 3*x);\n[/asy]\n\nEnter the letters of the correct options, separated by commas.",
+        "expected": "\\text{B, E, G}",
+        "predicted": "B, E, G",
+        "is_correct": true,
+        "latency_ms": 6729.493856430054,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0002",
+        "problem": "Let $M_n$ be the $n \\times n$ matrix with entries as follows: for $1 \\le i \\le n$, $m_{i,i} = 10$; for $1 \\le i \\le n - 1$, $m_{i+1,i} = m_{i,i+1} = 3$; all other entries in $M_n$ are zero. Let $D_n$ be the determinant of matrix $M_n$. Find\n\\[\\sum_{n=1}^{\\infty} \\frac{1}{8D_n+1}.\\]Note: The determinant of the $1 \\times 1$ matrix $[a]$ is $a$, and the determinant of the $2 \\times 2$ matrix $\\left[ {\\begin{array}{cc}\na & b \\\\\nc & d \\\\\n\\end{array} } \\right] = ad - bc$; for $n \\ge 2$, the determinant of an $n \\times n$ matrix with first row or first column $a_1$ $a_2$ $a_3$ $\\dots$ $a_n$ is equal to $a_1C_1 - a_2C_2 + a_3C_3 - \\dots + (-1)^{n+1}a_nC_n$, where $C_i$ is the determinant of the $(n - 1) \\times (n - 1)$ matrix formed by eliminating the row and column containing $a_i$.",
+        "expected": "\\frac{1}{72}",
+        "predicted": "1/72",
+        "is_correct": true,
+        "latency_ms": 30421.335220336914,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0003",
+        "problem": "Let $S$ be the set of all points $(x,y)$ in the coordinate plane such that $0\\leq x\\leq \\frac{\\pi}{2}$ and $0\\leq y\\leq\n\\frac{\\pi}{2}$. What is the area of the subset of $S$ for which \\[\n\\sin^2 x -\\sin x \\sin y +\\sin^2 y \\leq\\frac{3}{4}\\,?\n\\]",
+        "expected": "\\frac{\\pi^2}{6}",
+        "predicted": "$\\frac{\\pi^2}{4}$",
+        "is_correct": false,
+        "latency_ms": 27016.19601249695,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0004",
+        "problem": "Suppose that the point $\\left(\\rho,\\theta,\\phi \\right)=\\left( 12, \\frac{2 \\pi}{3}, \\frac{\\pi}{4} \\right)$ in spherical coordinates can be expressed as $(x, y, z)$ in rectangular coordinates.  Find $x+z$.",
+        "expected": "3\\sqrt{2}",
+        "predicted": "3*sqrt(2)",
+        "is_correct": true,
+        "latency_ms": 8724.244117736816,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0005",
+        "problem": "For a positive constant $c,$ in cylindrical coordinates $(r,\\theta,z),$ find the shape described by the equation\n\\[r = c.\\](A) Line\n(B) Circle\n(C) Plane\n(D) Sphere\n(E) Cylinder\n(F) Cone\n\nEnter the letter of the correct option.",
+        "expected": "\\text{(E)}",
+        "predicted": "E",
+        "is_correct": true,
+        "latency_ms": 3629.4641494750977,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0006",
+        "problem": "Let $A,$ $B,$ $C,$ and $D$ be points on a circle.  For each pair of points, we draw the line passing through the midpoint of those two points that is perpendicular to the line formed by the other two points.  For example, we draw the line passing through the midpoint of $\\overline{AB}$ that is perpendicular to line $CD.$  In this way, we draw a total of $\\binom{4}{2} = 6$ lines.\n\n[asy]\nunitsize(2.5 cm);\n\npair A, B, C, D, P;\npair[] M;\n\nA = dir(118);\nB = dir(62);\nC = dir(323);\nD = dir(165);\nM[12] = (A + B)/2;\nM[13] = (A + C)/2;\nM[14] = (A + D)/2;\nM[23] = (B + C)/2;\nM[24] = (B + D)/2;\nM[34] = (C + D)/2;\nP = (A + B + C + D)/2;\n\ndraw(Circle((0,0),1),red);\ndraw(A--B,green);\ndraw(A--C,green);\ndraw(A--D,green);\ndraw(B--C,green);\ndraw(B--D,green);\ndraw(C--D,green);\ndraw(interp(M[12],P,-2)--interp(M[12],P,6),dashed);\ndraw(interp(M[13],P,-2)--interp(M[13],P,2),dashed);\ndraw(interp(M[14],P,-0.5)--interp(M[14],P,2.5),dashed);\ndraw(interp(M[23],P,-0.7)--interp(M[23],P,1.5),dashed);\ndraw(interp(M[24],P,-3.3)--interp(M[24],P,4),dashed);\ndraw(interp(M[34],P,-0.3)--interp(M[34],P,1.6),dashed);\n\ndot(\"$A$\", A, A);\ndot(\"$B$\", B, B);\ndot(\"$C$\", C, C);\ndot(\"$D$\", D, D);\ndot(M[12]);\ndot(M[13]);\ndot(M[14]);\ndot(M[23]);\ndot(M[24]);\ndot(M[34]);\n[/asy]\n\nIt turns out that all six lines will always pass through the same point, say $P.$  There exist constants $a,$ $b,$ $c,$ and $d$ such that $\\overrightarrow{P}$ can always be expressed in the form\n\\[\\overrightarrow{P} = a \\overrightarrow{A} + b \\overrightarrow{B} + c \\overrightarrow{C} + d \\overrightarrow{D}.\\]Find $a + b + c + d.$",
+        "expected": "2",
+        "predicted": "1",
+        "is_correct": false,
+        "latency_ms": 7922.461986541748,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0007",
+        "problem": "For a point $P,$ let $d_1,$ $d_2$ and $d_3$ represents the distances from $P$ to the planes $x - z = 0,$ $x - 2y + z = 0,$ and $x + y + z = 0.$  Let $S$ be the set of points $P$ such that\n\\[d_1^2 + d_2^2 + d_3^2 = 36.\\]Find the region of the volume enclosed by $S.$",
+        "expected": "288 \\pi",
+        "predicted": "288\u03c0",
+        "is_correct": true,
+        "latency_ms": 10498.146772384644,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0008",
+        "problem": "Suppose $\\cos V = \\frac{2}{3}$ in the diagram below.  What is $TV$?\n\n\n\n[asy]\npair T,U,V;\nV = (0,0);\nT = (0,16);\nU = (17.89,16);\ndraw(V--T--U--V);\ndraw(rightanglemark(V,T,U,23));\nlabel(\"$V$\",V,SW);\nlabel(\"$U$\",U,NE);\nlabel(\"$T$\",T,NW);\nlabel(\"$24$\",(U-V)/2,SE);\n[/asy]",
+        "expected": "16",
+        "predicted": "16",
+        "is_correct": true,
+        "latency_ms": 9018.306255340576,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0009",
+        "problem": "If $\\frac{\\sin (2A + B)}{\\sin B} = 5,$ then find $\\frac{\\tan (A + B)}{\\tan A}.$",
+        "expected": "\\frac{3}{2}",
+        "predicted": "3",
+        "is_correct": false,
+        "latency_ms": 18239.16506767273,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0010",
+        "problem": "Simplify\n\\[\\frac{1}{1 - \\tan^2 x} + \\frac{1}{1 - \\cot^2 x}.\\]",
+        "expected": "1",
+        "predicted": "1",
+        "is_correct": true,
+        "latency_ms": 3465.873956680298,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0011",
+        "problem": "In triangle $ABC,$ $D$ and $E$ are on side $\\overline{BC}$ such that $BD = DE = EC.$  If $x = \\angle BAD,$ $y = \\angle DAE,$ and $z = \\angle EAC,$ then find\n\\[\\frac{\\sin (x + y) \\sin (y + z)}{\\sin x \\sin z}.\\]",
+        "expected": "4",
+        "predicted": "4",
+        "is_correct": true,
+        "latency_ms": 11672.598838806152,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0012",
+        "problem": "The area of triangle $ABC$ is equal to $a^2 - (b - c)^2,$ where $a,$ $b,$ and $c$ are the sides of triangle $ABC,$ as usual.  Compute $\\tan A.$",
+        "expected": "\\frac{8}{15}",
+        "predicted": "8/15",
+        "is_correct": true,
+        "latency_ms": 16119.041919708252,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0013",
+        "problem": "In right triangle $ABC$, we have $AB = 10$, $BC = 24$, and $\\angle ABC = 90^\\circ$. If $M$ is on $\\overline{AC}$ such that $\\overline{BM}$ is a median of $\\triangle ABC$, then what is $\\cos \\angle ABM$?",
+        "expected": "\\frac{5}{13}",
+        "predicted": "5/13",
+        "is_correct": true,
+        "latency_ms": 6469.439268112183,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0014",
+        "problem": "Find the smallest positive integer $x$ (measured in degrees) such that\n\\[\\tan (x - 160^{\\circ}) = \\frac{\\cos50^{\\circ}}{1 - \\sin50^{\\circ}}.\\]",
+        "expected": "50^\\circ",
+        "predicted": "50",
+        "is_correct": false,
+        "latency_ms": 20225.759983062744,
+        "tokens": 0,
+        "error": null,
+        "full_response": null
+      }
+    ],
+    "gpt-4": [
+      {
+        "problem_id": "math_0000",
+        "problem": "Let $\\mathbf{u}$ and $\\mathbf{v}$ be vectors such that $\\|\\mathbf{u}\\| = \\|\\mathbf{v}\\| = 2$ and $\\mathbf{u} \\cdot \\mathbf{v} = -1.$  If $\\theta$ is the angle between the vectors $\\mathbf{u} + \\mathbf{v}$ and $2 \\mathbf{u} - \\mathbf{v},$ then find $\\cos \\theta.$",
+        "expected": "\\frac{1}{4}",
+        "predicted": "\\frac{1",
+        "is_correct": false,
+        "latency_ms": 22851.463079452515,
+        "tokens": 1056,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0001",
+        "problem": "A line has slope $\\frac{2}{5}.$  Which of the following vectors are possible direction vectors for the line?\n\n[asy]\nusepackage(\"amsmath\");\n\nunitsize(1 cm);\n\npair x = (3,0), y = (0,2);\n\nlabel(\"(A) $\\begin{pmatrix} 2 \\\\ 5 \\end{pmatrix}$\", y);\nlabel(\"(B) $\\begin{pmatrix} 5 \\\\ 2 \\end{pmatrix}$\", x + y);\nlabel(\"(C) $\\begin{pmatrix} 0 \\\\ 0 \\end{pmatrix}$\", 2*x + y);\nlabel(\"(D) $\\begin{pmatrix} -2 \\\\ -5 \\end{pmatrix}$\", 3*x + y);\nlabel(\"(E) $\\begin{pmatrix} -5 \\\\ -2 \\end{pmatrix}$\", (0,0));\nlabel(\"(F) $\\begin{pmatrix} 2/5 \\\\ 1 \\end{pmatrix}$\", x);\nlabel(\"(G) $\\begin{pmatrix} 40 \\\\ 16 \\end{pmatrix}$\", 2*x);\nlabel(\"(H) $\\begin{pmatrix} 4 \\\\ 10 \\end{pmatrix}$\", 3*x);\n[/asy]\n\nEnter the letters of the correct options, separated by commas.",
+        "expected": "\\text{B, E, G}",
+        "predicted": "\\text{(B), (E), (G)",
+        "is_correct": false,
+        "latency_ms": 23458.740234375,
+        "tokens": 859,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0002",
+        "problem": "Let $M_n$ be the $n \\times n$ matrix with entries as follows: for $1 \\le i \\le n$, $m_{i,i} = 10$; for $1 \\le i \\le n - 1$, $m_{i+1,i} = m_{i,i+1} = 3$; all other entries in $M_n$ are zero. Let $D_n$ be the determinant of matrix $M_n$. Find\n\\[\\sum_{n=1}^{\\infty} \\frac{1}{8D_n+1}.\\]Note: The determinant of the $1 \\times 1$ matrix $[a]$ is $a$, and the determinant of the $2 \\times 2$ matrix $\\left[ {\\begin{array}{cc}\na & b \\\\\nc & d \\\\\n\\end{array} } \\right] = ad - bc$; for $n \\ge 2$, the determinant of an $n \\times n$ matrix with first row or first column $a_1$ $a_2$ $a_3$ $\\dots$ $a_n$ is equal to $a_1C_1 - a_2C_2 + a_3C_3 - \\dots + (-1)^{n+1}a_nC_n$, where $C_i$ is the determinant of the $(n - 1) \\times (n - 1)$ matrix formed by eliminating the row and column containing $a_i$.",
+        "expected": "\\frac{1}{72}",
+        "predicted": "1$",
+        "is_correct": false,
+        "latency_ms": 56730.51381111145,
+        "tokens": 1359,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0003",
+        "problem": "Let $S$ be the set of all points $(x,y)$ in the coordinate plane such that $0\\leq x\\leq \\frac{\\pi}{2}$ and $0\\leq y\\leq\n\\frac{\\pi}{2}$. What is the area of the subset of $S$ for which \\[\n\\sin^2 x -\\sin x \\sin y +\\sin^2 y \\leq\\frac{3}{4}\\,?\n\\]",
+        "expected": "\\frac{\\pi^2}{6}",
+        "predicted": "ity:",
+        "is_correct": false,
+        "latency_ms": 51222.687005996704,
+        "tokens": 1129,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0004",
+        "problem": "Suppose that the point $\\left(\\rho,\\theta,\\phi \\right)=\\left( 12, \\frac{2 \\pi}{3}, \\frac{\\pi}{4} \\right)$ in spherical coordinates can be expressed as $(x, y, z)$ in rectangular coordinates.  Find $x+z$.",
+        "expected": "3\\sqrt{2}",
+        "predicted": "9\\sqrt{2",
+        "is_correct": false,
+        "latency_ms": 11004.117012023926,
+        "tokens": 532,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0005",
+        "problem": "For a positive constant $c,$ in cylindrical coordinates $(r,\\theta,z),$ find the shape described by the equation\n\\[r = c.\\](A) Line\n(B) Circle\n(C) Plane\n(D) Sphere\n(E) Cylinder\n(F) Cone\n\nEnter the letter of the correct option.",
+        "expected": "\\text{(E)}",
+        "predicted": "\\text{(E) Cylinder",
+        "is_correct": false,
+        "latency_ms": 8515.393018722534,
+        "tokens": 415,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0006",
+        "problem": "Let $A,$ $B,$ $C,$ and $D$ be points on a circle.  For each pair of points, we draw the line passing through the midpoint of those two points that is perpendicular to the line formed by the other two points.  For example, we draw the line passing through the midpoint of $\\overline{AB}$ that is perpendicular to line $CD.$  In this way, we draw a total of $\\binom{4}{2} = 6$ lines.\n\n[asy]\nunitsize(2.5 cm);\n\npair A, B, C, D, P;\npair[] M;\n\nA = dir(118);\nB = dir(62);\nC = dir(323);\nD = dir(165);\nM[12] = (A + B)/2;\nM[13] = (A + C)/2;\nM[14] = (A + D)/2;\nM[23] = (B + C)/2;\nM[24] = (B + D)/2;\nM[34] = (C + D)/2;\nP = (A + B + C + D)/2;\n\ndraw(Circle((0,0),1),red);\ndraw(A--B,green);\ndraw(A--C,green);\ndraw(A--D,green);\ndraw(B--C,green);\ndraw(B--D,green);\ndraw(C--D,green);\ndraw(interp(M[12],P,-2)--interp(M[12],P,6),dashed);\ndraw(interp(M[13],P,-2)--interp(M[13],P,2),dashed);\ndraw(interp(M[14],P,-0.5)--interp(M[14],P,2.5),dashed);\ndraw(interp(M[23],P,-0.7)--interp(M[23],P,1.5),dashed);\ndraw(interp(M[24],P,-3.3)--interp(M[24],P,4),dashed);\ndraw(interp(M[34],P,-0.3)--interp(M[34],P,1.6),dashed);\n\ndot(\"$A$\", A, A);\ndot(\"$B$\", B, B);\ndot(\"$C$\", C, C);\ndot(\"$D$\", D, D);\ndot(M[12]);\ndot(M[13]);\ndot(M[14]);\ndot(M[23]);\ndot(M[24]);\ndot(M[34]);\n[/asy]\n\nIt turns out that all six lines will always pass through the same point, say $P.$  There exist constants $a,$ $b,$ $c,$ and $d$ such that $\\overrightarrow{P}$ can always be expressed in the form\n\\[\\overrightarrow{P} = a \\overrightarrow{A} + b \\overrightarrow{B} + c \\overrightarrow{C} + d \\overrightarrow{D}.\\]Find $a + b + c + d.$",
+        "expected": "2",
+        "predicted": "1",
+        "is_correct": false,
+        "latency_ms": 17637.59994506836,
+        "tokens": 1322,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0007",
+        "problem": "For a point $P,$ let $d_1,$ $d_2$ and $d_3$ represents the distances from $P$ to the planes $x - z = 0,$ $x - 2y + z = 0,$ and $x + y + z = 0.$  Let $S$ be the set of points $P$ such that\n\\[d_1^2 + d_2^2 + d_3^2 = 36.\\]Find the region of the volume enclosed by $S.$",
+        "expected": "288 \\pi",
+        "predicted": "\\frac{|Ax + By + Cz + D|}{\\sqrt{A^2 + B^2 + C^2}}\\]",
+        "is_correct": false,
+        "latency_ms": 31443.318128585815,
+        "tokens": 1168,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0008",
+        "problem": "Suppose $\\cos V = \\frac{2}{3}$ in the diagram below.  What is $TV$?\n\n\n\n[asy]\npair T,U,V;\nV = (0,0);\nT = (0,16);\nU = (17.89,16);\ndraw(V--T--U--V);\ndraw(rightanglemark(V,T,U,23));\nlabel(\"$V$\",V,SW);\nlabel(\"$U$\",U,NE);\nlabel(\"$T$\",T,NW);\nlabel(\"$24$\",(U-V)/2,SE);\n[/asy]",
+        "expected": "16",
+        "predicted": "36",
+        "is_correct": false,
+        "latency_ms": 14944.989919662476,
+        "tokens": 407,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0009",
+        "problem": "If $\\frac{\\sin (2A + B)}{\\sin B} = 5,$ then find $\\frac{\\tan (A + B)}{\\tan A}.$",
+        "expected": "\\frac{3}{2}",
+        "predicted": "as initially intended. For a precise and accurate solution, revisiting the problem statement or employing a different strategy that directly relates the given equation to the desired ratio would be necessary.",
+        "is_correct": false,
+        "latency_ms": 23518.70107650757,
+        "tokens": 840,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0010",
+        "problem": "Simplify\n\\[\\frac{1}{1 - \\tan^2 x} + \\frac{1}{1 - \\cot^2 x}.\\]",
+        "expected": "1",
+        "predicted": "1\\)",
+        "is_correct": false,
+        "latency_ms": 32190.807104110718,
+        "tokens": 1086,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0011",
+        "problem": "In triangle $ABC,$ $D$ and $E$ are on side $\\overline{BC}$ such that $BD = DE = EC.$  If $x = \\angle BAD,$ $y = \\angle DAE,$ and $z = \\angle EAC,$ then find\n\\[\\frac{\\sin (x + y) \\sin (y + z)}{\\sin x \\sin z}.\\]",
+        "expected": "4",
+        "predicted": "DE = EC$",
+        "is_correct": false,
+        "latency_ms": 41595.99995613098,
+        "tokens": 1138,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0012",
+        "problem": "The area of triangle $ABC$ is equal to $a^2 - (b - c)^2,$ where $a,$ $b,$ and $c$ are the sides of triangle $ABC,$ as usual.  Compute $\\tan A.$",
+        "expected": "\\frac{8}{15}",
+        "predicted": "\\sqrt{s(s-a)(s-b)(s-c)} \\]",
+        "is_correct": false,
+        "latency_ms": 24820.667028427124,
+        "tokens": 930,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0013",
+        "problem": "In right triangle $ABC$, we have $AB = 10$, $BC = 24$, and $\\angle ABC = 90^\\circ$. If $M$ is on $\\overline{AC}$ such that $\\overline{BM}$ is a median of $\\triangle ABC$, then what is $\\cos \\angle ABM$?",
+        "expected": "\\frac{5}{13}",
+        "predicted": "\\frac{10",
+        "is_correct": false,
+        "latency_ms": 21334.235906600952,
+        "tokens": 516,
+        "error": null,
+        "full_response": null
+      },
+      {
+        "problem_id": "math_0014",
+        "problem": "Find the smallest positive integer $x$ (measured in degrees) such that\n\\[\\tan (x - 160^{\\circ}) = \\frac{\\cos50^{\\circ}}{1 - \\sin50^{\\circ}}.\\]",
+        "expected": "50^\\circ",
+        "predicted": "210^{\\circ",
+        "is_correct": false,
+        "latency_ms": 24086.514949798584,
+        "tokens": 569,
+        "error": null,
+        "full_response": null
+      }
+    ]
+  }
+}
