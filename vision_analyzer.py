@@ -147,7 +147,7 @@ def extract_handwritten_solution(
         import io
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
+        model = genai.GenerativeModel("gemini-3-flash-preview")
 
         # Build problem context (without revealing we will verify separately)
         problem_context = _build_problem_context(problem)
