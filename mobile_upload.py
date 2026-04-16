@@ -360,7 +360,7 @@ def upload_image(
         # Update session status to receiving_images
         client.table("upload_sessions").update({
             "status": "receiving_images"
-        }).eq("id", session_id).in_("status", ["waiting", "paired"]).execute()
+        }).eq("id", session_id).execute()
 
         return storage_path, None
 

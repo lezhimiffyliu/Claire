@@ -491,12 +491,12 @@ def render_qr_upload_section(problem: Problem):
     images = status_data.get("images", [])
 
     # Status indicator
-    if status == "waiting":
+    if images:
+        st.success(f"Received {image_count} photo(s)")
+    elif status == "waiting":
         st.info("Waiting for phone to connect...")
     elif status == "paired":
         st.success("Phone connected! Waiting for photos...")
-    elif status == "receiving_images":
-        st.success(f"Received {image_count} photo(s)")
     elif status in ["closed", "expired"]:
         st.warning("Session ended. Generate a new QR code to continue.")
         if st.button("Generate New QR Code", use_container_width=True):
@@ -504,6 +504,8 @@ def render_qr_upload_section(problem: Problem):
             st.session_state.qr_upload_token = None
             st.rerun()
         return
+    else:
+        st.info(f"Session status: {status}")
 
     # Show image thumbnails if any
     if images:
