@@ -938,11 +938,13 @@ def render_problem_page():
             if p.diagram_image_url:
                 st.image(p.diagram_image_url, use_container_width=True)
             elif p.diagram_image:
-                diagram_path = f"/Users/lezhiliu/Desktop/calculus/{p.diagram_image}"
-                try:
+                # Use path relative to this file's directory
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                diagram_path = os.path.join(base_dir, p.diagram_image)
+                if os.path.exists(diagram_path):
                     st.image(diagram_path, use_container_width=True)
-                except:
-                    st.caption(f"📊 Diagram: {p.diagram_image}")
+                else:
+                    st.caption(f"📊 Diagram: {p.diagram_image} (not found)")
             diagram_shown = True
 
         st.markdown("")  # Space between parts
