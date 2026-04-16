@@ -26,6 +26,9 @@ pydantic>=2.0.0
 # QR code generation
 qrcode[pil]>=7.4
 
+# Auto-refresh for polling
+streamlit-autorefresh>=1.0.0
+
 # Development dependencies
 pytest>=8.0.0
 httpx>=0.26.0  # For testing FastAPI

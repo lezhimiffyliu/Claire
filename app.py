@@ -25,6 +25,7 @@ from qr_generator import generate_qr_code, get_upload_url
 from vision_analyzer import (
     analyze_handwritten_solution, analysis_to_grading_result, get_combined_feedback
 )
+from streamlit_autorefresh import st_autorefresh
 import os
 import random
 
@@ -489,6 +490,10 @@ def render_qr_upload_section(problem: Problem):
     status = status_data.get("status", "unknown")
     image_count = status_data.get("image_count", 0)
     images = status_data.get("images", [])
+
+    # Auto-refresh every 3 seconds while waiting for uploads
+    if status in ["waiting", "paired", "receiving_images"]:
+        st_autorefresh(interval=3000, limit=100, key="qr_upload_autorefresh")
 
     # Status indicator
     if images:
