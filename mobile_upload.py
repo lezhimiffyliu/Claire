@@ -379,7 +379,8 @@ def get_session_status(session_id: str) -> dict:
     Returns:
         Dict with status, image_count, and images list
     """
-    client = _client()
+    # Use service role client to bypass RLS
+    client = _service_role_client()
     if not client:
         return {"status": "error", "image_count": 0, "images": []}
 
@@ -431,8 +432,10 @@ def get_signed_urls(session_id: str, expires_in: int = 3600) -> list[str]:
     Returns:
         List of signed URLs for viewing images
     """
-    client = _client()
+    # Use service role client to bypass RLS for retrieving uploaded images
+    client = _service_role_client()
     if not client:
+        print("[get_signed_urls] No service client available")
         return []
 
     try:
@@ -440,6 +443,8 @@ def get_signed_urls(session_id: str, expires_in: int = 3600) -> list[str]:
         images_result = client.table("uploaded_images").select(
             "storage_path"
         ).eq("upload_session_id", session_id).order("sequence_number").execute()
+
+        print(f"[get_signed_urls] Found {len(images_result.data or [])} images for session {session_id}")
 
         urls = []
         for row in images_result.data or []:
@@ -451,6 +456,8 @@ def get_signed_urls(session_id: str, expires_in: int = 3600) -> list[str]:
             )
             if signed and "signedURL" in signed:
                 urls.append(signed["signedURL"])
+            else:
+                print(f"[get_signed_urls] Failed to create signed URL for {storage_path}: {signed}")
 
         return urls
 
