@@ -19,6 +19,9 @@ from typing import Optional
 
 import streamlit as st
 
+_service_client = None
+
+
 def _client():
     """Get authenticated Supabase client (with user session for RLS)."""
     try:
@@ -26,6 +29,44 @@ def _client():
         return get_authenticated_client()
     except ImportError:
         return None
+
+
+def _service_role_client():
+    """
+    Get Supabase client with service role key (bypasses RLS).
+    Used for mobile operations where user isn't authenticated.
+    """
+    global _service_client
+    if _service_client is None:
+        try:
+            from supabase import create_client
+            import os
+
+            url = None
+            key = None
+
+            # Try st.secrets first
+            try:
+                url = st.secrets.get("SUPABASE_URL")
+                key = st.secrets.get("SUPABASE_SERVICE_KEY")
+            except Exception:
+                pass
+
+            # Fallback to environment variables
+            if not url:
+                url = os.environ.get("SUPABASE_URL")
+            if not key:
+                key = os.environ.get("SUPABASE_SERVICE_KEY")
+
+            if not url or not key:
+                print("[mobile_upload] Missing SUPABASE_SERVICE_KEY for mobile operations")
+                return None
+
+            _service_client = create_client(url, key)
+        except Exception as e:
+            print(f"[mobile_upload] Service client error: {e}")
+            return None
+    return _service_client
 
 
 @dataclass
@@ -170,7 +211,8 @@ def validate_token(raw_token: str) -> Optional[UploadSession]:
     Returns:
         UploadSession if valid, None otherwise
     """
-    client = _client()
+    # Use service role client - mobile users don't have auth session
+    client = _service_role_client()
     if not client or not raw_token:
         return None
 
@@ -243,7 +285,8 @@ def pair_mobile_session(session_id: str) -> bool:
     Returns:
         True if successfully paired
     """
-    client = _client()
+    # Use service role client - mobile users don't have auth session
+    client = _service_role_client()
     if not client:
         return False
 
@@ -266,7 +309,7 @@ def upload_image(
     file_bytes: bytes,
     filename: str,
     content_type: str,
-) -> Optional[str]:
+) -> tuple[Optional[str], Optional[str]]:
     """
     Upload image to Supabase Storage and create database record.
 
@@ -277,11 +320,12 @@ def upload_image(
         content_type: MIME type (image/png, image/jpeg, etc.)
 
     Returns:
-        Storage path if successful, None otherwise
+        (storage_path, None) if successful, (None, error_message) otherwise
     """
-    client = _client()
+    # Use service role client - mobile users don't have auth session
+    client = _service_role_client()
     if not client:
-        return None
+        return None, "Service client not configured (missing SUPABASE_SERVICE_KEY)"
 
     try:
         # Get current image count for sequence number
@@ -317,11 +361,11 @@ def upload_image(
             "status": "receiving_images"
         }).eq("id", session_id).in_("status", ["waiting", "paired"]).execute()
 
-        return storage_path
+        return storage_path, None
 
     except Exception as e:
         print(f"[upload_image] Error: {e}")
-        return None
+        return None, str(e)
 
 
 def get_session_status(session_id: str) -> dict:

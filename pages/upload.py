@@ -152,7 +152,7 @@ def render_upload_page(session):
                     content_type = "image/png"
 
                 # Upload
-                result = upload_image(
+                result, error = upload_image(
                     session_id=session.id,
                     file_bytes=file_bytes,
                     filename=filename,
@@ -161,6 +161,8 @@ def render_upload_page(session):
 
                 if result:
                     success_count += 1
+                elif error:
+                    st.error(f"Error: {error}")
 
             progress.empty()
 
