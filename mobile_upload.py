@@ -322,6 +322,7 @@ def upload_image(
     Returns:
         (storage_path, None) if successful, (None, error_message) otherwise
     """
+    print("[DEBUG] entering upload_image")
     # Use service role client - mobile users don't have auth session
     client = _service_role_client()
     if not client:
