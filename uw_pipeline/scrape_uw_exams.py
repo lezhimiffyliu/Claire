@@ -31,7 +31,7 @@ from urllib.parse import urljoin, urlparse
 SCRIPT_DIR   = Path(__file__).parent
 BENCH_DIR    = SCRIPT_DIR.parent
 DOWNLOAD_DIR = BENCH_DIR / "uw_data"/ "downloads"
-MANIFEST     = DOWNLOAD_DIR / "manifest.json"
+MANIFEST     = DOWNLOAD_DIR / "manifest_125.json"
 
 COURSES = {
     "124": {

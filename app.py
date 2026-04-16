@@ -492,7 +492,8 @@ def render_qr_upload_section(problem: Problem):
     images = status_data.get("images", [])
 
     # Auto-refresh every 3 seconds while waiting for uploads
-    if status in ["waiting", "paired", "receiving_images"]:
+    # Stop auto-refresh once images are received (so Analyze button works)
+    if status in ["waiting", "paired", "receiving_images"] and not images:
         st_autorefresh(interval=3000, limit=100, key="qr_upload_autorefresh")
 
     # Status indicator
@@ -538,10 +539,10 @@ def render_qr_upload_section(problem: Problem):
                     return
 
                 # Analyze with vision model
-                analysis = analyze_handwritten_solution(problem, image_urls)
+                analysis, error_msg = analyze_handwritten_solution(problem, image_urls)
 
                 if not analysis:
-                    st.error("Analysis failed. Please try again.")
+                    st.error(error_msg or "Analysis failed. Please try again.")
                     return
 
                 # Convert to GradingResult for display

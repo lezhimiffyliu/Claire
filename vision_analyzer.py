@@ -370,7 +370,7 @@ def analyze_with_verifier(
 def analyze_handwritten_solution(
     problem: Problem,
     image_urls: list[str],
-) -> Optional[SolutionAnalysis]:
+) -> tuple[Optional[SolutionAnalysis], Optional[str]]:
     """
     Full pipeline: extract from images + verify with SymPy.
 
@@ -381,18 +381,27 @@ def analyze_handwritten_solution(
         image_urls: List of signed URLs for uploaded images
 
     Returns:
-        SolutionAnalysis with verified results, or None on error
+        (SolutionAnalysis, None) on success, or (None, error_message) on error
     """
+    # Check API key first
+    api_key = _get_gemini_api_key()
+    if not api_key:
+        logger.error("[vision_analyzer] No GEMINI_API_KEY configured")
+        return None, "Vision analysis service temporarily unavailable. Please try again later."
+
+    if not image_urls:
+        return None, "No images provided for analysis."
+
     # Step 1: Extract from images
     extraction = extract_handwritten_solution(problem, image_urls)
     if not extraction:
-        return None
+        return None, "Failed to extract solution from images. Please ensure the photo is clear and try again."
 
     # Step 2: Verify with SymPy
     analysis = analyze_with_verifier(extraction, problem)
 
     logger.info(f"[vision_analyzer] Analysis complete: {analysis.overall_summary}")
-    return analysis
+    return analysis, None
 
 
 def analysis_to_grading_result(

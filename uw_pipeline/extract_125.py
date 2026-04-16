@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-UW Math 126 extractor — Claude Haiku (VLM), with auto diagram cropping + Supabase upload.
+UW Math 125 extractor — Claude Haiku (VLM), with auto diagram cropping + Supabase upload.
+
+Math 125 = Calculus II: integration techniques, applications, differential equations
 
 Usage:
-  python extract_126.py --exam Au24
-  python extract_126.py --exam Sp24 --api-key sk-ant-...
+  python extract_125.py --exam Au24
+  python extract_125.py --exam Sp24 --api-key sk-ant-...
+  python extract_125.py --list-exams   # show available exams
 """
 
 import argparse, base64, json, os, re, shutil, subprocess, sys, tempfile
@@ -19,8 +22,8 @@ from PIL import Image
 
 SCRIPT_DIR     = Path(__file__).parent
 BENCH_DIR      = SCRIPT_DIR.parent
-DOWNLOAD_DIR   = BENCH_DIR / "uw_data"/ "downloads" / "math126"
-OUTPUT_DIR     = BENCH_DIR / "uw_data" / "math126"
+DOWNLOAD_DIR   = BENCH_DIR / "uw_data" / "downloads" / "math125"
+OUTPUT_DIR     = BENCH_DIR / "uw_data" / "math125"
 MODEL          = "claude-haiku-4-5"
 SUPABASE_URL   = "https://jesfegjblkddopcyqyfc.supabase.co"
 STORAGE_BUCKET = "materials"
@@ -30,6 +33,8 @@ def normalize_stem(raw: str) -> tuple[str, str]:
     """
     Normalize exam stem to Au24/Sp24/Wi24 format.
     Returns (normalized_stem, label).
+
+    Handles Math 125 format where A=Autumn, W=Winter, Sp=Spring.
     """
     raw_lower = raw.lower()
 
@@ -41,12 +46,18 @@ def normalize_stem(raw: str) -> tuple[str, str]:
     if len(year) == 4:
         year = year[2:]  # 2024 -> 24
 
-    # Determine season
-    if 'au' in raw_lower or 'aut' in raw_lower:
+    # Determine season (Math 125 uses A for Autumn, W for Winter)
+    if raw_lower.startswith('a') and not raw_lower.startswith('au'):
+        # Single 'A' means Autumn in Math 125
+        return f"Au{year}", f"Autumn 20{year}"
+    elif 'au' in raw_lower or 'aut' in raw_lower:
         return f"Au{year}", f"Autumn 20{year}"
     elif 'sp' in raw_lower or 'spr' in raw_lower:
         return f"Sp{year}", f"Spring 20{year}"
-    elif 'wi' in raw_lower or 'win' in raw_lower or raw_lower.startswith('w'):
+    elif raw_lower.startswith('w') and not raw_lower.startswith('wi'):
+        # Single 'W' means Winter in Math 125
+        return f"Wi{year}", f"Winter 20{year}"
+    elif 'wi' in raw_lower or 'win' in raw_lower:
         return f"Wi{year}", f"Winter 20{year}"
     elif 'su' in raw_lower or 'sum' in raw_lower:
         return f"Su{year}", f"Summer 20{year}"
@@ -67,8 +78,8 @@ def load_exam_map() -> dict:
         if 'ans' in name or 'sol' in name:
             continue
 
-        # Extract term from filename: m126finalSpr2025.pdf, m126finalAut2024.pdf
-        m = re.search(r'm?126final([a-z]+\d+)\.pdf', name, re.IGNORECASE)
+        # Extract term from filename: 125finalA24.pdf, 125finalSp23.pdf
+        m = re.search(r'125final([a-z]+\d+)\.pdf', name, re.IGNORECASE)
         if not m:
             continue
 
@@ -78,7 +89,7 @@ def load_exam_map() -> dict:
         # Find matching answer PDF
         base = pdf.stem
         ans_pdf = None
-        for suffix in ['Ans', 'ans', 'Sol', 'sol', '_ans', '_sol']:
+        for suffix in ['_ans', '_sol', 'Ans', 'ans', 'Sol', 'sol', '_Ans', '_Sol']:
             candidate = DOWNLOAD_DIR / f"{base}{suffix}.pdf"
             if candidate.exists():
                 ans_pdf = candidate.name
@@ -142,9 +153,9 @@ def upload_to_supabase(service_key: str, local_path: Path, storage_path: str) ->
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
-QUESTION_PROMPT = """Extract every problem from this UW Math 126 (Calculus III) final exam. Return a JSON array.
+QUESTION_PROMPT = """Extract every problem from this UW Math 125 (Calculus II) final exam. Return a JSON array.
 
-Math 126 covers: vectors and geometry in 3D space, lines and planes, dot/cross products, vector-valued functions, arc length, curvature, multivariable functions, partial derivatives, tangent planes, gradient, directional derivatives, optimization (critical points, Lagrange multipliers), double and triple integrals, coordinate systems (polar, cylindrical, spherical), vector fields, line integrals, Green's theorem, Taylor series, and sequences/series (if included).
+Math 125 covers: antiderivatives, Riemann sums, Fundamental Theorem of Calculus, u-substitution, area between curves, volumes (disk/washer methods), work, integration by parts, trigonometric integrals, trigonometric substitution, partial fractions, improper integrals, arc length, and differential equations (separable, exponential growth/decay).
 
 CRITICAL RULES — follow exactly:
 1. Copy question text VERBATIM. Do NOT summarize, paraphrase, or omit anything. If a problem defines a function (e.g., "Let f(x) = ..."), this MUST be included in the stem. 
@@ -157,37 +168,39 @@ It is critical context for all parts and must never be omitted.
 5. stem: shared intro text before sub-parts, or null if none.
 6. parts: if no sub-parts, use [{"label": null, "question_text": "...", ...}]
 7. depends_on: set when a part says "Using your answer from (a)..." or similar.
-8. has_diagram: true ONLY if a diagram/graph/figure/3D object is physically displayed next to or within that specific part. Do NOT set true just because the part references a diagram from a previous part or the stem. Only the FIRST part that introduces the diagram should have has_diagram=true.
+8. has_diagram: true ONLY if a diagram/graph/figure is physically displayed next to or within that specific part. Do NOT set true just because the part references a diagram from a previous part or the stem. Only the FIRST part that introduces the diagram should have has_diagram=true.
 9. diagram_page: if has_diagram=true, use the [Page N] label number where the diagram appears, NOT the printed "Page X of Y" header.
-10. diagram_description: if has_diagram=true, describe in full detail — type (graph, 3D surface, region, vector field, etc.), axes labels and ranges, curves/surfaces drawn, shaded regions, key labeled points, all annotations. Enough for a student to reconstruct it. null if no diagram.
+10. diagram_description: if has_diagram=true, describe in full detail — type (graph, curve, region, etc.), axes labels and ranges, curves drawn, shaded regions, key labeled points, all annotations. Enough for a student to reconstruct it. null if no diagram.
 11. topic: MUST be one of these exact values:
-    - vectors_and_geometry
-    - lines_and_planes
-    - quadric_surfaces
-    - vector_valued_functions
-    - motion_in_space
-    - multivariable_functions
-    - partial_derivatives
-    - tangent_planes_and_differentials
-    - multivariable_optimization
-    - double_integrals
-    - polar_coordinates
-    - applications_of_double_integrals
-    - taylor_polynomials_and_series
+    - antiderivatives_and_riemann_sums
+    - fundamental_theorem_of_calculus
+    - substitution
+    - area_between_curves
+    - volumes
+    - work
+    - integration_by_parts
+    - trigonometric_integrals
+    - trigonometric_substitution
+    - partial_fractions
+    - improper_integrals
+    - applications_of_integration
+    - arc_length
+    - differential_equations
 12. concepts: array of snake_case strings from these subtopics:
-    - vectors_and_geometry: three_dimensional_coordinate_system, vector_representation, vector_operations, magnitude_and_direction, dot_product, angle_between_vectors, orthogonality, vector_projection
-    - lines_and_planes: parametric_equations_of_lines, symmetric_equations_of_lines, direction_vectors, equations_of_planes, normal_vector_to_plane, line_plane_intersection, parallel_and_perpendicular_conditions
-    - quadric_surfaces: cylinders, elliptic_paraboloid, hyperbolic_paraboloid, ellipsoid, hyperboloid_of_one_sheet, hyperboloid_of_two_sheets, surface_identification, traces_of_surfaces
-    - vector_valued_functions: vector_functions_definition, space_curves, component_functions, limits_of_vector_functions, derivatives_of_vector_functions, integrals_of_vector_functions, tangent_vector, parametrization_of_curves
-    - motion_in_space: velocity_vector, speed, acceleration_vector, tangential_and_normal_components, arc_length_parameterization, curvature, normal_vector, binormal_vector, normal_plane
-    - multivariable_functions: functions_of_two_variables, domain_in_r2, level_curves, level_surfaces, visualization_of_surfaces
-    - partial_derivatives: partial_derivative_definition, higher_order_partial_derivatives, mixed_partials, clairs_theorem, implicit_partial_differentiation
-    - tangent_planes_and_differentials: tangent_plane_equation, linear_approximation_multivariable, total_differential, differentials_interpretation
-    - multivariable_optimization: critical_points_multivariable, second_derivative_test_multivariable, local_extrema_multivariable, global_extrema_multivariable, optimization_with_constraints, lagrange_multipliers
-    - double_integrals: double_integrals_over_rectangles, double_integrals_over_general_regions, iterated_integrals, changing_order_of_integration, integration_bounds_setup
-    - polar_coordinates: polar_coordinate_conversion, graphing_in_polar, area_in_polar_coordinates, polar_integral_setup
-    - applications_of_double_integrals: mass_from_density_2d, center_of_mass_2d, moments_2d, average_value_multivariable
-    - taylor_polynomials_and_series: first_order_taylor_polynomial, second_order_taylor_polynomial, higher_order_taylor_polynomial, taylor_series_definition, error_estimation_taylor, building_new_series_from_known_series, power_series_representation
+    - antiderivatives_and_riemann_sums: basic_antiderivatives, initial_value_problems, sigma_notation, left_riemann_sums, right_riemann_sums, midpoint_riemann_sums, riemann_sum_limit_definition, definite_integral_as_area, net_change_from_integral
+    - fundamental_theorem_of_calculus: accumulation_functions, derivative_of_integral_function, evaluation_by_antiderivatives, total_change_theorem, indefinite_integrals
+    - substitution: u_substitution_basic, u_substitution_with_bounds, reverse_chain_rule_recognition, algebraic_substitution_setup, definite_integral_substitution
+    - area_between_curves: area_between_two_curves_dx, area_between_two_curves_dy, finding_intersection_points_for_area, top_minus_bottom_setup, right_minus_left_setup
+    - volumes: cross_sections, disk_method, washer_method, volume_with_respect_to_x, volume_with_respect_to_y, radius_from_geometry, inner_outer_radius_setup
+    - work: constant_force_work, variable_force_work, spring_work, pumping_liquid_work, distance_and_force_setup, work_integral_interpretation
+    - integration_by_parts: integration_by_parts_basic, choosing_u_and_dv, repeated_integration_by_parts, tabular_integration_by_parts, integrals_involving_logs, integrals_involving_inverse_trig
+    - trigonometric_integrals: powers_of_sine_and_cosine, powers_of_tangent_and_secant, trig_identity_rewriting, odd_even_power_strategy, product_of_trig_functions
+    - trigonometric_substitution: sqrt_a2_minus_x2_substitution, sqrt_a2_plus_x2_substitution, sqrt_x2_minus_a2_substitution, triangle_back_substitution, trigonometric_substitution_setup
+    - partial_fractions: linear_factor_decomposition, repeated_linear_factor_decomposition, irreducible_quadratic_decomposition, solving_for_coefficients, integrating_rational_functions
+    - improper_integrals: infinite_interval_integrals, vertical_asymptote_integrals, splitting_at_discontinuities, convergence_of_improper_integrals, divergence_of_improper_integrals
+    - applications_of_integration: average_value_of_a_function, numerical_integration_midpoint_rule, numerical_integration_trapezoidal_rule, numerical_integration_simpsons_rule, error_estimation_for_numerical_integration, mass_from_density, center_of_mass_one_dimensional, center_of_mass_two_dimensional, moments
+    - arc_length: arc_length_of_y_fx, arc_length_of_x_gy, arc_length_integrand_setup
+    - differential_equations: differential_equation_terminology, separable_differential_equations, initial_value_problems_for_separable_equations, exponential_growth_and_decay, logistic_differential_equation, mixing_or_application_modeling, solution_verification
 
 Schema:
 [
@@ -195,17 +208,17 @@ Schema:
     "problem_number": 3,
     "page_number": 4,
     "points": 10,
-    "topic": "double_integrals",
-    "concepts": ["double_integrals", "polar_coordinates", "area"],
+    "topic": "volumes",
+    "concepts": ["disk_method", "volume_with_respect_to_x"],
     "stem": null,
     "parts": [
       {
         "label": "a",
-        "question_text": "Set up but do not evaluate the integral...",
+        "question_text": "Set up but do not evaluate the integral for the volume...",
         "depends_on": null,
         "has_diagram": true,
         "diagram_page": 4,
-        "diagram_description": "A shaded region R bounded by the circle r=2 and the line y=x in the first quadrant. The x-axis is labeled from 0 to 2, y-axis from 0 to 2. The region is shaded between the two curves.",
+        "diagram_description": "A shaded region bounded by y=x^2 and y=4, with the region to be rotated about the x-axis.",
         "diagram_bbox": null
       }
     ]
@@ -214,22 +227,22 @@ Schema:
 
 Return JSON array only. No other text."""
 
-SOLUTION_PROMPT = """Extract final answers from this UW Math 126 solution/answer key. May be handwritten.
+SOLUTION_PROMPT = """Extract final answers from this UW Math 125 solution/answer key. May be handwritten.
 
 CRITICAL: Copy answers VERBATIM. Do NOT simplify or rephrase.
 - Include all equivalent forms if shown (e.g. "$3\\sqrt{5} = \\sqrt{45}$")
 - Math expressions: LaTeX ($...$ inline, $$...$$ display)
-- Word answers: copy exact words ("Converges", "Diverges", "saddle point", etc.)
+- Word answers: copy exact words ("Converges", "Diverges", etc.)
 
 Return a JSON array, one entry per problem+part:
 [
   {"problem_number": 1, "label": "a", "final_answer": "$\\\\frac{\\\\pi}{4}$"},
-  {"problem_number": 2, "label": null, "final_answer": "Diverges"}
+  {"problem_number": 2, "label": null, "final_answer": "Converges"}
 ]
 
 Return JSON array only. No other text."""
 
-BBOX_PROMPT = """This is page {page_num} of a UW Math 126 (Calculus III) exam.
+BBOX_PROMPT = """This is page {page_num} of a UW Math 125 (Calculus II) exam.
 There is a diagram/figure/graph on this page for Problem {prob_num}{part_str}.
 
 Identify the bounding box of the diagram (the box tightly enclosing the figure, not the surrounding text).
@@ -273,7 +286,7 @@ def crop_diagram(client, page_img: Path, page_num: int, prob_num, part_label, ou
 
 # ─── Markdown generation ──────────────────────────────────────────────────────
 
-def to_markdown(problems: list, exam_label: str, course: str = "Math 126") -> str:
+def to_markdown(problems: list, exam_label: str, course: str = "Math 125") -> str:
     lines = [f"# {course} Final Exam — {exam_label}\n"]
     for p in problems:
         pts = f" ({p['points']} pts)" if p.get('points') else ""
@@ -315,11 +328,11 @@ def process_exam(stem: str, client, supabase_key: str | None, skip_upload: bool)
         return False
 
     OUTPUT_DIR.mkdir(exist_ok=True)
-    img_dir = OUTPUT_DIR / f"math126_{stem}_images"
+    img_dir = OUTPUT_DIR / f"math125_{stem}_images"
     img_dir.mkdir(exist_ok=True)
 
     print(f"\n{'='*60}")
-    print(f"  Math 126 — {label} ({stem})")
+    print(f"  Math 125 — {label} ({stem})")
     print(f"{'='*60}")
 
     # ── Step 1: PDF → images ──────────────────────────────────────
@@ -386,7 +399,7 @@ def process_exam(stem: str, client, supabase_key: str | None, skip_upload: bool)
     # ── Step 5: Upload to Supabase ────────────────────────────────
     if not skip_upload and supabase_key:
         print("\n[5/5] Uploading to Supabase...")
-        sb_prefix = f"math126/{stem}"
+        sb_prefix = f"math125/{stem}"
 
         # Upload question PDF
         q_url = upload_to_supabase(supabase_key, q_pdf, f"{sb_prefix}/{q_name}")
@@ -414,9 +427,15 @@ def process_exam(stem: str, client, supabase_key: str | None, skip_upload: bool)
         print("\n[5/5] No SUPABASE_SERVICE_KEY — skipping upload")
 
     # ── Save output ───────────────────────────────────────────────
-    out_stem = f"math126_{stem}"
+    out_stem = f"math125_{stem}"
     json_path = OUTPUT_DIR / f"{out_stem}.json"
     md_path   = OUTPUT_DIR / f"{out_stem}.md"
+
+    # Add metadata fields
+    for p in problems:
+        p["id"]     = f"uw_math_125_{stem.lower()}_p{p['problem_number']}"
+        p["course"] = "math_125"
+        p["exam"]   = f"{stem.lower()}_final"
 
     json_path.write_text(json.dumps(problems, indent=2, ensure_ascii=False))
     md_path.write_text(to_markdown(problems, label))
@@ -439,7 +458,7 @@ def process_exam(stem: str, client, supabase_key: str | None, skip_upload: bool)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exam", help="e.g. Spr2025")
+    parser.add_argument("--exam", help="e.g. A24, Sp23, W22")
     parser.add_argument("--all", action="store_true", help="Process all available exams")
     parser.add_argument("--list-exams", action="store_true", help="List available exams")
     parser.add_argument("--api-key", default=os.environ.get("ANTHROPIC_API_KEY"))
@@ -448,7 +467,7 @@ def main():
     args = parser.parse_args()
 
     if args.list_exams:
-        print("\nAvailable Math 126 exams:")
+        print("\nAvailable Math 125 exams:")
         for stem, (q_name, a_name, label) in sorted(EXAM_MAP.items()):
             has_ans = "✅" if a_name else "❌"
             print(f"  {stem:12} → {label:20} (answers: {has_ans})")
