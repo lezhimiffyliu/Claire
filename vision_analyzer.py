@@ -383,25 +383,31 @@ def analyze_handwritten_solution(
     Returns:
         (SolutionAnalysis, None) on success, or (None, error_message) on error
     """
-    # Check API key first
-    api_key = _get_gemini_api_key()
-    if not api_key:
-        logger.error("[vision_analyzer] No GEMINI_API_KEY configured")
-        return None, "Vision analysis service temporarily unavailable. Please try again later."
+    try:
+        # Check API key first
+        api_key = _get_gemini_api_key()
+        if not api_key:
+            logger.error("[vision_analyzer] No GEMINI_API_KEY configured")
+            return None, "Vision analysis service temporarily unavailable. Please try again later."
 
-    if not image_urls:
-        return None, "No images provided for analysis."
+        if not image_urls:
+            return None, "No images provided for analysis."
 
-    # Step 1: Extract from images
-    extraction = extract_handwritten_solution(problem, image_urls)
-    if not extraction:
-        return None, "Failed to extract solution from images. Please ensure the photo is clear and try again."
+        # Step 1: Extract from images
+        extraction = extract_handwritten_solution(problem, image_urls)
+        if not extraction:
+            return None, "Failed to extract solution from images. Please ensure the photo is clear and try again."
 
-    # Step 2: Verify with SymPy
-    analysis = analyze_with_verifier(extraction, problem)
+        # Step 2: Verify with SymPy
+        analysis = analyze_with_verifier(extraction, problem)
 
-    logger.info(f"[vision_analyzer] Analysis complete: {analysis.overall_summary}")
-    return analysis, None
+        logger.info(f"[vision_analyzer] Analysis complete: {analysis.overall_summary}")
+        return analysis, None
+    except Exception as e:
+        logger.error(f"[vision_analyzer] Unexpected error in analyze_handwritten_solution: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, f"Analysis failed unexpectedly: {str(e)}"
 
 
 def analysis_to_grading_result(
