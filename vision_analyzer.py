@@ -103,18 +103,22 @@ logger = logging.getLogger(__name__)
 def _download_image(url: str) -> Optional[bytes]:
     """Download image from URL and return bytes."""
     try:
+        logger.debug(f"[vision_analyzer] Downloading image from: {url[:100]}...")
         resp = httpx.get(url, timeout=30.0)
+        logger.debug(f"[vision_analyzer] HTTP status: {resp.status_code}")
         resp.raise_for_status()
-        return resp.content
+        image_bytes = resp.content
+        logger.debug(f"[vision_analyzer] Successfully downloaded {len(image_bytes)} bytes")
+        return image_bytes
     except Exception as e:
-        logger.warning(f"[vision_analyzer] Failed to download {url}: {e}")
+        logger.error(f"[vision_analyzer] Failed to download {url[:100]}: {type(e).__name__}: {e}")
         return None
 
 
 def extract_handwritten_solution(
     problem: Problem,
     image_urls: list[str],
-) -> Optional[SolutionExtraction]:
+) -> tuple[Optional[SolutionExtraction], Optional[str]]:
     """
     Extract structured data from handwritten solution images using Gemini Flash vision.
 
@@ -126,16 +130,16 @@ def extract_handwritten_solution(
         image_urls: List of signed URLs for uploaded images
 
     Returns:
-        SolutionExtraction with per-part extracted data, or None on error
+        (SolutionExtraction, None) on success, or (None, error_message) on failure
     """
     api_key = _get_gemini_api_key()
     if not api_key:
         logger.error("[vision_analyzer] No GEMINI_API_KEY")
-        return None
+        return None, "Vision analysis is not available"
 
     if not image_urls:
         logger.error("[vision_analyzer] No images provided")
-        return None
+        return None, "No images provided for analysis"
 
     try:
         import google.generativeai as genai
@@ -208,9 +212,10 @@ Output ONLY the JSON, no other text."""
                 img = Image.open(io.BytesIO(image_bytes))
                 content_parts.append(img)
 
+        logger.info(f"[vision_analyzer] Successfully loaded {len(content_parts)}/{len(image_urls)} images")
         if not content_parts:
-            print("[vision_analyzer] No images could be downloaded")
-            return None
+            logger.error("[vision_analyzer] No images could be downloaded")
+            return None, "Could not download uploaded images for vision analysis"
 
         # Add prompt
         content_parts.append(prompt)
@@ -218,6 +223,7 @@ Output ONLY the JSON, no other text."""
         # Call Gemini
         response = model.generate_content(content_parts)
         output = response.text.strip()
+        logger.debug(f"[vision_analyzer] Gemini response (first 300 chars): {output[:300]}")
 
         # Extract JSON from response
         if output.startswith("```"):
@@ -226,7 +232,13 @@ Output ONLY the JSON, no other text."""
                 output = output[4:]
         output = output.strip()
 
-        data = json.loads(output)
+        # Parse JSON with explicit error handling
+        try:
+            data = json.loads(output)
+        except json.JSONDecodeError as e:
+            logger.error(f"[vision_analyzer] Vision model returned invalid JSON: {e}")
+            logger.error(f"[vision_analyzer] Raw output (first 500 chars): {output[:500]}")
+            return None, "Vision model response format error"
 
         # Parse into PartExtraction dataclasses
         parts = []
@@ -246,13 +258,13 @@ Output ONLY the JSON, no other text."""
             parts=parts,
             overall_notes=data.get("overall_notes", ""),
             extraction_confidence=data.get("extraction_confidence", 0.5),
-        )
+        ), None
 
     except Exception as e:
-        logger.error(f"[vision_analyzer] Extraction error: {e}")
+        logger.error(f"[vision_analyzer] Extraction error: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-        return None
+        return None, f"Vision analysis failed unexpectedly: {type(e).__name__}"
 
 
 def analyze_with_verifier(
@@ -388,15 +400,16 @@ def analyze_handwritten_solution(
         api_key = _get_gemini_api_key()
         if not api_key:
             logger.error("[vision_analyzer] No GEMINI_API_KEY configured")
-            return None, "Vision analysis service temporarily unavailable. Please try again later."
+            return None, "Vision analysis is not available"
 
         if not image_urls:
-            return None, "No images provided for analysis."
+            return None, "No images provided for analysis"
 
         # Step 1: Extract from images
-        extraction = extract_handwritten_solution(problem, image_urls)
+        extraction, error_msg = extract_handwritten_solution(problem, image_urls)
         if not extraction:
-            return None, "Failed to extract solution from images. Please ensure the photo is clear and try again."
+            # Pass through the specific error from extraction
+            return None, error_msg or "Vision analysis failed"
 
         # Step 2: Verify with SymPy
         analysis = analyze_with_verifier(extraction, problem)
@@ -404,10 +417,10 @@ def analyze_handwritten_solution(
         logger.info(f"[vision_analyzer] Analysis complete: {analysis.overall_summary}")
         return analysis, None
     except Exception as e:
-        logger.error(f"[vision_analyzer] Unexpected error in analyze_handwritten_solution: {e}")
+        logger.error(f"[vision_analyzer] Unexpected error in analyze_handwritten_solution: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-        return None, f"Analysis failed unexpectedly: {str(e)}"
+        return None, f"Vision analysis failed unexpectedly: {type(e).__name__}"
 
 
 def analysis_to_grading_result(
