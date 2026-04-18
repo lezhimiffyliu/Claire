@@ -1432,13 +1432,22 @@ with st.sidebar:
     if st.session_state.course and st.session_state.problems:
         st.markdown("#### 📚 Problems")
 
-        # Group by exam
+        # Group by exam (with deduplication)
         exams = {}
+        seen_ids = {}  # Track seen problem IDs per exam to avoid duplicates
+
         for problem in st.session_state.problems:
             exam_label = problem.get_source_label().split(" - ")[0]
+
+            # Initialize exam group and tracking set if not exists
             if exam_label not in exams:
                 exams[exam_label] = []
-            exams[exam_label].append(problem)
+                seen_ids[exam_label] = set()
+
+            # Only add if not already seen in this exam
+            if problem.id not in seen_ids[exam_label]:
+                exams[exam_label].append(problem)
+                seen_ids[exam_label].add(problem.id)
 
         for exam_label, problems in exams.items():
             with st.expander(f"{exam_label} ({len(problems)} problems)"):
