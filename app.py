@@ -900,60 +900,6 @@ def render_diagnostic_result():
             start_practice(recommended=False)
             st.rerun()
 
-    # ============================================================
-    # DEBUG: Show profile internals
-    # ============================================================
-    with st.expander("🔧 Debug: Student Profile"):
-        profile = get_profile()
-        if profile:
-            st.markdown("**Raw Profile Data:**")
-
-            st.markdown(f"- **Course:** {profile.course}")
-            st.markdown(f"- **Diagnostic Score:** {profile.diagnostic_score:.1%}")
-            st.markdown(f"- **Initial Focus Topics:** {profile.initial_focus_topics}")
-            st.markdown(f"- **Needs Foundation:** {profile.needs_foundation}")
-
-            st.markdown("**Topic Estimates:**")
-            if profile.topic_estimates:
-                for topic, estimate in profile.topic_estimates.items():
-                    st.markdown(f"  - `{topic}`: {estimate.correct}/{estimate.attempts} correct, status={estimate.status_label}")
-            else:
-                st.markdown("  (empty)")
-
-            st.markdown("**get_priority_topics() returns:**")
-            priority_from_profile = profile.get_priority_topics()
-            st.code(priority_from_profile)
-
-            st.markdown("**Error Counts:**")
-            st.json(profile.error_counts)
-
-            # Show problem topics for comparison
-            st.markdown("---")
-            st.markdown("**Problem Bank Topics (for comparison):**")
-            if st.session_state.get("parts_list"):
-                problem_topics = set()
-                for problem, _ in st.session_state.parts_list:
-                    problem_topics.add(problem.topic)
-                st.code(sorted(problem_topics))
-            else:
-                # Load problems to check
-                from problem_loader import load_problems
-                problems = load_problems(profile.course)
-                problem_topics = set(p.topic for p in problems)
-                st.code(sorted(problem_topics))
-
-            # Check overlap
-            st.markdown("**Topic Match Check:**")
-            if priority_from_profile:
-                for t in priority_from_profile:
-                    if t in problem_topics:
-                        st.markdown(f"  ✅ `{t}` exists in problem bank")
-                    else:
-                        st.markdown(f"  ❌ `{t}` NOT in problem bank")
-        else:
-            st.warning("No profile found")
-
-
 # ============================================================
 # WELCOME BACK PAGE
 # ============================================================
@@ -1516,31 +1462,6 @@ with st.sidebar:
                                 st.session_state.show_solution = False
                                 st.rerun()
                             break
-
-    # Developer tools (at bottom of sidebar)
-    st.divider()
-    with st.expander("🔧 Developer Tools"):
-        st.caption("Tools for updating the problem bank")
-
-        # Show cache status
-        from problem_loader import CACHE_ENABLED
-        if CACHE_ENABLED:
-            st.markdown("✅ **Cache:** Enabled (1 hour)")
-        else:
-            st.markdown("⚠️ **Cache:** Disabled")
-            st.caption("Set via CLAIRE_DISABLE_CACHE=1")
-
-        st.markdown("")
-
-        # Clear cache button
-        if st.button("🗑️ Clear Problem Cache", use_container_width=True):
-            from problem_loader import load_problems, get_all_parts
-            load_problems.clear()
-            get_all_parts.clear()
-            st.success("Cache cleared! New problems will be loaded.")
-            st.rerun()
-
-        st.caption("Use this after adding new problems to the bank")
 
 
 # ============================================================
