@@ -83,17 +83,35 @@ st.markdown("""
 # SESSION STATE INITIALIZATION
 # ============================================================
 
-if "course" not in st.session_state:
-    st.session_state.course = None  # "124", "125", "126"
+from learning_context import WorkspaceContext, CheckpointType, get_context, set_context
+
+# Auto-restore context
+if "context_loaded" not in st.session_state:
+    user = get_user()
+    ctx = WorkspaceContext.load(user.id) if user else None
+
+    if ctx:
+        set_context(ctx)
+        st.session_state.course = ctx.course
+
+        if ctx.checkpoint.type == CheckpointType.DIAGNOSTIC:
+            st.session_state.mode = "diagnostic"
+            st.session_state.diagnostic_idx = ctx.checkpoint.diagnostic_index or 0
+            if ctx.checkpoint.diagnostic_question_ids:
+                st.session_state.diagnostic_question_ids = ctx.checkpoint.diagnostic_question_ids
+        elif ctx.checkpoint.type == CheckpointType.PRACTICE:
+            st.session_state.mode = "practice"
+            st.session_state.resume_problem_id = ctx.checkpoint.problem_id
+            st.session_state.resume_part_index = ctx.checkpoint.part_index
+        else:
+            st.session_state.mode = "select"
+    else:
+        st.session_state.mode = "select"
+
+    st.session_state.context_loaded = True
 
 if "mode" not in st.session_state:
-    st.session_state.mode = "select"  # "select", "diagnostic", "practice"
-
-if "diagnostic_questions" not in st.session_state:
-    st.session_state.diagnostic_questions = []  # Questions for current diagnostic
-
-if "diagnostic_idx" not in st.session_state:
-    st.session_state.diagnostic_idx = 0  # Current question index
+    st.session_state.mode = "select"
 
 if "diagnostic_answers" not in st.session_state:
     st.session_state.diagnostic_answers = {}  # {question_id: selected_index}
@@ -247,15 +265,29 @@ def get_diagnostic_questions(course: str, count: int = 8) -> list:
 
 def select_course(course: str):
     """Select a course and start diagnostic."""
+    from learning_context import WorkspaceContext, set_context, ResumeCheckpoint, CheckpointType
+
     st.session_state.course = course
     st.session_state.mode = "diagnostic"
     st.session_state.diagnostic_questions = get_diagnostic_questions(course)
     st.session_state.diagnostic_idx = 0
 
-    # For logged-in users: create/load workspace and profile from Supabase
+    # Store question IDs for resume
+    question_ids = [q["id"] for q in st.session_state.diagnostic_questions]
+    st.session_state.diagnostic_question_ids = question_ids
+
+    # For logged-in users: create workspace and save checkpoint
     user = get_user()
     if user:
-        workspace_id = get_or_create_workspace(str(user.id), course)
+        ctx = WorkspaceContext.create(user.id, course)
+        if ctx:
+            set_context(ctx)
+            ctx.save_checkpoint(ResumeCheckpoint(
+                type=CheckpointType.DIAGNOSTIC,
+                diagnostic_index=0,
+                diagnostic_question_ids=question_ids
+            ))
+        workspace_id = ctx.workspace_id if ctx else None
         if workspace_id:
             set_current_workspace_id(workspace_id)
             # Load existing profile from Supabase
@@ -279,6 +311,8 @@ def skip_diagnostic():
 
 def finish_diagnostic():
     """Complete diagnostic and show results."""
+    from learning_context import get_context, ResumeCheckpoint, CheckpointType
+
     questions = st.session_state.diagnostic_questions
     answers = st.session_state.diagnostic_answers
 
@@ -310,6 +344,14 @@ def finish_diagnostic():
     # Update student profile
     score = correct_count / len(questions) if questions else 0.0
     update_profile_from_diagnostic(score, weak)
+
+    # Save checkpoint and profile to Supabase
+    ctx = get_context()
+    if ctx:
+        profile = get_profile()
+        if profile:
+            ctx.save_checkpoint(ResumeCheckpoint(type=CheckpointType.PRACTICE))
+            ctx.save_profile(profile.__dict__, diagnostic_completed=True)
 
     st.session_state.mode = "diagnostic_result"
 
@@ -884,6 +926,16 @@ def render_diagnostic_result():
 
 def render_problem_page():
     """Render the problem + upload + grading page."""
+    from learning_context import get_context, ResumeCheckpoint, CheckpointType
+
+    # Resume to specific problem if coming from restore
+    if "resume_problem_id" in st.session_state and "parts_list" in st.session_state:
+        problem_id = st.session_state.pop("resume_problem_id")
+        for i, (prob, _) in enumerate(st.session_state.parts_list):
+            if prob.id == problem_id:
+                st.session_state.current_part_idx = i
+                break
+
     current = get_current_part()
 
     if not current:
@@ -895,6 +947,15 @@ def render_problem_page():
         return
 
     problem, part, part_idx = current
+
+    # Save checkpoint when viewing a problem
+    ctx = get_context()
+    if ctx:
+        ctx.save_checkpoint(ResumeCheckpoint(
+            type=CheckpointType.PRACTICE,
+            problem_id=problem.id,
+            part_index=part_idx
+        ))
 
     # Header
     col_back, col_title, col_progress = st.columns([1, 3, 1])
