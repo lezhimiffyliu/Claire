@@ -19,7 +19,8 @@ from auth import handle_oauth_callback, get_user, show_login_button, sign_out
 from stripe_checkout import create_checkout_session, verify_checkout_session, get_customer_portal_url
 from mobile_upload import (
     create_upload_session, get_session_status, get_signed_urls,
-    close_session, get_session_by_id
+    close_session, get_session_by_id, get_analysis_status,
+    update_analysis_status, get_image_count, get_session_status_lean
 )
 from qr_generator import generate_qr_code, get_upload_url
 from vision_analyzer import (
@@ -455,19 +456,44 @@ def render_qr_upload_section(problem: Problem):
 
     st.markdown("---")
 
-    # Poll for status
-    status_data = get_session_status(session.id)
-    status = status_data.get("status", "unknown")
-    image_count = status_data.get("image_count", 0)
-    images = status_data.get("images", [])
+    # Single lean query for all polling data (status + analysis_status + image_count)
+    poll_data = get_session_status_lean(session.id)
+    status = poll_data.get("status", "unknown")
+    analysis_status = poll_data.get("analysis_status", "pending")
+    image_count = poll_data.get("image_count", 0)
+    has_images = image_count > 0
 
-    # Auto-refresh every 3 seconds while waiting for uploads
-    # Stop auto-refresh once images are received (so Analyze button works)
-    if status in ["waiting", "paired", "receiving_images"] and not images:
+    # If analysis completed, load result from DB
+    if analysis_status == "completed" and poll_data.get("analysis_result"):
+        stored_result = poll_data["analysis_result"]
+        # Reconstruct GradingResult from stored data
+        from grader import GradingResult
+        result = GradingResult(
+            is_correct=stored_result.get("is_correct", False),
+            feedback=stored_result.get("feedback", ""),
+            error_type=stored_result.get("error_type"),
+            hint=stored_result.get("hint"),
+        )
+        st.session_state.grading_result = result
+        # Close session and clear state
+        close_session(session.id)
+        st.session_state.qr_upload_session = None
+        st.session_state.qr_upload_token = None
+        st.rerun()
+
+    if analysis_status == "failed":
+        st.error("Analysis failed. Please try again.")
+        # Reset for retry
+        update_analysis_status(session.id, "pending")
+        st.rerun()
+
+    # Auto-refresh while waiting for uploads (not during analysis)
+    # Stop refresh once images are received so Analyze button works
+    if status in ["waiting", "paired", "receiving_images"] and not has_images:
         st_autorefresh(interval=3000, limit=100, key="qr_upload_autorefresh")
 
     # Status indicator
-    if images:
+    if has_images:
         st.success(f"Received {image_count} photo(s)")
     elif status == "waiting":
         st.info("Waiting for phone to connect...")
@@ -483,11 +509,13 @@ def render_qr_upload_section(problem: Problem):
     else:
         st.info(f"Session status: {status}")
 
-    # Show image thumbnails if any
-    if images:
-        st.markdown("**Uploaded photos:**")
-        signed_urls = get_signed_urls(session.id)
+    # Show image thumbnails and analyze button if images exist
+    if has_images:
+        # Fetch signed URLs ONCE for both display and analysis
+        signed_urls = get_signed_urls(session.id, expires_in=300)
+
         if signed_urls:
+            st.markdown("**Uploaded photos:**")
             cols = st.columns(min(len(signed_urls), 3))
             for i, url in enumerate(signed_urls):
                 with cols[i % 3]:
@@ -497,22 +525,24 @@ def render_qr_upload_section(problem: Problem):
 
         # Analyze button
         if st.button("✅ Analyze Solution", type="primary", use_container_width=True):
+            # Mark analysis as running
+            update_analysis_status(session.id, "running")
+
             with st.spinner("Analyzing your handwritten work..."):
                 # Check quota
                 used_premium = can_use_premium()
 
-                # Get signed URLs for vision analysis
-                image_urls = get_signed_urls(session.id, expires_in=300)
-
-                if not image_urls:
+                if not signed_urls:
                     st.error("Could not retrieve uploaded images.")
+                    update_analysis_status(session.id, "failed")
                     return
 
-                # Analyze with vision model
-                analysis, error_msg = analyze_handwritten_solution(problem, image_urls)
+                # Analyze with vision model (use already-fetched URLs)
+                analysis, error_msg = analyze_handwritten_solution(problem, signed_urls)
 
                 if not analysis:
                     st.error(error_msg or "Analysis failed. Please try again.")
+                    update_analysis_status(session.id, "failed")
                     return
 
                 # Convert to GradingResult for display
@@ -560,6 +590,14 @@ def render_qr_upload_section(problem: Problem):
                     )
                     # Sync profile to Supabase
                     sync_profile_to_supabase()
+
+                # Store analysis result in DB and mark as completed
+                update_analysis_status(session.id, "completed", {
+                    "is_correct": result.is_correct,
+                    "feedback": result.feedback,
+                    "error_type": result.error_type,
+                    "hint": result.hint,
+                })
 
                 # Close the upload session
                 close_session(session.id)
@@ -896,14 +934,30 @@ def render_problem_page():
         st.markdown(problem.stem)
         st.markdown("")
 
+    # Helper function to fix LaTeX rendering issues
+    def fix_latex(text):
+        """Fix common LaTeX rendering issues in Streamlit.
+
+        Issue: $...= $ causes rendering problems.
+        Fix: Move trailing operators outside LaTeX: $...$ =
+        """
+        import re
+        # Pattern: $ followed by content, then operator/equals, then closing $
+        # Replace "= $" with "$ =" (move equals outside)
+        text = re.sub(r'\s*=\s*\$', r'$ =', text)
+        # Also fix other trailing operators if needed
+        text = re.sub(r'\s*([+\-*/])\s*\$', r'$ \1', text)
+        return text
+
     # Show ALL parts of this problem
     diagram_shown = False
     for p in problem.parts:
-        # Show part question
+        # Show part question with LaTeX fixes
+        question = fix_latex(p.question_text)
         if p.label:
-            st.markdown(f"**({p.label})** {p.question_text}")
+            st.markdown(f"**({p.label})** {question}")
         else:
-            st.markdown(p.question_text)
+            st.markdown(question)
 
         # Show diagram if exists (only show once per problem)
         if p.has_diagram and not diagram_shown:
@@ -923,9 +977,12 @@ def render_problem_page():
 
     st.markdown("---")
 
-    # Upload section with tabs
+    # Upload section with tabs (QR first - most students use phone scanning)
     st.markdown("#### 📷 Submit your work")
-    upload_tab, qr_tab = st.tabs(["📁 File Upload", "📱 QR Mobile Upload"])
+    qr_tab, upload_tab = st.tabs(["📱 QR Mobile Upload", "📁 File Upload"])
+
+    with qr_tab:
+        render_qr_upload_section(problem)
 
     with upload_tab:
         uploaded_file = st.file_uploader(
@@ -1000,9 +1057,6 @@ def render_problem_page():
 
                     st.session_state.grading_result = result
                     st.rerun()
-
-    with qr_tab:
-        render_qr_upload_section(problem)
 
     # Grading result
     if st.session_state.grading_result:
@@ -1242,6 +1296,31 @@ with st.sidebar:
                                 st.session_state.show_solution = False
                                 st.rerun()
                             break
+
+    # Developer tools (at bottom of sidebar)
+    st.divider()
+    with st.expander("🔧 Developer Tools"):
+        st.caption("Tools for updating the problem bank")
+
+        # Show cache status
+        from problem_loader import CACHE_ENABLED
+        if CACHE_ENABLED:
+            st.markdown("✅ **Cache:** Enabled (1 hour)")
+        else:
+            st.markdown("⚠️ **Cache:** Disabled")
+            st.caption("Set via CLAIRE_DISABLE_CACHE=1")
+
+        st.markdown("")
+
+        # Clear cache button
+        if st.button("🗑️ Clear Problem Cache", use_container_width=True):
+            from problem_loader import load_problems, get_all_parts
+            load_problems.clear()
+            get_all_parts.clear()
+            st.success("Cache cleared! New problems will be loaded.")
+            st.rerun()
+
+        st.caption("Use this after adding new problems to the bank")
 
 
 # ============================================================

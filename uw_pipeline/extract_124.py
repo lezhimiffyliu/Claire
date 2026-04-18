@@ -237,7 +237,7 @@ The image dimensions are {width}x{height} pixels.
 Return JSON only:
 {{"x1": <left pixel>, "y1": <top pixel>, "x2": <right pixel>, "y2": <bottom pixel>}}
 
-Be generous — include a 10-20px margin around the diagram. No other text."""
+Identify just the core diagram area — I will add 40px padding automatically. No other text."""
 
 # ─── Diagram cropping ─────────────────────────────────────────────────────────
 
@@ -259,10 +259,10 @@ def crop_diagram(client, page_img: Path, page_num: int, prob_num, part_label, ou
         raw = re.sub(r"\s*```$", "", raw)
         bbox = json.loads(raw)
         x1, y1, x2, y2 = bbox["x1"], bbox["y1"], bbox["x2"], bbox["y2"]
-        # clamp to image bounds
-        PAD = 45
-        x1, y1 = max(0, x1-PAD), max(0, y1-PAD)
-        x2, y2 = min(w, x2+PAD), min(h, y2+PAD)
+        # clamp to image bounds with padding
+        PAD = 60
+        x1, y1 = max(0, x1 - PAD), max(0, y1 - PAD)
+        x2, y2 = min(w, x2 + PAD), min(h, y2 + PAD)
         cropped = img.crop((x1, y1, x2, y2))
         cropped.save(out_path, "PNG")
         print(f"      ✂️  Cropped diagram → {out_path.name} ({x1},{y1})-({x2},{y2})")
@@ -364,24 +364,41 @@ def process_exam(stem: str, client, supabase_key: str | None, skip_upload: bool)
     else:
         print("\n[3/5] No answer PDF found, skipping answer extraction")
 
-    # ── Step 4: Link diagrams to full page images ─────────────────
-    # (Skip cropping for now — just use the full page where the diagram appears)
-    # Note: Claude reports page numbers as "Page X of 11" from exam headers.
-    # Since page-01.png is the cover, "Page X of 11" corresponds to page-(X+1).png = q_pages[X]
-    print("\n[4/5] Linking diagrams to page images...")
+    # ── Step 4: Crop diagrams with LLM-detected bbox ─────────────
+    # Use Claude to detect diagram bbox (x1, y1, x2, y2) and crop with padding=40
+    print("\n[4/5] Cropping diagrams with LLM bbox detection...")
+    diagrams_dir = img_dir / "diagrams"
+    diagrams_dir.mkdir(exist_ok=True)
+
     for p in problems:
         for part in p.get("parts", []):
             if not part.get("has_diagram"):
                 continue
-            # Use problem's page_number as the diagram page (same page as the question)
-            diag_page = p.get("page_number")
-            if not diag_page or diag_page >= len(q_pages):
-                print(f"      ⚠️  P{p['problem_number']} part={part.get('label')}: page {diag_page} out of range")
+
+            # Get diagram page from the part (not the problem)
+            diag_page = part.get("diagram_page")
+            if not diag_page or diag_page < 1 or diag_page > len(q_pages):
+                print(f"      ⚠️  P{p['problem_number']} part={part.get('label')}: diagram_page {diag_page} out of range")
                 continue
-            # diag_page is "Page X of 11", which is q_pages[X] (not X-1) due to cover page
-            page_img = q_pages[diag_page]
-            part["diagram_image_local"] = str(page_img.relative_to(BENCH_DIR))
-            print(f"      📄 P{p['problem_number']} part={part.get('label') or 'main'} → {page_img.name}")
+
+            # diagram_page uses [Page N] labels starting from 1, but q_pages is 0-indexed
+            # [Page 1] → q_pages[0], [Page 4] → q_pages[3]
+            page_img = q_pages[diag_page - 1]
+
+            # Generate crop filename: p1_a.png, p2.png, etc.
+            crop_filename = f"p{p['problem_number']}"
+            if part.get('label'):
+                crop_filename += f"_{part['label']}"
+            crop_filename += ".png"
+            crop_path = diagrams_dir / crop_filename
+
+            # Crop diagram using LLM bbox detection
+            if crop_diagram(client, page_img, diag_page, p['problem_number'], part.get('label'), crop_path):
+                part["diagram_image_local"] = str(crop_path.relative_to(BENCH_DIR))
+            else:
+                # Fallback to full page if cropping fails
+                print(f"      📄 Fallback to full page: {page_img.name}")
+                part["diagram_image_local"] = str(page_img.relative_to(BENCH_DIR))
 
     # ── Step 5: Upload to Supabase ────────────────────────────────
     if not skip_upload and supabase_key:

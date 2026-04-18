@@ -77,6 +77,8 @@ class SolutionAnalysis:
     profile_update_hints: dict  # Hints for updating student profile
     any_incorrect: bool  # True if any part is incorrect
     any_uncertain: bool  # True if any part couldn't be verified
+    is_invalid_submission: bool = False  # True if submission doesn't match problem
+    invalid_submission_reason: Optional[str] = None  # Reason for invalid submission
 
 
 def _build_problem_context(problem: Problem) -> str:
@@ -274,6 +276,9 @@ def analyze_with_verifier(
     """
     Apply verifier to extracted data to determine correctness.
 
+    First checks problem alignment to prevent false positives from wrong-problem submissions.
+    Only runs verifier if alignment check passes.
+
     Args:
         extraction: SolutionExtraction from extract_handwritten_solution()
         problem: The Problem object with official answers
@@ -282,7 +287,27 @@ def analyze_with_verifier(
         SolutionAnalysis with verified is_correct for each part
     """
     from verifier import verify_answer, AnswerVerificationResult
+    from alignment_checker import check_problem_alignment
 
+    # === STEP 1: Check problem alignment BEFORE running verifier ===
+    alignment_result = check_problem_alignment(problem, extraction)
+
+    if not alignment_result.is_aligned:
+        logger.warning(f"[vision_analyzer] Problem alignment FAILED: {alignment_result.details}")
+        # Return invalid submission result - skip verifier entirely
+        return SolutionAnalysis(
+            parts=[],
+            overall_summary="This does not appear to be a solution to the current problem.",
+            profile_update_hints={},
+            any_incorrect=True,
+            any_uncertain=False,
+            is_invalid_submission=True,
+            invalid_submission_reason=alignment_result.details,
+        )
+
+    logger.info("[vision_analyzer] Problem alignment check PASSED, proceeding with verification")
+
+    # === STEP 2: Run verifier (only if alignment passed) ===
     analyzed_parts = []
     any_incorrect = False
     any_uncertain = False
@@ -437,7 +462,26 @@ def analysis_to_grading_result(
     Returns:
         GradingResult for the specified part
     """
-    if not analysis or not analysis.parts:
+    if not analysis:
+        return GradingResult(
+            error_step=None,
+            error_type=None,
+            feedback="Unable to analyze solution",
+            hint="",
+            is_correct=False,
+        )
+
+    # Handle invalid submission (wrong problem)
+    if analysis.is_invalid_submission:
+        return GradingResult(
+            error_step=None,
+            error_type="invalid_submission",
+            feedback=analysis.overall_summary,
+            hint="Please upload your solution to the current problem.",
+            is_correct=False,
+        )
+
+    if not analysis.parts:
         return GradingResult(
             error_step=None,
             error_type=None,
@@ -476,7 +520,18 @@ def get_combined_feedback(analysis: SolutionAnalysis) -> str:
     Returns:
         Formatted feedback string
     """
-    if not analysis or not analysis.parts:
+    if not analysis:
+        return "Unable to analyze solution."
+
+    # Handle invalid submission
+    if analysis.is_invalid_submission:
+        return (
+            f"**Invalid Submission**\n\n"
+            f"{analysis.overall_summary}\n\n"
+            f"Please upload your solution to the current problem."
+        )
+
+    if not analysis.parts:
         return "Unable to analyze solution."
 
     lines = []

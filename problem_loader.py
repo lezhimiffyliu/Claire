@@ -27,6 +27,12 @@ import json
 import os
 from dataclasses import dataclass, field
 from typing import Optional
+import streamlit as st
+
+# Cache control via environment variable
+# Set CLAIRE_DISABLE_CACHE=1 to disable caching during development
+CACHE_ENABLED = os.environ.get("CLAIRE_DISABLE_CACHE", "0") != "1"
+CACHE_TTL = 3600 if CACHE_ENABLED else 0  # 0 = no cache
 
 
 @dataclass
@@ -125,11 +131,15 @@ def load_problems_from_file(filepath: str) -> list[Problem]:
         return []
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def load_problems(course: str) -> list[Problem]:
     """
     Load all problems for a course (e.g., "124").
 
     Looks for files matching: problems/math124_*.json
+
+    Cached for 1 hour to avoid repeated file I/O.
+    Set CLAIRE_DISABLE_CACHE=1 to disable caching during development.
     """
     problems_dir = os.path.join(os.path.dirname(__file__), "problems")
 
@@ -147,17 +157,38 @@ def load_problems(course: str) -> list[Problem]:
             all_problems.extend(problems)
             print(f"[problem_loader] Loaded {len(problems)} problems from {filename}")
 
-    # Sort by exam and problem number
-    all_problems.sort(key=lambda p: (p.exam, p.problem_number))
+    # Sort by exam date (newest first) and problem number (ascending)
+    def exam_to_timestamp(exam_str):
+        """Convert exam string to timestamp for sorting.
+        Examples: 'au24_final' -> 2024.83, 'wi25_final' -> 2025.08
+        """
+        parts = exam_str.split('_')[0]  # "au24" or "wi25"
+        season = parts[:2]  # "au", "wi", "sp", "su"
+        year_short = parts[2:]  # "24", "25"
+        year = int('20' + year_short) if year_short else 0  # 2024, 2025
+
+        # Approximate month for each season (for chronological ordering)
+        # Autumn = Oct, Winter = Jan, Spring = Apr, Summer = Jul
+        season_month = {'au': 10, 'wi': 1, 'sp': 4, 'su': 7}
+        month = season_month.get(season, 1)
+
+        # Winter crosses calendar year: Winter 2025 = Jan 2025 (already in exam string)
+        return year + month / 12.0
+
+    all_problems.sort(key=lambda p: (-exam_to_timestamp(p.exam), p.problem_number))
 
     print(f"[problem_loader] Total: {len(all_problems)} problems for course {course}")
     return all_problems
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def get_all_parts(course: str) -> list[tuple[Problem, int]]:
     """
     Get all individual parts as (Problem, part_index) tuples.
     Useful for practice mode where each part is a separate question.
+
+    Cached for 1 hour to avoid repeated processing.
+    Set CLAIRE_DISABLE_CACHE=1 to disable caching during development.
     """
     problems = load_problems(course)
     parts = []

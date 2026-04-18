@@ -84,6 +84,9 @@ class UploadSession:
     created_at: datetime
     expires_at: datetime
     closed_at: Optional[datetime]
+    # Analysis tracking
+    analysis_status: str = "pending"  # pending|running|completed|failed
+    analysis_result: Optional[dict] = None
 
 
 @dataclass
@@ -170,6 +173,7 @@ def create_upload_session(
             "status": "waiting",
             "problem_display_text": display_text,
             "expires_at": expires_at.isoformat(),
+            "analysis_status": "pending",
         }).execute()
 
         if result.data and len(result.data) > 0:
@@ -187,6 +191,8 @@ def create_upload_session(
                 created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
                 expires_at=datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00")),
                 closed_at=None,
+                analysis_status=row.get("analysis_status", "pending"),
+                analysis_result=row.get("analysis_result"),
             )
             return session, raw_token
 
@@ -268,6 +274,8 @@ def validate_token(raw_token: str) -> Optional[UploadSession]:
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             expires_at=expires_at,
             closed_at=closed_at,
+            analysis_status=row.get("analysis_status", "pending"),
+            analysis_result=row.get("analysis_result"),
         )
 
     except Exception as e:
@@ -494,6 +502,147 @@ def close_session(session_id: str) -> bool:
         return False
 
 
+def get_analysis_status(session_id: str) -> dict:
+    """
+    Get ONLY the analysis status of a session (lean query for polling).
+
+    Args:
+        session_id: UUID of the upload session
+
+    Returns:
+        Dict with analysis_status, analysis_result (if completed), and image_count
+    """
+    client = _service_role_client()
+    if not client:
+        return {"analysis_status": "error"}
+
+    try:
+        # Single query: get analysis_status and analysis_result
+        result = client.table("upload_sessions").select(
+            "analysis_status, analysis_result"
+        ).eq("id", session_id).execute()
+
+        if not result.data:
+            return {"analysis_status": "not_found"}
+
+        row = result.data[0]
+        return {
+            "analysis_status": row.get("analysis_status", "pending"),
+            "analysis_result": row.get("analysis_result"),
+        }
+
+    except Exception as e:
+        print(f"[get_analysis_status] Error: {e}")
+        return {"analysis_status": "error"}
+
+
+def update_analysis_status(
+    session_id: str,
+    status: str,
+    result: Optional[dict] = None
+) -> bool:
+    """
+    Update the analysis status of a session.
+
+    Args:
+        session_id: UUID of the upload session
+        status: New status (pending|running|completed|failed)
+        result: Analysis result JSON (required when status=completed)
+
+    Returns:
+        True if successfully updated
+    """
+    client = _service_role_client()
+    if not client:
+        return False
+
+    try:
+        update_data = {"analysis_status": status}
+        if result is not None:
+            update_data["analysis_result"] = result
+
+        client.table("upload_sessions").update(
+            update_data
+        ).eq("id", session_id).execute()
+
+        return True
+
+    except Exception as e:
+        print(f"[update_analysis_status] Error: {e}")
+        return False
+
+
+def get_image_count(session_id: str) -> int:
+    """
+    Get the count of uploaded images for a session (lean query).
+
+    Args:
+        session_id: UUID of the upload session
+
+    Returns:
+        Number of uploaded images
+    """
+    client = _service_role_client()
+    if not client:
+        return 0
+
+    try:
+        result = client.table("uploaded_images").select(
+            "id", count="exact"
+        ).eq("upload_session_id", session_id).execute()
+
+        return result.count or 0
+
+    except Exception as e:
+        print(f"[get_image_count] Error: {e}")
+        return 0
+
+
+def get_session_status_lean(session_id: str) -> dict:
+    """
+    Get session status and image count in a single efficient query.
+
+    This is the primary polling function - combines status check with image count
+    to minimize database round-trips.
+
+    Args:
+        session_id: UUID of the upload session
+
+    Returns:
+        Dict with status, analysis_status, and image_count
+    """
+    client = _service_role_client()
+    if not client:
+        return {"status": "error", "analysis_status": "error", "image_count": 0}
+
+    try:
+        # Single query for session status + analysis status
+        session_result = client.table("upload_sessions").select(
+            "status, analysis_status, analysis_result"
+        ).eq("id", session_id).execute()
+
+        if not session_result.data:
+            return {"status": "not_found", "analysis_status": "not_found", "image_count": 0}
+
+        row = session_result.data[0]
+
+        # Get image count (separate query but efficient - count only)
+        images_result = client.table("uploaded_images").select(
+            "id", count="exact"
+        ).eq("upload_session_id", session_id).execute()
+
+        return {
+            "status": row.get("status", "unknown"),
+            "analysis_status": row.get("analysis_status", "pending"),
+            "analysis_result": row.get("analysis_result"),
+            "image_count": images_result.count or 0,
+        }
+
+    except Exception as e:
+        print(f"[get_session_status_lean] Error: {e}")
+        return {"status": "error", "analysis_status": "error", "image_count": 0}
+
+
 def get_session_by_id(session_id: str) -> Optional[UploadSession]:
     """
     Get an upload session by ID (for desktop polling).
@@ -544,6 +693,8 @@ def get_session_by_id(session_id: str) -> Optional[UploadSession]:
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             expires_at=datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00")),
             closed_at=closed_at,
+            analysis_status=row.get("analysis_status", "pending"),
+            analysis_result=row.get("analysis_result"),
         )
 
     except Exception as e:

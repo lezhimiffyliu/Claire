@@ -5,15 +5,15 @@
     "points": 12,
     "topic": "limits",
     "concepts": [
-      "algebraic_limit_evaluation",
       "limits_at_infinity",
+      "algebraic_limit_evaluation",
       "trig_limits"
     ],
     "stem": "Find the following limits or explain why the limit does not exist. Give exact answers.",
     "parts": [
       {
         "label": "a",
-        "question_text": "$\\lim_{x \\to \\infty} x \\ln(x+2) - x \\ln(x)$",
+        "question_text": "$$\\lim_{x \\to \\infty} x \\ln(x + 2) - x \\ln(x)$$",
         "depends_on": null,
         "has_diagram": false,
         "diagram_page": null,
@@ -22,7 +22,7 @@
       },
       {
         "label": "b",
-        "question_text": "$\\lim_{x \\to 0^+} x^x$",
+        "question_text": "$$\\lim_{x \\to 0^+} x^x$$",
         "depends_on": null,
         "has_diagram": false,
         "diagram_page": null,
@@ -31,7 +31,7 @@
       },
       {
         "label": "c",
-        "question_text": "$\\lim_{x \\to \\frac{\\pi}{2}} \\frac{\\sin(3x) + 1 + 3\\cos(x)}{\\cos(5x) + 1 - \\sin(x)}$",
+        "question_text": "$$\\lim_{x \\to \\frac{\\pi}{2}} \\frac{\\sin(3x) + 1 + 3\\cos(x)}{\\cos(5x) + 1 - \\sin(x)}$$",
         "depends_on": null,
         "has_diagram": false,
         "diagram_page": null,
@@ -51,16 +51,16 @@
     "concepts": [
       "exponential_derivatives",
       "logarithmic_differentiation",
-      "trig_derivatives",
       "chain_rule",
       "product_rule",
-      "quotient_rule"
+      "quotient_rule",
+      "trig_derivatives"
     ],
     "stem": "Differentiate the following functions using the rules of differentiation. Do not simplify.",
     "parts": [
       {
         "label": "a",
-        "question_text": "$f(x) = e^{-\\frac{x^2}{2}} + x^2 \\cos(x)$",
+        "question_text": "$$f(x) = e^{-\\frac{x^2}{2}} + x^2 \\cos(x)$$",
         "depends_on": null,
         "has_diagram": false,
         "diagram_page": null,
@@ -69,7 +69,7 @@
       },
       {
         "label": "b",
-        "question_text": "$g(x) = (\\sin(x^3))^{\\ln(x)}$",
+        "question_text": "$$g(x) = \\left(\\sin(x^3)\\right)^{\\ln(x)}$$",
         "depends_on": null,
         "has_diagram": false,
         "diagram_page": null,
@@ -78,12 +78,12 @@
       },
       {
         "label": "c",
-        "question_text": "$h(x) = \\frac{\\arctan x}{x}$",
+        "question_text": "$$h(x) = \\frac{\\arctan x}{x}$$",
         "depends_on": null,
         "has_diagram": false,
         "diagram_page": null,
         "diagram_description": null,
-        "final_answer": "$h'(x) = \\frac{\\left(\\frac{x}{1+x^2}\\right) - \\arctan(x)}{x^2}$"
+        "final_answer": "$h'(x) = \\frac{\\frac{x}{1+x^2} - \\arctan(x)}{x^2}$"
       }
     ],
     "id": "uw_math_124_au25_p2",
@@ -97,7 +97,8 @@
     "topic": "linear_approximation",
     "concepts": [
       "linearization",
-      "tangent_line_approximation"
+      "tangent_line_approximation",
+      "differentials"
     ],
     "stem": "In this problem, we will use linear approximations to estimate the value of $(8.1)^{1/3}$.",
     "parts": [
@@ -117,7 +118,7 @@
         "has_diagram": false,
         "diagram_page": null,
         "diagram_description": null,
-        "final_answer": "$(8.12)^{1/3} \\approx L(8.12) = 2 + \\frac{1}{12}(0.12) = 2.01$"
+        "final_answer": "$(8.12)^{1/3} \\approx 2.01$"
       }
     ],
     "id": "uw_math_124_au25_p3",
@@ -126,7 +127,7 @@
   },
   {
     "problem_number": 4,
-    "page_number": 5,
+    "page_number": 4,
     "points": 10,
     "topic": "implicit_differentiation",
     "concepts": [
@@ -137,7 +138,7 @@
     "parts": [
       {
         "label": null,
-        "question_text": "Consider the curve defined implicitly by $xce^y + y\\sin(x) - y^2 = -1$. Find the equation of tangent line to the above curve at the point $(0, 1)$.",
+        "question_text": "Consider the curve defined implicitly by $$xce^y + y\\sin(x) - y^2 = -1$$ Find the equation of tangent line to the above curve at the point $(0, 1)$.",
         "depends_on": null,
         "has_diagram": false,
         "diagram_page": null,
@@ -156,9 +157,11 @@
     "topic": "parametric_equations",
     "concepts": [
       "parametric_first_derivative",
-      "parametric_tangent_line"
+      "parametric_tangent_line",
+      "parametric_curve_graphing",
+      "horizontal_vertical_tangents"
     ],
-    "stem": "Answer the following questions based on the parametric curve $x(t) = \\cos(2t)$ $y(t) = \\sin(3t)$ where $-\\frac{\\pi}{2} < t < \\frac{\\pi}{2}$. Its graph is given on the right.",
+    "stem": "Answer the following questions based on the parametric curve $$x(t) = \\cos(2t) \\quad y(t) = \\sin(3t)$$ where $-\\frac{\\pi}{2} < t < \\frac{\\pi}{2}$. Its graph is given on the right.",
     "parts": [
       {
         "label": "a",
@@ -166,10 +169,10 @@
         "depends_on": null,
         "has_diagram": true,
         "diagram_page": 5,
-        "diagram_description": "A parametric curve displayed on an x-y coordinate plane. The curve appears to be a closed loop or figure-eight shape. The x-axis and y-axis are shown with origin marked. The curve passes through the origin area and extends in both positive and negative x and y directions.",
+        "diagram_description": "A parametric curve plotted on an xy-plane with x-axis ranging approximately from -1.5 to 1.5 and y-axis from -1.5 to 1.5. The curve appears to be a closed loop or figure-eight shape, passing through the origin and with points marked along it.",
         "final_answer": "$(0.5, \\pm 1)$",
-        "diagram_image_local": "uw_data/math124/math124_Au25_images/page-06.png",
-        "diagram_image_url": "https://jesfegjblkddopcyqyfc.supabase.co/storage/v1/object/public/materials/math124/Au25/diagrams/page-06.png"
+        "diagram_image_local": "uw_data/math124/math124_Au25_images/page-05.png",
+        "diagram_image_url": "https://jesfegjblkddopcyqyfc.supabase.co/storage/v1/object/public/materials/math124/Au25/diagrams/page-05.png"
       },
       {
         "label": "b",
@@ -193,8 +196,8 @@
     "concepts": [
       "related_rates_setup",
       "time_differentiation",
-      "geometric_related_rates",
-      "trigonometric_related_rates"
+      "trigonometric_related_rates",
+      "rate_interpretation"
     ],
     "stem": null,
     "parts": [
@@ -204,10 +207,10 @@
         "depends_on": null,
         "has_diagram": true,
         "diagram_page": 6,
-        "diagram_description": "A diagram showing a triangle configuration with point P at the top, points Q and R on a horizontal baseline, and point O on the baseline between Q and R. Point P is above the baseline. The angle θ is marked at vertex P between the two line segments PQ and PR. A vertical line segment is drawn from P down to O on the baseline. The diagram is labeled 'Picture is not to scale.'",
-        "final_answer": "$\\frac{d\\theta}{dt} = -\\frac{546}{1025}$",
-        "diagram_image_local": "uw_data/math124/math124_Au25_images/page-07.png",
-        "diagram_image_url": "https://jesfegjblkddopcyqyfc.supabase.co/storage/v1/object/public/materials/math124/Au25/diagrams/page-07.png"
+        "diagram_description": "A triangle with vertices labeled Q, O, R on a horizontal line (base) and P above them. Point P is shown at the top with an arrow pointing upward. The angle at P is labeled θ. A vertical line is drawn from P to O on the base. The segments PQ and PR are drawn as the sides of the triangle, representing the elastic ropes.",
+        "final_answer": "$\\frac{d\\theta}{dt} = \\left(\\frac{-8}{164} + \\frac{-5}{125}\\right) \\cdot 6 = \\frac{-546}{1025}$",
+        "diagram_image_local": "uw_data/math124/math124_Au25_images/diagrams/p6.png",
+        "diagram_image_url": "https://jesfegjblkddopcyqyfc.supabase.co/storage/v1/object/public/materials/math124/Au25/diagrams/p6.png"
       }
     ],
     "id": "uw_math_124_au25_p6",
@@ -221,6 +224,7 @@
     "topic": "optimization",
     "concepts": [
       "optimization_setup",
+      "objective_function",
       "constraint_equation",
       "geometric_optimization",
       "optimization_verification"
@@ -233,10 +237,10 @@
         "depends_on": null,
         "has_diagram": true,
         "diagram_page": 7,
-        "diagram_description": "A cross-sectional diagram showing a cone with a cylinder inscribed inside it. The cone appears to be shown as a triangle with a shaded rectangular region (the cylinder cross-section) inside it. The cylinder is positioned with its base on the base of the cone and extends upward within the cone.",
-        "final_answer": "$h = 2$ and $r = \\frac{16}{3}$",
-        "diagram_image_local": "uw_data/math124/math124_Au25_images/page-08.png",
-        "diagram_image_url": "https://jesfegjblkddopcyqyfc.supabase.co/storage/v1/object/public/materials/math124/Au25/diagrams/page-08.png"
+        "diagram_description": "A cone with apex at the top and circular base at the bottom. A cylinder is inscribed inside the cone with its base on the cone's base and its top circular face inside the cone. The cone has height labeled as 6 and base radius as 8. The cylinder has radius and height unmarked.",
+        "final_answer": "The dimensions are $h = 2$ and $r = \\frac{16}{3}$",
+        "diagram_image_local": "uw_data/math124/math124_Au25_images/diagrams/p7.png",
+        "diagram_image_url": "https://jesfegjblkddopcyqyfc.supabase.co/storage/v1/object/public/materials/math124/Au25/diagrams/p7.png"
       }
     ],
     "id": "uw_math_124_au25_p7",
@@ -260,7 +264,7 @@
       "second_derivative_test",
       "curve_sketching"
     ],
-    "stem": null,
+    "stem": "Let $f(x) = \\frac{3x^2 - 1}{3x^3}$.",
     "parts": [
       {
         "label": "a",
@@ -287,7 +291,7 @@
         "has_diagram": false,
         "diagram_page": null,
         "diagram_description": null,
-        "final_answer": "Local minimum at $(-1, -\\frac{2}{3})$ and local maximum at $(1, \\frac{2}{3})$"
+        "final_answer": "$f$ is increasing on $(-1, 0)$ and $(0, 1)$ and decreasing on $(-\\infty, -1)$ and $(1, \\infty)$. Local minimum at $(-1, -\\frac{2}{3})$ and local maximum at $(1, \\frac{2}{3})$"
       },
       {
         "label": "d",
@@ -296,7 +300,7 @@
         "has_diagram": false,
         "diagram_page": null,
         "diagram_description": null,
-        "final_answer": "Concave up on $(−\\sqrt{2}, 0)$ and $(0, \\sqrt{2})$; Concave down on $(\\infty, −\\sqrt{2})$ and $(\\sqrt{2}, \\infty)$. Inflection points: $(−\\sqrt{2}, −\\frac{5\\sqrt{2}}{12})$ and $(\\sqrt{2}, \\frac{5\\sqrt{2}}{12})$"
+        "final_answer": "Concave up on $(-\\sqrt{2}, 0)$ and $(0, \\sqrt{2})$; Concave down on $(-\\infty, -\\sqrt{2})$ and $(\\sqrt{2}, \\infty)$. Inflection points: $(-\\sqrt{2}, -\\frac{5\\sqrt{2}}{12})$ and $(\\sqrt{2}, \\frac{5\\sqrt{2}}{12})$"
       },
       {
         "label": "e",
@@ -304,8 +308,8 @@
         "depends_on": null,
         "has_diagram": true,
         "diagram_page": 9,
-        "diagram_description": "A blank coordinate grid with x-axis ranging from -5 to 5 and y-axis ranging from -3 to 3. Grid lines are drawn at unit intervals. The axes intersect at the origin (0, 0). This is where students should sketch the curve for $f(x) = \\frac{3x^2 - 1}{3x^3}$.",
-        "final_answer": "[Graph shown with vertical asymptote at $x=0$, horizontal asymptote at $y=0$, local extrema at $(\\pm 1, \\pm \\frac{2}{3})$, and inflection points at $(\\pm\\sqrt{2}, \\pm\\frac{5\\sqrt{2}}{12})$]",
+        "diagram_description": "A blank coordinate grid with x-axis ranging from -5 to 5 and y-axis ranging from -3 to 3, with gridlines at integer intervals.",
+        "final_answer": "See graph (odd function, symmetric about the origin)",
         "diagram_image_local": "uw_data/math124/math124_Au25_images/page-09.png",
         "diagram_image_url": "https://jesfegjblkddopcyqyfc.supabase.co/storage/v1/object/public/materials/math124/Au25/diagrams/page-09.png"
       }
