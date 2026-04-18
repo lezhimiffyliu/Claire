@@ -790,6 +790,65 @@ EXPLANATION STYLE (Basic — be concise):
         except Exception:
             return None
 
+    def process_structured_teaching(
+        self, prompt: str, conversation_history: list[dict]
+    ) -> dict:
+        """
+        Process teaching prompt and return structured JSON decision.
+
+        This method is used by teaching_orchestrator to get structured
+        actions instead of free-form text.
+
+        Args:
+            prompt: Mode-aware prompt from orchestrator
+            conversation_history: Previous messages in this session
+
+        Returns:
+            Dict with 'output' containing JSON decision
+        """
+        if not self.llm:
+            return {
+                "output": json.dumps({
+                    "action": "give_hint",
+                    "message": "I'm having trouble connecting right now.",
+                    "reasoning": "No LLM available"
+                })
+            }
+
+        try:
+            from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+
+            # Build messages
+            messages = []
+
+            # Add conversation history if provided
+            for msg in conversation_history:
+                if msg["role"] == "user":
+                    messages.append(HumanMessage(content=msg["content"]))
+                else:
+                    messages.append(AIMessage(content=msg["content"]))
+
+            # Add current prompt
+            messages.append(HumanMessage(content=prompt))
+
+            # Call LLM directly (not through ReAct agent)
+            result = self.llm.invoke(messages)
+            output = result.content.strip()
+
+            return {"output": output}
+
+        except Exception as e:
+            print(f"[process_structured_teaching] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "output": json.dumps({
+                    "action": "give_hint",
+                    "message": "Let me help you work through this.",
+                    "reasoning": f"Error: {e}"
+                })
+            }
+
     def _build_continuation_input(self, user_input: str) -> str:
         """Build input for when student is answering a previous question."""
         context_info = ""

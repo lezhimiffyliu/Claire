@@ -28,6 +28,10 @@ from vision_analyzer import (
 from streamlit_autorefresh import st_autorefresh
 import os
 import random
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # Page config
 st.set_page_config(
@@ -141,6 +145,9 @@ if "teaching_context" not in st.session_state:
 if "teaching_mode" not in st.session_state:
     st.session_state.teaching_mode = False  # True when in teaching dialogue
 
+if "last_teaching_action" not in st.session_state:
+    st.session_state.last_teaching_action = None  # Last action from teaching orchestrator
+
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -149,60 +156,41 @@ if "teaching_mode" not in st.session_state:
 def build_teaching_context(
     problem: Problem,
     analysis,  # SolutionAnalysis
+    grading_result: GradingResult,
     part_index: int = 0,
-) -> dict:
+):
     """
     Build teaching context from analysis results for Socratic teaching.
+
+    Now returns TeachingContext object from teaching_orchestrator.
 
     Args:
         problem: The Problem object
         analysis: SolutionAnalysis from vision_analyzer
+        grading_result: GradingResult for compatibility
         part_index: Which part to focus on
 
     Returns:
-        Dict with all context needed for teaching agent
+        TeachingContext object
     """
-    part = analysis.parts[part_index] if part_index < len(analysis.parts) else analysis.parts[0]
-    problem_part = problem.parts[part_index] if part_index < len(problem.parts) else problem.parts[0]
-
-    return {
-        # Problem info
-        "problem_id": problem.id,
-        "problem_stem": problem.stem,
-        "question_text": problem_part.question_text,
-        "official_answer": problem_part.final_answer,
-        "topic": problem.topic,
-        "concepts": getattr(problem, "concepts", []),
-
-        # Student's work
-        "student_answer": part.student_final_answer,
-        "student_steps": part.steps,
-
-        # Verifier result
-        "is_correct": part.is_correct,
-        "is_uncertain": part.is_uncertain,
-        "verifier_result": part.verifier_result,
-
-        # Error analysis
-        "error_type": part.error_type,
-        "error_candidates": part.error_candidates,
-        "feedback": part.feedback,
-        "hint": part.hint,
-        "confidence": part.confidence,
-    }
+    from teaching_orchestrator import context_from_grading_result
+    return context_from_grading_result(problem, grading_result, analysis, part_index)
 
 
-def start_teaching_session(teaching_context: dict) -> str:
+def start_teaching_session(teaching_context) -> str:
     """
     Start a Socratic teaching session based on the teaching context.
 
+    Now uses teaching_orchestrator for structured decision-making and rule enforcement.
+
     Args:
-        teaching_context: Dict from build_teaching_context()
+        teaching_context: TeachingContext object from teaching_orchestrator
 
     Returns:
         Initial teaching message from agent
     """
     from claire_agent import ClaireAgent
+    from teaching_orchestrator import orchestrate_teaching_response
 
     # Get or create agent
     if "claire_agent" not in st.session_state:
@@ -210,35 +198,17 @@ def start_teaching_session(teaching_context: dict) -> str:
 
     agent = st.session_state.claire_agent
 
-    # Build the initial prompt for the agent
-    prompt = f"""A student just submitted a handwritten solution that was analyzed.
+    # Use orchestrator to get structured decision with rule enforcement
+    decision = orchestrate_teaching_response(
+        context=teaching_context,
+        agent=agent,
+        user_input="",
+    )
 
-**Problem:** {teaching_context.get('question_text', '')}
+    # Store the decision action for UI logic (e.g., auto-end session if confirmed correct)
+    st.session_state.last_teaching_action = decision.action
 
-**Official Answer:** {teaching_context.get('official_answer', 'Not provided')}
-
-**Student's Answer:** {teaching_context.get('student_answer', 'Not extracted')}
-
-**Student's Steps:**
-{chr(10).join(teaching_context.get('student_steps', ['No steps extracted']))}
-
-**Analysis Result:**
-- Correct: {teaching_context.get('is_correct', False)}
-- Error Type: {teaching_context.get('error_type', 'unknown')}
-- Suspected Issues: {teaching_context.get('error_candidates', [])}
-
-**Your Task:**
-The student's answer is INCORRECT. Using Socratic method:
-1. Do NOT reveal the correct answer directly
-2. Ask a guiding question to help them discover their mistake
-3. Focus on the specific step or concept where they went wrong
-4. Be encouraging but direct them to think
-
-Start with a single guiding question."""
-
-    # Call agent
-    result = agent.process_query(prompt)
-    return result.get("output", "Let me help you understand where you went wrong...")
+    return decision.message
 
 
 def load_diagnostic_bank():
@@ -598,13 +568,14 @@ def render_qr_upload_section(problem: Problem):
 
                 st.session_state.grading_result = result
 
-                # If incorrect, prepare teaching context for Socratic dialogue
-                if not result.is_correct:
-                    teaching_ctx = build_teaching_context(problem, analysis, part_index=0)
-                    st.session_state.teaching_context = teaching_ctx
+                # Prepare teaching context (even if correct, for potential follow-up)
+                teaching_ctx = build_teaching_context(problem, analysis, result, part_index=0)
+                st.session_state.teaching_context = teaching_ctx
+
+                # Only enter teaching mode if incorrect or uncertain
+                if not result.is_correct or result.error_type:
                     st.session_state.teaching_mode = True
                 else:
-                    st.session_state.teaching_context = None
                     st.session_state.teaching_mode = False
 
                 st.rerun()
@@ -1092,20 +1063,41 @@ def render_problem_page():
 
         with col_send:
             if st.button("Send", use_container_width=True) and student_input:
+                from teaching_orchestrator import orchestrate_teaching_response
+                from session_state import TeachingMode, AgentAction
+
                 # Add student message
                 st.session_state.teaching_messages.append({
                     "role": "user",
                     "content": student_input
                 })
 
-                # Get agent response
-                if "claire_agent" in st.session_state:
-                    agent = st.session_state.claire_agent
-                    result = agent.process_query(student_input)
-                    st.session_state.teaching_messages.append({
-                        "role": "assistant",
-                        "content": result.get("output", "Keep going...")
-                    })
+                # Update teaching context mode and history
+                if st.session_state.teaching_context:
+                    ctx = st.session_state.teaching_context
+                    ctx.mode = TeachingMode.CONTINUE_TEACHING
+                    ctx.conversation_history = st.session_state.teaching_messages.copy()
+
+                    # Get structured decision from orchestrator
+                    if "claire_agent" in st.session_state:
+                        agent = st.session_state.claire_agent
+                        decision = orchestrate_teaching_response(
+                            context=ctx,
+                            agent=agent,
+                            user_input=student_input,
+                        )
+
+                        # Add response
+                        st.session_state.teaching_messages.append({
+                            "role": "assistant",
+                            "content": decision.message
+                        })
+
+                        # Auto-end session if confirmed correct
+                        if decision.action == AgentAction.CONFIRM_CORRECT_AND_STOP:
+                            st.session_state.teaching_mode = False
+                            st.info("Session complete! Moving on.")
+
                 st.rerun()
 
         with col_end:

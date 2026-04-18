@@ -130,6 +130,8 @@ cython_debug/
 
 # Claire project - personal/runtime files
 LEARNING_NOTES.md
+ARCHITECTURE_UPDATE.md
+SUMMARY.md
 usage.db
 api.log
 CLAUDE.md
