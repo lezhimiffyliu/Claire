@@ -45,7 +45,14 @@ st.set_page_config(
 # AUTH & PAYMENT CALLBACKS (must be early)
 # ============================================================
 
-# Handle OAuth callback (?code=xxx)
+# 🆕 Step 1: Try to restore session from cookies (before OAuth callback)
+# This allows automatic re-login on page refresh
+from auth import restore_session_from_cookie
+if restore_session_from_cookie():
+    # Session successfully restored from cookies
+    pass
+
+# Step 2: Handle OAuth callback (?code=xxx) for new logins
 if handle_oauth_callback():
     st.rerun()
 
@@ -106,6 +113,24 @@ if "context_loaded" not in st.session_state:
         set_context(ctx)
         st.session_state.course = ctx.course
 
+        # Load profile to check if returning user
+        workspace_id = ctx.workspace_id
+        if workspace_id:
+            set_current_workspace_id(workspace_id)
+            profile = load_from_supabase(workspace_id)
+            if profile:
+                save_profile(profile)
+
+                # 🆕 Check if this is a returning user (has progress)
+                has_progress = (profile.total_correct + profile.total_incorrect > 0) or ctx.diagnostic_completed
+
+                # Show welcome back page for returning users
+                if has_progress and "welcome_back_shown" not in st.session_state:
+                    st.session_state.mode = "welcome_back"
+                    st.session_state.context_loaded = True
+                    st.stop()  # Stop here to show welcome back first
+
+        # Resume from checkpoint
         if ctx.checkpoint.type == CheckpointType.DIAGNOSTIC:
             st.session_state.mode = "diagnostic"
             st.session_state.diagnostic_idx = ctx.checkpoint.diagnostic_index or 0
@@ -930,6 +955,130 @@ def render_diagnostic_result():
 
 
 # ============================================================
+# WELCOME BACK PAGE
+# ============================================================
+
+def render_welcome_back():
+    """Show personalized welcome back page for returning users."""
+    from auth import get_user
+    import random
+
+    user = get_user()
+    profile = get_profile()
+    course_names = {"124": "Math 124", "125": "Math 125", "126": "Math 126"}
+    course = st.session_state.course
+
+    # Casual greetings
+    greetings = [
+        "👋 Welcome back!",
+        "🎉 Hey there!",
+        "✨ What's up!",
+        "💪 Ready to practice?",
+        "🚀 Let's do this!",
+    ]
+    greeting = random.choice(greetings)
+
+    st.markdown(f"## {greeting}")
+    if user:
+        st.caption(f"Signed in as {user.email}")
+
+    st.markdown("---")
+
+    # Progress summary
+    if profile:
+        total_attempts = profile.total_correct + profile.total_incorrect
+        accuracy = profile.overall_accuracy if total_attempts > 0 else 0
+
+        st.markdown(f"### 📊 Your {course_names.get(course, 'Calculus')} Progress")
+        st.markdown("")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Problems Attempted", total_attempts)
+        with col2:
+            st.metric("Correct Answers", profile.total_correct)
+        with col3:
+            topic_count = len([t for t in profile.topic_estimates.values() if t.attempts > 0])
+            st.metric("Topics Explored", topic_count)
+
+        st.markdown("---")
+
+        # Smart recommendation based on profile
+        priority_topics = profile.get_priority_topics()[:3]  # Top 3 priority
+        dominant_error = profile.get_dominant_error_type()
+
+        st.markdown("### 🎯 What's Next?")
+        st.markdown("")
+
+        # Personalized message based on profile (use accuracy internally, don't show)
+        if total_attempts < 5:
+            st.info("🌱 Just getting started. Let's build some momentum!")
+        elif accuracy >= 0.75 and total_attempts >= 10:
+            st.success("🔥 You're doing great! Keep it up.")
+        elif profile.total_correct >= 10:
+            st.info("💪 Making solid progress. Let's keep going!")
+        else:
+            st.info("📚 Building your practice foundation. Every problem helps!")
+
+        st.markdown("")
+
+        # Recommendation
+        if priority_topics:
+            topics_display = ", ".join([f"**{t.replace('_', ' ').title()}**" for t in priority_topics])
+
+            # Personalized recommendation message
+            if total_attempts < 3:
+                rec_msg = f"Since you're just getting started, I recommend focusing on {topics_display}."
+            elif profile.total_correct >= 15:
+                rec_msg = f"You've got some good reps in! Next up: {topics_display}."
+            else:
+                rec_msg = f"Based on your recent work, let's focus on {topics_display}."
+
+            st.markdown(rec_msg)
+
+            # Show topic estimates
+            with st.expander("📋 Topic Breakdown"):
+                for topic in priority_topics:
+                    if topic in profile.topic_estimates:
+                        te = profile.topic_estimates[topic]
+                        topic_display = topic.replace("_", " ").title()
+                        st.markdown(f"**{topic_display}**: {te.correct}/{te.attempts} solved — {te.status_label}")
+        else:
+            st.markdown("Let's continue practicing and build your mastery data!")
+
+        # Error pattern insight
+        if dominant_error and profile.error_counts.get(dominant_error, 0) > 2:
+            st.markdown("")
+            error_labels = {
+                "concept": "conceptual misunderstandings",
+                "algebra": "algebraic mistakes",
+                "logic": "logic errors",
+                "careless": "careless slips"
+            }
+            st.caption(f"💬 Pattern noticed: Most errors are {error_labels.get(dominant_error, dominant_error)}. Claire will help you work through these!")
+
+    else:
+        st.info("No progress data yet. Let's get started!")
+
+    st.markdown("---")
+
+    # Action buttons
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("🎯 Continue Practicing", type="primary", use_container_width=True):
+            st.session_state.welcome_back_shown = True
+            start_practice(recommended=True)
+            st.rerun()
+
+    with col2:
+        if st.button("📚 Browse All Problems", use_container_width=True):
+            st.session_state.welcome_back_shown = True
+            start_practice(recommended=False)
+            st.rerun()
+
+
+# ============================================================
 # PROBLEM PAGE
 # ============================================================
 
@@ -1347,7 +1496,7 @@ with st.sidebar:
 
         for exam_label, problems in exams.items():
             with st.expander(f"{exam_label} ({len(problems)} problems)"):
-                for problem in problems:
+                for problem_idx, problem in enumerate(problems):
                     # Find first part index for this problem
                     for i, (p, _) in enumerate(st.session_state.parts_list):
                         if p.id == problem.id:
@@ -1360,7 +1509,8 @@ with st.sidebar:
                             num_parts = len(problem.parts)
                             parts_label = f" ({num_parts} parts)" if num_parts > 1 else ""
                             btn_label = f"{prefix}P{problem.problem_number}: {problem.topic.replace('_', ' ').title()}{parts_label}"
-                            if st.button(btn_label, key=f"nav_{problem.id}"):
+                            # Use exam_label + problem_idx to ensure unique key
+                            if st.button(btn_label, key=f"nav_{exam_label}_{problem_idx}"):
                                 st.session_state.current_part_idx = i
                                 st.session_state.grading_result = None
                                 st.session_state.show_solution = False
@@ -1399,6 +1549,8 @@ with st.sidebar:
 
 if st.session_state.mode == "select" or st.session_state.course is None:
     render_course_selection()
+elif st.session_state.mode == "welcome_back":
+    render_welcome_back()
 elif st.session_state.mode == "diagnostic":
     render_diagnostic()
 elif st.session_state.mode == "diagnostic_result":

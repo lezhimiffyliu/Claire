@@ -5,6 +5,8 @@ Flow:
 1. User clicks "Sign in with Google" → redirected to Google
 2. Google redirects back to app with ?code=...
 3. App exchanges code for session → user is logged in
+4. Session tokens stored in encrypted browser cookies for persistence
+5. On page refresh, session automatically restored from cookies
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ except ImportError:
     pass
 
 _supabase = None
+_cookies = None
 
 
 def _client():
@@ -58,6 +61,35 @@ def _client():
     return _supabase
 
 
+def get_cookie_manager():
+    """Get or create encrypted cookie manager singleton."""
+    global _cookies
+    if _cookies is None:
+        try:
+            from streamlit_cookies_manager import EncryptedCookieManager
+
+            # Get encryption password from env
+            password = os.environ.get("COOKIE_PASSWORD", "default-insecure-password")
+
+            _cookies = EncryptedCookieManager(
+                prefix="claire_auth_",
+                password=password
+            )
+
+            # Initialize (required for first use)
+            if not _cookies.ready():
+                st.stop()
+
+        except ImportError:
+            print("[AUTH DEBUG] streamlit-cookies-manager not installed")
+            return None
+        except Exception as e:
+            print(f"[AUTH DEBUG] Cookie manager error: {e}")
+            return None
+
+    return _cookies
+
+
 def get_authenticated_client():
     """
     Get Supabase client with current user's session.
@@ -89,9 +121,24 @@ def handle_oauth_callback() -> bool:
         return False
     try:
         resp = client.auth.exchange_code_for_session({"auth_code": params["code"]})
-        if resp.user:
+        if resp.user and resp.session:
+            # Save to session_state
             st.session_state.user = resp.user
             st.session_state.supabase_session = resp.session
+
+            # 🆕 Save to encrypted cookies for persistence across page refreshes
+            cookies = get_cookie_manager()
+            if cookies:
+                try:
+                    cookies["access_token"] = resp.session.access_token
+                    cookies["refresh_token"] = resp.session.refresh_token
+                    cookies["user_id"] = str(resp.user.id)
+                    cookies["user_email"] = resp.user.email
+                    cookies.save()
+                    print(f"[AUTH DEBUG] Saved session to cookies for user {resp.user.email}")
+                except Exception as e:
+                    print(f"[AUTH DEBUG] Failed to save cookies: {e}")
+
             st.query_params.clear()
             return True
     except Exception as e:
@@ -102,6 +149,75 @@ def handle_oauth_callback() -> bool:
             st.warning("Login session expired. Please try signing in again.")
         else:
             st.error(f"Login failed: {e}")
+    return False
+
+
+def restore_session_from_cookie() -> bool:
+    """
+    🆕 Restore user session from encrypted cookies.
+    Call this at app startup BEFORE handle_oauth_callback().
+    Returns True if session was successfully restored.
+    """
+    # Skip if already logged in
+    if "user" in st.session_state:
+        print("[AUTH DEBUG] Already logged in via session_state")
+        return True
+
+    cookies = get_cookie_manager()
+    if not cookies:
+        print("[AUTH DEBUG] Cookie manager not available")
+        return False
+
+    # Get tokens from cookies
+    access_token = cookies.get("access_token")
+    refresh_token = cookies.get("refresh_token")
+    user_id = cookies.get("user_id")
+    user_email = cookies.get("user_email")
+
+    if not (access_token and refresh_token and user_id):
+        print("[AUTH DEBUG] No valid session in cookies")
+        return False
+
+    client = _client()
+    if not client:
+        print("[AUTH DEBUG] Supabase client not available")
+        return False
+
+    try:
+        # Restore session using tokens
+        print(f"[AUTH DEBUG] Attempting to restore session for {user_email}")
+        resp = client.auth.set_session(access_token, refresh_token)
+
+        if resp.user:
+            # Successfully restored!
+            st.session_state.user = resp.user
+            st.session_state.supabase_session = resp.session
+
+            # Update cookies with refreshed tokens
+            try:
+                cookies["access_token"] = resp.session.access_token
+                cookies["refresh_token"] = resp.session.refresh_token
+                cookies.save()
+                print(f"[AUTH DEBUG] ✅ Session restored for {resp.user.email}")
+            except Exception as e:
+                print(f"[AUTH DEBUG] Failed to update cookies: {e}")
+
+            return True
+        else:
+            print("[AUTH DEBUG] set_session returned no user")
+
+    except Exception as e:
+        print(f"[AUTH DEBUG] Session restore failed: {e}")
+        # Token expired or invalid - clear cookies
+        try:
+            for key in ["access_token", "refresh_token", "user_id", "user_email"]:
+                if key in cookies:
+                    del cookies[key]
+            cookies.save()
+            print("[AUTH DEBUG] Cleared invalid cookies")
+        except Exception as clear_error:
+            print(f"[AUTH DEBUG] Failed to clear cookies: {clear_error}")
+
     return False
 
 
@@ -136,9 +252,25 @@ def show_login_button(label: str = "Sign in with Google to upload materials"):
 
 
 def sign_out():
+    """Sign out and clear both session_state and cookies."""
     try:
         _client().auth.sign_out()
     except Exception:
         pass
+
+    # Clear session_state
     st.session_state.pop("user", None)
     st.session_state.pop("supabase_session", None)
+    st.session_state.pop("workspace_context", None)
+
+    # 🆕 Clear cookies
+    cookies = get_cookie_manager()
+    if cookies:
+        try:
+            for key in ["access_token", "refresh_token", "user_id", "user_email"]:
+                if key in cookies:
+                    del cookies[key]
+            cookies.save()
+            print("[AUTH DEBUG] Cleared cookies on sign out")
+        except Exception as e:
+            print(f"[AUTH DEBUG] Failed to clear cookies: {e}")

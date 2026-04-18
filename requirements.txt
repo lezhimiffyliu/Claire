@@ -29,6 +29,9 @@ qrcode[pil]>=7.4
 # Auto-refresh for polling
 streamlit-autorefresh>=1.0.0
 
+# Cookie management for persistent sessions
+streamlit-cookies-manager>=0.2.0
+
 # Development dependencies
 pytest>=8.0.0
 httpx>=0.26.0  # For testing FastAPI
