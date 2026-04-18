@@ -76,16 +76,17 @@ def get_cookie_manager():
                 password=password
             )
 
-            # Initialize (required for first use)
-            if not _cookies.ready():
-                st.stop()
-
         except ImportError:
             print("[AUTH DEBUG] streamlit-cookies-manager not installed")
             return None
         except Exception as e:
             print(f"[AUTH DEBUG] Cookie manager error: {e}")
             return None
+
+    # Check if ready (JavaScript loaded)
+    if _cookies and not _cookies.ready():
+        # Wait for cookies to be ready
+        st.stop()
 
     return _cookies
 
@@ -163,7 +164,12 @@ def restore_session_from_cookie() -> bool:
         print("[AUTH DEBUG] Already logged in via session_state")
         return True
 
-    cookies = get_cookie_manager()
+    try:
+        cookies = get_cookie_manager()
+    except Exception as e:
+        print(f"[AUTH DEBUG] Cookie manager initialization error: {e}")
+        return False
+
     if not cookies:
         print("[AUTH DEBUG] Cookie manager not available")
         return False
