@@ -85,7 +85,19 @@ st.markdown("""
 
 from learning_context import WorkspaceContext, CheckpointType, get_context, set_context
 
-# Auto-restore context
+# Initialize basic session state first
+if "mode" not in st.session_state:
+    st.session_state.mode = "select"
+if "course" not in st.session_state:
+    st.session_state.course = None
+if "diagnostic_questions" not in st.session_state:
+    st.session_state.diagnostic_questions = []
+if "diagnostic_idx" not in st.session_state:
+    st.session_state.diagnostic_idx = 0
+if "diagnostic_answers" not in st.session_state:
+    st.session_state.diagnostic_answers = {}
+
+# Auto-restore context (only once)
 if "context_loaded" not in st.session_state:
     user = get_user()
     ctx = WorkspaceContext.load(user.id) if user else None
@@ -109,9 +121,6 @@ if "context_loaded" not in st.session_state:
         st.session_state.mode = "select"
 
     st.session_state.context_loaded = True
-
-if "mode" not in st.session_state:
-    st.session_state.mode = "select"
 
 if "diagnostic_answers" not in st.session_state:
     st.session_state.diagnostic_answers = {}  # {question_id: selected_index}

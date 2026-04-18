@@ -24,15 +24,18 @@ def _get_supabase_client():
 
 def _get_user_client():
     """Get client with user session (for RLS)."""
-    from auth import get_user
+    import streamlit as st
     client = _get_supabase_client()
     if not client:
         return None
-    user = get_user()
-    if not user or not user.access_token:
+
+    # Get session from st.session_state (set by auth.py)
+    session = st.session_state.get("supabase_session")
+    if not session or not session.access_token:
         return None
+
     # Set auth header for RLS
-    client.postgrest.auth(user.access_token)
+    client.postgrest.auth(session.access_token)
     return client
 
 @dataclass
