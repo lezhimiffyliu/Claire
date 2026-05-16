@@ -1,0 +1,35 @@
+{
+  "name": "onboarding",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Duolingo-style onboarding for Claire calculus tutor",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "extract-questions": "node scripts/extractMCQuestions.js",
+    "api": "cd .. && source venv/bin/activate && python api_server.py",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:headed": "npx playwright test --headed"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.104.1",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.5.0",
+    "framer-motion": "^11.18.2",
+    "katex": "^0.16.45",
+    "postcss": "^8.5.10",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.14.2",
+    "tailwindcss": "^3.4.19",
+    "vite": "^5.4.21"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  }
+}

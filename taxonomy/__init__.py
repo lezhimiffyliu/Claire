@@ -12,6 +12,10 @@ Usage:
     topics = get_topics("126")
     subtopics = get_subtopics("126", "double_integrals")
     heuristic_md = load_heuristic("double_integrals")
+
+    # NEW: Metadata access
+    topic_meta = get_topic_metadata("126", "double_integrals")
+    subtopic_meta = get_subtopic_metadata("126", "iterated_integrals")
 """
 
 from pathlib import Path
@@ -21,6 +25,11 @@ from typing import Optional
 from .math124 import TOPICS as TOPICS_124, SUBTOPICS as SUBTOPICS_124
 from .math125 import TOPICS as TOPICS_125, SUBTOPICS as SUBTOPICS_125
 from .math126 import TOPICS as TOPICS_126, SUBTOPICS as SUBTOPICS_126
+
+# Import metadata
+from .math124 import TOPIC_METADATA as TOPIC_META_124, SUBTOPIC_METADATA as SUBTOPIC_META_124
+from .math125 import TOPIC_METADATA as TOPIC_META_125, SUBTOPIC_METADATA as SUBTOPIC_META_125
+from .math126 import TOPIC_METADATA as TOPIC_META_126, SUBTOPIC_METADATA as SUBTOPIC_META_126
 
 HEURISTICS_DIR = Path(__file__).parent / "heuristics"
 
@@ -35,6 +44,19 @@ _COURSE_SUBTOPICS = {
     "124": SUBTOPICS_124,
     "125": SUBTOPICS_125,
     "126": SUBTOPICS_126,
+}
+
+# Course -> metadata mapping
+_COURSE_TOPIC_METADATA = {
+    "124": TOPIC_META_124,
+    "125": TOPIC_META_125,
+    "126": TOPIC_META_126,
+}
+
+_COURSE_SUBTOPIC_METADATA = {
+    "124": SUBTOPIC_META_124,
+    "125": SUBTOPIC_META_125,
+    "126": SUBTOPIC_META_126,
 }
 
 
@@ -100,9 +122,54 @@ def list_available_heuristics() -> list[str]:
     return [p.stem for p in HEURISTICS_DIR.glob("*.md")]
 
 
-def get_topic_display_name(topic: str) -> str:
-    """Human-readable topic name."""
+def get_topic_display_name(topic: str, course: str = None) -> str:
+    """
+    Human-readable topic name.
+    If course is provided, uses display_name from metadata if available.
+    """
+    if course:
+        meta = _COURSE_TOPIC_METADATA.get(course, {}).get(topic, {})
+        if "display_name" in meta:
+            return meta["display_name"]
     return topic.replace("_", " ").title()
+
+
+def get_topic_metadata(course: str, topic: str) -> dict:
+    """
+    Get metadata for a topic.
+
+    Returns dict with:
+    - difficulty: 1-5
+    - frequency: "high" | "medium" | "low"
+    - order: int (pedagogical order)
+    - color_family: str (color hue name)
+    - display_name: str (human-readable name)
+    """
+    meta = _COURSE_TOPIC_METADATA.get(course, {})
+    return meta.get(topic, {})
+
+
+def get_subtopic_metadata(course: str, subtopic: str) -> dict:
+    """
+    Get metadata for a subtopic.
+
+    Returns dict with:
+    - difficulty: 1-5
+    - frequent: boolean
+    - order: int (order within parent topic)
+    """
+    meta = _COURSE_SUBTOPIC_METADATA.get(course, {})
+    return meta.get(subtopic, {})
+
+
+def get_all_topic_metadata(course: str) -> dict:
+    """Get all topic metadata for a course."""
+    return _COURSE_TOPIC_METADATA.get(course, {})
+
+
+def get_all_subtopic_metadata(course: str) -> dict:
+    """Get all subtopic metadata for a course."""
+    return _COURSE_SUBTOPIC_METADATA.get(course, {})
 
 
 # Build reverse lookup: subtopic -> topic (for all courses)

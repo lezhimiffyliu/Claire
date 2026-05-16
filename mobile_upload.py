@@ -143,8 +143,11 @@ def create_upload_session(
     Returns:
         (UploadSession, raw_token) - raw_token for QR code URL
     """
-    client = _client()
+    # Always use service role client for creating sessions (bypasses RLS)
+    # This works for both Streamlit and FastAPI environments
+    client = _service_role_client()
     if not client:
+        print("[create_upload_session] No Supabase client available (missing SUPABASE_SERVICE_KEY)")
         return None, ""
 
     # Generate secure token
@@ -484,7 +487,10 @@ def close_session(session_id: str) -> bool:
     Returns:
         True if successfully closed
     """
+    # Try authenticated client first, fallback to service role
     client = _client()
+    if not client:
+        client = _service_role_client()
     if not client:
         return False
 
@@ -653,7 +659,10 @@ def get_session_by_id(session_id: str) -> Optional[UploadSession]:
     Returns:
         UploadSession if found, None otherwise
     """
+    # Try authenticated client first, fallback to service role
     client = _client()
+    if not client:
+        client = _service_role_client()
     if not client:
         return None
 

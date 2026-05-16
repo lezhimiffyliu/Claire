@@ -161,16 +161,27 @@ def load_problems(course: str) -> list[Problem]:
     def exam_to_timestamp(exam_str):
         """Convert exam string to timestamp for sorting.
         Examples: 'au24_final' -> 2024.83, 'wi25_final' -> 2025.08
+        Also handles: 'Spr2025_final' -> 2025.33
         """
-        parts = exam_str.split('_')[0]  # "au24" or "wi25"
-        season = parts[:2]  # "au", "wi", "sp", "su"
-        year_short = parts[2:]  # "24", "25"
-        year = int('20' + year_short) if year_short else 0  # 2024, 2025
+        import re
 
-        # Approximate month for each season (for chronological ordering)
-        # Autumn = Oct, Winter = Jan, Spring = Apr, Summer = Jul
+        # Try to extract year (2 or 4 digits)
+        year_match = re.search(r'(\d{4}|\d{2})', exam_str)
+        if year_match:
+            year_str = year_match.group(1)
+            year = int(year_str) if len(year_str) == 4 else int('20' + year_str)
+        else:
+            year = 0
+
+        # Detect season from string (case-insensitive)
+        exam_lower = exam_str.lower()
         season_month = {'au': 10, 'wi': 1, 'sp': 4, 'su': 7}
-        month = season_month.get(season, 1)
+        month = 1  # default
+
+        for season, m in season_month.items():
+            if season in exam_lower:
+                month = m
+                break
 
         # Winter crosses calendar year: Winter 2025 = Jan 2025 (already in exam string)
         return year + month / 12.0

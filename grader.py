@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from typing import Optional
 
-from claire_agent import get_secret
+from claire_agent_old import get_secret
 
 
 @dataclass
@@ -133,12 +133,20 @@ def grade_solution(parsed: ParsedSolution, problem: dict, diagram_url: Optional[
     Returns:
         GradingResult with feedback
     """
-    api_key = get_secret("ANTHROPIC_API_KEY")
-    if not api_key:
-        # Try DeepSeek as fallback
+    import streamlit as st
+
+    # Only use DeepSeek if user explicitly chose basic mode
+    use_basic = st.session_state.get("use_basic_mode", False)
+
+    if use_basic:
         api_key = get_secret("DEEPSEEK_API_KEY")
         if api_key:
             return _grade_with_deepseek(parsed, problem, api_key)
+        # Fall through to Claude if no DeepSeek key
+
+    # Use Claude (default)
+    api_key = get_secret("ANTHROPIC_API_KEY")
+    if not api_key:
         return GradingResult(
             error_step=None,
             error_type=None,

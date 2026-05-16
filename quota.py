@@ -231,9 +231,21 @@ def record_query(used_premium: bool = True):
 def get_quota_status() -> dict:
     """
     Get current quota status for display.
-    Returns: {"is_logged_in": bool, "remaining": int, "limit": int, "used_premium": bool}
+    Returns: {"is_logged_in": bool, "remaining": int, "limit": int, "can_premium": bool, "limit_reached": bool, "is_pro": bool}
     """
     user_id = get_user_id()
+    is_pro = is_pro_user()
+
+    if is_pro:
+        return {
+            "is_logged_in": bool(user_id),
+            "remaining": -1,
+            "limit": -1,
+            "can_premium": True,
+            "limit_reached": False,
+            "is_pro": True,
+        }
+
     if user_id:
         remaining = user_premium_remaining(user_id)
         return {
@@ -241,6 +253,8 @@ def get_quota_status() -> dict:
             "remaining": remaining,
             "limit": USER_FREE_PREMIUM,
             "can_premium": remaining > 0,
+            "limit_reached": remaining <= 0,
+            "is_pro": False,
         }
     else:
         remaining = anon_queries_remaining()
@@ -249,6 +263,8 @@ def get_quota_status() -> dict:
             "remaining": remaining,
             "limit": ANON_FREE_QUERIES,
             "can_premium": remaining > 0,
+            "limit_reached": remaining <= 0,
+            "is_pro": False,
         }
 
 

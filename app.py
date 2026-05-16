@@ -34,6 +34,168 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
+# ─────────────────────────────────────────────────────────────
+# Upgrade Flow Helpers
+# ─────────────────────────────────────────────────────────────
+
+def render_quota_banner():
+    """Persistent banner showing quota status (top of problem page)."""
+    quota = get_quota_status()
+
+    if quota.get("is_pro"):
+        st.success("✨ Pro · Unlimited Claude grading")
+        return
+
+    if quota.get("limit_reached"):
+        # User is in basic mode
+        if st.session_state.get("use_basic_mode"):
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.warning("Using basic mode (upgrade for Claude step-by-step feedback)")
+            with col2:
+                _render_upgrade_button("Upgrade", key="banner_upgrade")
+        # Limit reached but user hasn't chosen basic mode yet - modal will handle
+        return
+    elif quota.get("remaining") == 1:
+        # Pre-trigger warning: last review
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.warning("⚠️ Last Claude review today")
+        with col2:
+            _render_upgrade_button("Upgrade", key="banner_upgrade_last")
+    else:
+        # Normal state - show quota with upgrade option
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.info(f"☁️ {quota['remaining']}/{quota['limit']} Claude reviews left today")
+        with col2:
+            _render_upgrade_button("Upgrade", key="banner_upgrade_normal")
+
+
+def render_upgrade_modal() -> bool:
+    """
+    Show blocking upgrade modal when quota is exhausted.
+
+    Returns:
+        True if user clicked "Continue with basic mode"
+        False otherwise (modal displayed, should st.stop())
+    """
+    st.markdown("---")
+    st.markdown("### You've used all your free Claude reviews today")
+    st.markdown("""
+Claude walks you through your mistakes step by step. Basic mode only gives short answers.
+
+**Upgrade to keep learning properly.**
+""")
+
+    user = get_user()
+    if not user:
+        st.info("Sign in to upgrade to Pro")
+        show_login_button("Sign in with Google")
+        st.markdown("")
+        st.markdown(
+            '<span style="color: #888; font-size: 0.9em;">or continue with basic mode</span>',
+            unsafe_allow_html=True
+        )
+        if st.button("Continue with basic mode", key="modal_basic_anon"):
+            st.session_state.use_basic_mode = True
+            return True
+    else:
+        # Primary upgrade button (prominent)
+        _render_upgrade_button("Upgrade to Pro ($9.99/mo)", primary=True, key="modal_upgrade")
+
+        st.markdown("")
+
+        # Secondary "continue with basic" link (visually weak)
+        st.markdown(
+            '<p style="text-align: center; margin-top: 1em;">'
+            '<span style="color: #888; font-size: 0.85em;">or </span>'
+            '</p>',
+            unsafe_allow_html=True
+        )
+        if st.button("Continue with basic mode", key="modal_basic", type="secondary"):
+            st.session_state.use_basic_mode = True
+            return True
+
+    st.markdown("---")
+    return False
+
+
+def render_post_grading_prompt():
+    """Light upgrade prompt shown after each grading result."""
+    quota = get_quota_status()
+    if not quota.get("is_pro"):
+        st.markdown("")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.caption("Want unlimited step-by-step feedback?")
+        with col2:
+            _render_upgrade_button("Upgrade to Pro", key=f"post_grade_{id(st.session_state)}")
+
+
+def render_upgrade_card(key_suffix: str = ""):
+    """
+    Prominent upgrade card for main content areas.
+    Shows on diagnostic result, welcome back, etc.
+    """
+    quota = get_quota_status()
+
+    if quota.get("is_pro"):
+        return
+
+    user = get_user()
+
+    st.markdown("")
+
+    # Use a container with custom styling
+    with st.container():
+        if quota.get("limit_reached") and st.session_state.get("use_basic_mode"):
+            # User is in basic mode
+            st.warning("⚡ **You're using basic mode** — short feedback only")
+            st.markdown("Upgrade to get Claude's step-by-step explanations")
+        else:
+            # Normal state - show remaining quota
+            remaining = quota.get("remaining", 0)
+            limit = quota.get("limit", 5)
+            st.info(f"☁️ **{remaining}/{limit} Claude reviews left today**")
+            st.markdown("Upgrade for unlimited step-by-step feedback")
+
+        if user:
+            if st.button("⭐ Upgrade to Pro — $9.99/mo", type="primary", use_container_width=True, key=f"card_upgrade_{key_suffix}"):
+                checkout_url = create_checkout_session(user.id, user.email)
+                if checkout_url:
+                    st.markdown(f'<meta http-equiv="refresh" content="0;url={checkout_url}">', unsafe_allow_html=True)
+                else:
+                    st.error("Could not create checkout session")
+        else:
+            st.markdown("")
+            show_login_button("Sign in to upgrade")
+
+    st.markdown("")
+
+
+def _render_upgrade_button(label: str, primary: bool = False, key: str = None) -> bool:
+    """
+    Unified upgrade button that redirects to Stripe checkout.
+    Returns True if clicked (redirect initiated).
+    """
+    user = get_user()
+    if not user:
+        return False
+
+    btn_type = "primary" if primary else "secondary"
+    if st.button(label, type=btn_type, use_container_width=True, key=key):
+        checkout_url = create_checkout_session(user.id, user.email)
+        if checkout_url:
+            st.markdown(
+                f'<meta http-equiv="refresh" content="0;url={checkout_url}">',
+                unsafe_allow_html=True
+            )
+            return True
+        else:
+            st.error("Could not create checkout session. Please try again.")
+    return False
+
 # Page config
 st.set_page_config(
     page_title="Claire",
@@ -84,6 +246,7 @@ st.markdown("""
     .error-careless { background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 4px; }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 # ============================================================
@@ -165,6 +328,9 @@ if "parts_list" not in st.session_state:
 if "current_part_idx" not in st.session_state:
     st.session_state.current_part_idx = 0
 
+if "last_view_id" not in st.session_state:
+    st.session_state.last_view_id = None  # Track last view for scroll-to-top
+
 if "grading_result" not in st.session_state:
     st.session_state.grading_result = None
 
@@ -200,6 +366,33 @@ if "teaching_mode" not in st.session_state:
 
 if "last_teaching_action" not in st.session_state:
     st.session_state.last_teaching_action = None  # Last action from teaching orchestrator
+
+if "use_basic_mode" not in st.session_state:
+    st.session_state.use_basic_mode = False  # True when user chose to continue with DeepSeek
+
+if "teaching_quota_blocked" not in st.session_state:
+    st.session_state.teaching_quota_blocked = False  # True when teaching blocked by quota
+
+
+# ============================================================
+# SCROLL-TO-TOP HELPER (state-based, only on view change)
+# ============================================================
+
+def scroll_to_top_if_view_changed(current_view_id: str):
+    """
+    Scroll to top only when the view changes (new question, new mode).
+    Scroll container: <SECTION data-testid="stMain">
+    """
+    if st.session_state.last_view_id != current_view_id:
+        import streamlit.components.v1 as components
+        components.html(
+            """<script>
+            const el = window.parent.document.querySelector('[data-testid="stMain"]');
+            if (el) el.scrollTop = 0;
+            </script>""",
+            height=0,
+        )
+        st.session_state.last_view_id = current_view_id
 
 
 # ============================================================
@@ -240,9 +433,15 @@ def start_teaching_session(teaching_context) -> str:
         teaching_context: TeachingContext object from teaching_orchestrator
 
     Returns:
-        Initial teaching message from agent
+        Initial teaching message from agent, or None if blocked by quota
     """
-    from claire_agent import ClaireAgent
+    # Check quota for teaching
+    quota = get_quota_status()
+    if quota.get("limit_reached") and not st.session_state.get("use_basic_mode"):
+        st.session_state.teaching_quota_blocked = True
+        return None  # Signal to show modal
+
+    from claire_agent_old import ClaireAgent
     from teaching_orchestrator import orchestrate_teaching_response
 
     # Get or create agent
@@ -601,12 +800,18 @@ def render_qr_upload_section(problem: Problem):
 
         # Analyze button
         if st.button("✅ Analyze Solution", type="primary", use_container_width=True):
+            # Check quota - block if limit reached
+            quota = get_quota_status()
+            if quota.get("limit_reached") and not st.session_state.get("use_basic_mode"):
+                if not render_upgrade_modal():
+                    st.stop()
+
             # Mark analysis as running
             update_analysis_status(session.id, "running")
 
             with st.spinner("Analyzing your handwritten work..."):
-                # Check quota
-                used_premium = can_use_premium()
+                # Determine if using premium (Claude) or basic (DeepSeek)
+                used_premium = quota.get("can_premium") and not st.session_state.get("use_basic_mode")
 
                 if not signed_urls:
                     st.error("Could not retrieve uploaded images.")
@@ -863,6 +1068,24 @@ def render_diagnostic_result():
         else:
             st.error("Needs focused practice")
 
+    # Question-by-question breakdown
+    st.markdown("### 📋 Your Answers")
+    for i, q in enumerate(questions):
+        user_answer_idx = answers.get(q["id"])
+        correct_idx = q["correct_index"]
+        is_correct = user_answer_idx == correct_idx
+
+        # Topic from question
+        topic = q.get("topic", "").replace("_", " ").title()
+
+        if is_correct:
+            st.markdown(f"✅ **Q{i+1}** ({topic}): Correct")
+        else:
+            # Show what they picked vs correct
+            user_choice = q["choices"][user_answer_idx] if user_answer_idx is not None else "No answer"
+            correct_choice = q["choices"][correct_idx]
+            st.markdown(f"❌ **Q{i+1}** ({topic}): You chose *{user_choice}* — Correct: *{correct_choice}*")
+
     st.markdown("---")
 
     # Strengths (what looked good)
@@ -883,6 +1106,11 @@ def render_diagnostic_result():
         st.info(f"Start by reviewing **{format_topic(weak[0])}** — let's gather more signal here.")
     else:
         st.success("No red flags so far. Let's start practicing!")
+
+    st.markdown("---")
+
+    # Upgrade card - prominent placement before action buttons
+    render_upgrade_card(key_suffix="diagnostic")
 
     st.markdown("---")
 
@@ -1008,6 +1236,11 @@ def render_welcome_back():
 
     st.markdown("---")
 
+    # Upgrade card - prominent placement before action buttons
+    render_upgrade_card(key_suffix="welcome")
+
+    st.markdown("---")
+
     # Action buttons
     col1, col2 = st.columns(2)
 
@@ -1079,6 +1312,9 @@ def render_problem_page():
             1
         )
         st.caption(f"Q {current_problem_num}/{total}")
+
+    # Persistent quota banner
+    render_quota_banner()
 
     st.markdown("---")
 
@@ -1162,9 +1398,15 @@ def render_problem_page():
             st.image(uploaded_file, caption="Your work", use_container_width=True)
 
             if st.button("✅ Grade my work", type="primary", use_container_width=True):
+                # Check quota - block if limit reached
+                quota = get_quota_status()
+                if quota.get("limit_reached") and not st.session_state.get("use_basic_mode"):
+                    if not render_upgrade_modal():
+                        st.stop()
+
                 with st.spinner("Analyzing your work..."):
-                    # Check quota
-                    used_premium = can_use_premium()
+                    # Determine if using premium (Claude) or basic (DeepSeek)
+                    used_premium = quota.get("can_premium") and not st.session_state.get("use_basic_mode")
 
                     # Parse image
                     image_bytes = uploaded_file.getvalue()
@@ -1248,10 +1490,19 @@ def render_problem_page():
                     st.session_state.teaching_mode = True
                     st.rerun()
 
+        # Light upgrade prompt after grading
+        render_post_grading_prompt()
+
         st.markdown("")
 
     # Teaching dialogue (Socratic mode)
     if st.session_state.teaching_mode and st.session_state.teaching_context:
+        # Check if blocked by quota
+        if st.session_state.get("teaching_quota_blocked"):
+            if not render_upgrade_modal():
+                st.stop()
+            st.session_state.teaching_quota_blocked = False
+
         st.markdown("---")
         st.markdown("#### 🎓 Let's Work Through This")
 
@@ -1263,6 +1514,12 @@ def render_problem_page():
         if not st.session_state.teaching_messages:
             with st.spinner("Preparing guidance..."):
                 initial_response = start_teaching_session(st.session_state.teaching_context)
+                # Check if blocked by quota (start_teaching_session returns None)
+                if initial_response is None:
+                    if not render_upgrade_modal():
+                        st.stop()
+                    st.session_state.teaching_quota_blocked = False
+                    st.rerun()
                 st.session_state.teaching_messages.append({
                     "role": "assistant",
                     "content": initial_response
@@ -1378,27 +1635,31 @@ with st.sidebar:
                     st.link_button("Manage subscription", portal_url, use_container_width=True)
         else:
             quota = get_quota_status()
-            st.markdown(f"📊 {quota['remaining']}/{quota['limit']} grading left today")
+            if quota.get("limit_reached"):
+                st.markdown("📊 Using basic mode")
+                st.caption("Short feedback only")
+            else:
+                st.markdown(f"📊 {quota['remaining']}/{quota['limit']} Claude uses left")
 
-            # Upgrade button
+            # Upgrade button - visible, not hidden
             st.markdown("")
-            if st.button("⭐ Upgrade to Pro", type="primary", use_container_width=True):
+            if st.button("⭐ Upgrade to Pro", type="primary", use_container_width=True, key="sidebar_upgrade"):
                 checkout_url = create_checkout_session(user.id, user.email)
                 if checkout_url:
                     st.markdown(f'<meta http-equiv="refresh" content="0;url={checkout_url}">', unsafe_allow_html=True)
                 else:
                     st.error("Could not create checkout session")
-            st.caption("$9.99/mo • Unlimited Claude grading")
+            st.caption("$9.99/mo · Unlimited Claude grading")
 
         st.markdown("")
         if st.button("Sign out", use_container_width=True):
             sign_out()
             st.rerun()
     else:
-        # Not logged in
+        # Not logged in - show quota and sign in prompt
         quota = get_quota_status()
         st.markdown(f"📊 {quota['remaining']}/{quota['limit']} grading left")
-        st.caption("Sign in to save progress")
+        st.caption("Sign in to upgrade to Pro")
         st.markdown("")
         show_login_button("Sign in with Google")
 
@@ -1449,7 +1710,20 @@ with st.sidebar:
                 exams[exam_label].append(problem)
                 seen_ids[exam_label].add(problem.id)
 
-        for exam_label, problems in exams.items():
+        # Sort exams by year (newest first) - extract year from label like "SP25 Final"
+        def exam_sort_key(label):
+            # Extract year number (e.g., "25" from "SP25 Final")
+            import re
+            match = re.search(r'(\d{2})', label)
+            if match:
+                year = int(match.group(1))
+                # Handle Y2K: 00-30 -> 2000-2030, 31-99 -> 1931-1999
+                return -(year + 2000 if year <= 30 else year + 1900)
+            return 0
+
+        sorted_exams = sorted(exams.items(), key=lambda x: exam_sort_key(x[0]))
+
+        for exam_label, problems in sorted_exams:
             with st.expander(f"{exam_label} ({len(problems)} problems)"):
                 for problem_idx, problem in enumerate(problems):
                     # Find first part index for this problem
@@ -1479,11 +1753,31 @@ with st.sidebar:
 
 if st.session_state.mode == "select" or st.session_state.course is None:
     render_course_selection()
+    scroll_to_top_if_view_changed("select")
 elif st.session_state.mode == "welcome_back":
     render_welcome_back()
+    scroll_to_top_if_view_changed("welcome_back")
 elif st.session_state.mode == "diagnostic":
     render_diagnostic()
+    # Scroll on diagnostic question change (use question_id + idx for uniqueness)
+    diag_idx = st.session_state.get("diagnostic_idx", 0)
+    diag_questions = st.session_state.get("diagnostic_questions", [])
+    if diag_idx < len(diag_questions):
+        q_id = diag_questions[diag_idx].get("id", "")
+        scroll_to_top_if_view_changed(f"diagnostic_{q_id}_{diag_idx}")
+    else:
+        scroll_to_top_if_view_changed(f"diagnostic_{diag_idx}")
 elif st.session_state.mode == "diagnostic_result":
     render_diagnostic_result()
+    scroll_to_top_if_view_changed("diagnostic_result")
 else:
     render_problem_page()
+    # Scroll on problem/part change (use problem.id + part_idx for uniqueness)
+    part_idx = st.session_state.get("current_part_idx", 0)
+    parts_list = st.session_state.get("parts_list", [])
+    if part_idx < len(parts_list):
+        problem, p_idx = parts_list[part_idx]
+        scroll_to_top_if_view_changed(f"practice_{problem.id}_{p_idx}")
+    else:
+        scroll_to_top_if_view_changed(f"practice_{part_idx}")
+

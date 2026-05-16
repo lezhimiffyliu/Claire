@@ -389,6 +389,10 @@ class StudentProfileV2:
     total_correct: int = 0
     total_incorrect: int = 0
 
+    # Question-level history (NEW) ⭐
+    # {question_id: {attempts, correct, last_result, last_seen}}
+    question_history: Dict[str, dict] = field(default_factory=dict)
+
     def get_or_create_topic(self, topic: str) -> TopicEstimateV2:
         """Get existing or create new topic estimate."""
         if topic not in self.topic_estimates:
@@ -400,7 +404,8 @@ class StudentProfileV2:
         topic: str,
         subtopic: Optional[str],
         correct: bool,
-        error_type: Optional[str] = None
+        error_type: Optional[str] = None,
+        question_id: Optional[str] = None
     ):
         """
         Record a practice attempt at topic and/or subtopic level.
@@ -410,6 +415,7 @@ class StudentProfileV2:
             subtopic: Optional subtopic name (e.g., "integration_bounds_setup")
             correct: Whether the attempt was correct
             error_type: Optional error classification
+            question_id: Optional question ID for question-level tracking
         """
         # Normalize topic
         canonical = normalize_to_topic(topic, self.course)
@@ -436,6 +442,94 @@ class StudentProfileV2:
             self.total_incorrect += 1
             if error_type and error_type in self.error_counts:
                 self.error_counts[error_type] += 1
+
+        # Record question-level history (NEW) ⭐
+        if question_id:
+            self.record_question_attempt(question_id, correct)
+
+    def record_question_attempt(self, question_id: str, correct: bool):
+        """
+        Record an attempt on a specific question.
+
+        Updates question_history with:
+        - attempts count
+        - correct count
+        - last_result (bool)
+        - last_seen (timestamp)
+        """
+        from datetime import datetime
+
+        if question_id not in self.question_history:
+            self.question_history[question_id] = {
+                "attempts": 0,
+                "correct": 0,
+                "last_result": None,
+                "last_seen": None,
+            }
+
+        qh = self.question_history[question_id]
+        qh["attempts"] += 1
+        if correct:
+            qh["correct"] += 1
+        qh["last_result"] = correct
+        qh["last_seen"] = datetime.now().isoformat()
+
+    def get_question_boost(
+        self,
+        question_id: str,
+        current_session_questions: Optional[list] = None
+    ) -> float:
+        """
+        Calculate recommendation boost/penalty for a specific question.
+
+        Strategy:
+        - Never seen (attempts=0): 0 points (neutral)
+        - Last wrong: +20~30 points (reinforce error correction)
+        - Last correct: -10~-20 points (reduce short-term repetition)
+        - Time decay: If last_seen is old (>1 day), gradually restore weight
+        - Short-term suppression: If in recent K questions, heavy penalty (-40)
+
+        Args:
+            question_id: Question identifier
+            current_session_questions: List of recently attempted question_ids
+
+        Returns:
+            Boost score (-40 to +30)
+        """
+        from datetime import datetime, timedelta
+
+        # Not seen before → neutral
+        if question_id not in self.question_history:
+            return 0.0
+
+        qh = self.question_history[question_id]
+        boost = 0.0
+
+        # Short-term suppression: Recently attempted in this session
+        if current_session_questions and question_id in current_session_questions[-10:]:
+            # Within last 10 questions → strong suppression
+            return -40.0
+
+        # Base boost from last result
+        if qh["last_result"] is not None:
+            if qh["last_result"]:
+                # Last correct → reduce repetition
+                boost = -15.0
+            else:
+                # Last wrong → reinforce practice
+                boost = +25.0
+
+        # Time decay: If seen long ago, reduce penalty/boost
+        if qh["last_seen"]:
+            last_seen = datetime.fromisoformat(qh["last_seen"])
+            hours_since = (datetime.now() - last_seen).total_seconds() / 3600
+
+            if hours_since > 24:  # More than 1 day
+                # Gradually restore weight (reduce magnitude)
+                decay_factor = min(1.0, hours_since / (24 * 7))  # Full decay after 1 week
+                boost *= (1 - decay_factor * 0.7)  # Reduce boost/penalty by up to 70%
+
+        return boost
 
     def get_priority_topics(self) -> list[str]:
         """
@@ -531,6 +625,7 @@ class StudentProfileV2:
             "suggest_foundation_review": self.suggest_foundation_review,
             "total_correct": self.total_correct,
             "total_incorrect": self.total_incorrect,
+            "question_history": self.question_history,
         }
 
     @classmethod
@@ -545,6 +640,7 @@ class StudentProfileV2:
         profile.suggest_foundation_review = data.get("suggest_foundation_review", False)
         profile.total_correct = data.get("total_correct", 0)
         profile.total_incorrect = data.get("total_incorrect", 0)
+        profile.question_history = data.get("question_history", {})
 
         # Rebuild topic estimates
         for topic, topic_data in data.get("topic_estimates", {}).items():

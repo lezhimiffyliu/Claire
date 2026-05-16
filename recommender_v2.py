@@ -26,18 +26,20 @@ def recommend_next_problem_v2(
     parts_list: list[tuple[Problem, int]],
     current_idx: int,
     profile: Optional[StudentProfileV2] = None,
-    seen_indices: Optional[set] = None,
+    session_questions: Optional[list] = None,
 ) -> int:
     """
     Recommend the next problem index based on V2 profile.
 
-    Enhanced to consider subtopic-level mastery.
+    Enhanced with:
+    - Subtopic-level mastery
+    - Question-level history tracking
+    - Short-term suppression + long-term revisit
 
     Returns the index into parts_list.
 
     Args:
-        seen_indices: Set of problem indices already seen this session.
-                      If provided, these get a penalty to encourage variety.
+        session_questions: List of question_ids attempted this session (for short-term suppression)
     """
     import random
 
@@ -51,8 +53,8 @@ def recommend_next_problem_v2(
         # No profile, just go to next
         return (current_idx + 1) % len(parts_list)
 
-    if seen_indices is None:
-        seen_indices = set()
+    if session_questions is None:
+        session_questions = []
 
     # Get course from profile or first problem
     course = profile.course if profile else "124"
@@ -88,6 +90,9 @@ def recommend_next_problem_v2(
         # Also check if problem has 'subtopics' field
         problem_subtopics = getattr(problem, 'subtopics', [])
 
+        # Get question_id (unique identifier from problem)
+        question_id = getattr(problem, 'id', None) or getattr(problem, 'question_id', None)
+
         candidates.append({
             "index": i,
             "problem": problem,
@@ -97,6 +102,7 @@ def recommend_next_problem_v2(
             "concepts": concepts,
             "subtopics": problem_subtopics,
             "difficulty": problem.difficulty if hasattr(problem, 'difficulty') else "medium",
+            "question_id": question_id,
         })
 
     if not candidates:
@@ -111,6 +117,7 @@ def recommend_next_problem_v2(
         problem_subtopics = c["subtopics"]
         difficulty = c["difficulty"]
         idx = c["index"]
+        question_id = c["question_id"]
 
         # ===== Priority 1: SUBTOPIC match (0-120 points) =====
         # If problem has subtopics tagged, check if they match weak subtopics
@@ -179,9 +186,17 @@ def recommend_next_problem_v2(
         else:
             score += 5 if diff_value == 1 else 3
 
-        # ===== PENALTY for already-seen problems (-50 points) =====
-        if idx in seen_indices:
-            score -= 50  # Heavy penalty for seen problems
+        # ===== Priority 6: QUESTION-LEVEL history (-40 to +30 points) ⭐ NEW! =====
+        # Smart question memory: short-term suppression + long-term revisit
+        # - Last wrong: +25 (reinforce error correction)
+        # - Last correct: -15 (reduce short-term repetition)
+        # - In recent session: -40 (short-term suppression)
+        # - Time decay: Gradually restore weight after 1+ days
+        question_boost = 0
+        if question_id:
+            question_boost = profile.get_question_boost(question_id, session_questions)
+
+        score += question_boost
 
         # Add small random factor to break ties (0-5 points)
         score += random.random() * 5
@@ -363,3 +378,329 @@ def get_feedback_style(profile: Optional[StudentProfileV2] = None) -> dict:
         style["show_steps"] = False
 
     return style
+
+
+# ============================================================
+# API-SPECIFIC FUNCTIONS
+# ============================================================
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _is_new_user(profile: Optional[StudentProfileV2], recent_attempts: Optional[list]) -> bool:
+    """
+    Detect if user is a new user (no practice history).
+
+    A user is considered "new" if:
+    - No profile, OR
+    - profile.total_attempts == 0 (no topic estimates), AND
+    - No recent_attempts with is_correct != None (ungraded attempts don't count)
+    """
+    if profile is None:
+        return True
+
+    # Check if profile has any practice data
+    total_attempts = profile.total_correct + profile.total_incorrect
+    if total_attempts > 0:
+        return False
+
+    # Check if there are any graded attempts
+    if recent_attempts:
+        graded_attempts = [a for a in recent_attempts if a.get("is_correct") is not None]
+        if len(graded_attempts) > 0:
+            return False
+
+    return True
+
+
+def generate_sweep_recommendations(
+    course: str,
+    profile: Optional[StudentProfileV2] = None,
+    recent_attempts: Optional[list] = None,
+    limit: int = 5
+) -> list[dict]:
+    """
+    Generate SWEEP-phase recommendations for new users.
+
+    Sweep phase = cover all topics in pedagogical order, starting from Chapter 1.
+    Each topic gets 2-3 problems before moving to the next.
+
+    Args:
+        course: Course code ("124", "125", "126")
+        profile: StudentProfileV2 (may be empty)
+        recent_attempts: Recent attempts (may be empty or all ungraded)
+        limit: Max recommendations to return
+
+    Returns:
+        List of checkpoint-style recommendation dicts
+    """
+    from problem_loader import load_problems
+    from taxonomy import (
+        get_topics,
+        get_subtopics,
+        get_topic_metadata,
+        get_subtopic_metadata,
+        get_topic_display_name,
+    )
+    import random
+
+    logger.info(f"[SWEEP] Generating sweep recommendations for course={course}")
+
+    # Get topics in pedagogical order (TOPICS list is already ordered by 'order' field)
+    topics_ordered = get_topics(course)
+
+    if not topics_ordered:
+        logger.warning(f"[SWEEP] No topics found for course={course}")
+        return []
+
+    # Load all problems
+    all_problems = load_problems(course)
+
+    # Group problems by topic
+    topic_problems = {}
+    for p in all_problems:
+        if not p.topic:
+            continue
+        if p.topic not in topic_problems:
+            topic_problems[p.topic] = []
+        topic_problems[p.topic].append(p)
+
+    # Find topics user has already practiced (from profile.topic_estimates)
+    practiced_topics = set()
+    if profile and profile.topic_estimates:
+        for topic, est in profile.topic_estimates.items():
+            if est.total_attempts > 0:
+                practiced_topics.add(topic)
+
+    # Also check recent_attempts for practiced topics
+    if recent_attempts:
+        for a in recent_attempts:
+            topic = a.get("topic")
+            if topic and a.get("is_correct") is not None:
+                practiced_topics.add(topic)
+
+    logger.info(f"[SWEEP] Practiced topics: {practiced_topics}")
+
+    # Find next topics to recommend (first unpracticed topics in order)
+    recommendations = []
+
+    for topic in topics_ordered:
+        if len(recommendations) >= limit:
+            break
+
+        # Skip topics with no problems
+        if topic not in topic_problems or len(topic_problems[topic]) == 0:
+            continue
+
+        problems = topic_problems[topic]
+        topic_meta = get_topic_metadata(course, topic)
+        display_name = get_topic_display_name(topic, course)
+
+        # Get subtopics and filter for frequent ones
+        subtopics = get_subtopics(course, topic)
+        frequent_subtopics = []
+        for sub in subtopics:
+            sub_meta = get_subtopic_metadata(course, sub)
+            if sub_meta.get("frequent", True):  # Default to True if not specified
+                frequent_subtopics.append(sub)
+
+        # Filter problems: prefer medium difficulty (2-3) and frequent subtopics
+        def problem_score(p):
+            diff = getattr(p, 'difficulty', 'medium')
+            diff_score = 0 if diff == 'medium' else (1 if diff == 'easy' else 2)
+
+            # Bonus for matching frequent subtopics
+            subtopic_bonus = 0
+            p_subtopics = getattr(p, 'subtopics', [])
+            for ps in p_subtopics:
+                if ps in frequent_subtopics:
+                    subtopic_bonus = -1  # Lower score = higher priority
+                    break
+
+            return (diff_score + subtopic_bonus, random.random())
+
+        sorted_problems = sorted(problems, key=problem_score)
+
+        # Select 3 problems for this topic
+        selected_problems = sorted_problems[:3]
+
+        # Determine if this is the "next" topic or just "upcoming"
+        is_next = topic not in practiced_topics and len(recommendations) == 0
+
+        rec_type = "core_skill"  # Sweep = systematic coverage
+        reason = f"Chapter {topics_ordered.index(topic) + 1}: Start here" if is_next else f"Chapter {topics_ordered.index(topic) + 1}"
+
+        recommendations.append({
+            "id": f"sweep_{topic}",
+            "type": rec_type,
+            "title": display_name,
+            "subtitle": f"{len(selected_problems)} problems to start",
+            "status": "recommended" if is_next else "available",
+            "reason": reason,
+            "topic": topic,
+            "problemIds": [p.id for p in selected_problems],
+            "problemCount": len(problems),
+            "weight": 100 - topics_ordered.index(topic),  # Earlier topics = higher weight
+            "isSweep": True,  # Flag for frontend to know this is sweep mode
+        })
+
+    logger.info(f"[SWEEP] Generated {len(recommendations)} sweep recommendations")
+    return recommendations
+
+
+def recommend_problems_for_api(
+    course: str,
+    profile: Optional[StudentProfileV2] = None,
+    recent_attempts: Optional[list] = None,
+    limit: int = 5
+) -> list[dict]:
+    """
+    Generate problem recommendations for API endpoint.
+
+    Returns a list of checkpoint-style recommendations that can be
+    directly used by the frontend Dashboard.
+
+    Args:
+        course: Course code ("124", "125", "126")
+        profile: StudentProfileV2 from workspace context (optional)
+        recent_attempts: List of recent attempt dicts from DB (optional)
+        limit: Max recommendations to return
+
+    Returns:
+        List of recommendation dicts with structure:
+        {
+            "id": "rec_<topic>",
+            "type": "prerequisite" | "core_skill" | "exam_pattern",
+            "title": "Topic Display Name",
+            "subtitle": "N problems · X pts on exams",
+            "status": "recommended" | "available",
+            "reason": "Why this is recommended",
+            "topic": "topic_slug",
+            "problemIds": ["id1", "id2", ...],
+            "problemCount": N,
+            "weight": float,
+        }
+    """
+    # ============================================================
+    # SWEEP vs FOCUS phase detection
+    # ============================================================
+    if _is_new_user(profile, recent_attempts):
+        logger.info(f"[RECOMMENDER] User is NEW → SWEEP phase (course={course})")
+        return generate_sweep_recommendations(course, profile, recent_attempts, limit)
+
+    logger.info(f"[RECOMMENDER] User has history → FOCUS phase (course={course})")
+
+    # ============================================================
+    # FOCUS phase: existing logic (prioritize weak topics)
+    # ============================================================
+    from problem_loader import load_problems
+    import random
+
+    # Load all problems for the course
+    all_problems = load_problems(course)
+
+    # Group problems by topic
+    topic_problems = {}
+    for p in all_problems:
+        if not p.topic:
+            continue
+        if p.topic not in topic_problems:
+            topic_problems[p.topic] = []
+        topic_problems[p.topic].append(p)
+
+    recommendations = []
+
+    # Get priority topics from profile (if available)
+    priority_topics = []
+    weak_subtopics = []
+    if profile:
+        priority_topics = profile.get_priority_topics()
+        weak_subtopics = profile.get_all_priority_subtopics(limit=10)
+
+    # Build topic scores
+    topic_scores = {}
+    for topic, problems in topic_problems.items():
+        score = 0.0
+
+        # Base score from problem count (more problems = more exam weight)
+        score += len(problems) * 2
+
+        # Priority boost from profile
+        if topic in priority_topics:
+            rank = priority_topics.index(topic)
+            score += max(0, 50 - rank * 10)
+
+        # Weak subtopic boost
+        for (t, sub) in weak_subtopics:
+            if t == topic:
+                score += 30
+
+        # Recent failure boost
+        if recent_attempts:
+            recent_topic_attempts = [
+                a for a in recent_attempts
+                if a.get("topic") == topic
+            ]
+            recent_failures = sum(
+                1 for a in recent_topic_attempts[:5]
+                if not a.get("is_correct")
+            )
+            score += recent_failures * 15
+
+        topic_scores[topic] = score
+
+    # Sort topics by score
+    sorted_topics = sorted(
+        topic_scores.items(),
+        key=lambda x: -x[1]
+    )
+
+    # Generate recommendations
+    for i, (topic, score) in enumerate(sorted_topics[:limit]):
+        problems = topic_problems[topic]
+        display_name = get_topic_display_name(topic)
+
+        # Determine recommendation type and status
+        is_priority = topic in priority_topics[:3] if profile else False
+        is_weak = any(t == topic for (t, _) in weak_subtopics[:5])
+
+        if is_weak:
+            rec_type = "prerequisite"
+            reason = f"Diagnostic showed weakness in this area"
+        elif is_priority:
+            rec_type = "core_skill"
+            reason = f"Priority topic based on your performance"
+        else:
+            rec_type = "exam_pattern"
+            reason = f"High-frequency exam topic ({len(problems)} problems)"
+
+        # Select problems to recommend
+        # Prefer medium difficulty, then shuffle
+        problem_pool = sorted(
+            problems,
+            key=lambda p: (
+                0 if getattr(p, 'difficulty', 'medium') == 'medium' else
+                1 if getattr(p, 'difficulty', 'medium') == 'easy' else 2
+            )
+        )
+
+        # Add some randomness
+        if len(problem_pool) > 5:
+            problem_pool = random.sample(problem_pool[:10], min(5, len(problem_pool)))
+
+        recommendations.append({
+            "id": f"rec_{topic}",
+            "type": rec_type,
+            "title": display_name,
+            "subtitle": f"{len(problems)} problems available",
+            "status": "recommended" if i == 0 else "available",
+            "reason": reason,
+            "topic": topic,
+            "problemIds": [p.id for p in problem_pool[:5]],
+            "problemCount": len(problems),
+            "weight": score,
+        })
+
+    return recommendations
