@@ -2,6 +2,10 @@
 Claire - Making Calculus Clear
 
 Exam prep agent: Pattern Detection → Heuristic Teaching → Guided Practice
+
+LEGACY: This is the old ReAct agent. New development should use agent/claire_agent.py
+This file is kept for backward compatibility with api.py legacy endpoints.
+Do not add new features here. Migrate to agent/ when possible.
 """
 
 import os

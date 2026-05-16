@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from typing import Optional
 
-from claire_agent_old import get_secret
+from agent.claire_agent import get_secret
 
 
 @dataclass
