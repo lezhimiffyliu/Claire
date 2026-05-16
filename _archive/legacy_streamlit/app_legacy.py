@@ -6,7 +6,7 @@ Calculus Cram: Exam prep powered by AI
 import streamlit as st
 import time
 import re
-from claire_agent import ClaireAgent
+from claire_agent_old import ClaireAgent
 from exam_context import analyze_files, ExamContext
 from placement_test import (
     build_questions_from_bank,
@@ -902,7 +902,7 @@ def llm_call(prompt: str, max_tokens: int = 400) -> str:
     """
     Direct single-turn LLM call. No agent, no tools.
     """
-    from claire_agent import get_secret
+    from claire_agent_old import get_secret
     from langchain_core.messages import HumanMessage
 
     api_key = get_secret("ANTHROPIC_API_KEY")
@@ -1105,7 +1105,7 @@ def reconstruct_math_problems(questions: list) -> list:
     Uses LLM to rewrite (not fix) the math expressions.
     Only for diagnostic questions (5 max).
     """
-    from claire_agent import get_secret
+    from claire_agent_old import get_secret
     import json
 
     if not questions:

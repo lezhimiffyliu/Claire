@@ -193,7 +193,7 @@ def parse_exam_to_json(raw_text: str, llm=None) -> dict:
 def _get_llm():
     """Get LLM instance using existing setup."""
     try:
-        from claire_agent import get_secret
+        from claire_agent_old import get_secret
         api_key = get_secret("ANTHROPIC_API_KEY")
         if not api_key:
             return None

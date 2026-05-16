@@ -199,7 +199,7 @@ def _batch_detect_topics(texts: list[str]) -> list[list[str]]:
 
     # Try LLM batch detection
     try:
-        from claire_agent import get_secret
+        from claire_agent_old import get_secret
 
         # Use DeepSeek (cheap)
         api_key = get_secret("DEEPSEEK_API_KEY")
