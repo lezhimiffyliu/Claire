@@ -5,7 +5,7 @@ CLI Entry Point (LangChain ReAct Version)
 """
 
 import os
-from claire_agent import ClaireAgent
+from claire_agent_old import ClaireAgent
 
 
 def clear_screen():
