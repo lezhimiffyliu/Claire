@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/📐_Claire-Calculus_Cram-blue?style=for-the-badge" alt="Claire"/>
+  <img src="https://img.shields.io/badge/📐_Claire-Calculus_Tutor-blue?style=for-the-badge" alt="Claire"/>
 </p>
 
 <h1 align="center">Claire</h1>
-<p align="center"><strong>Your AI study partner for calculus exam week.</strong></p>
+<p align="center"><strong>AI calculus tutor that teaches UW students step-by-step using real past exam problems, with phone-based handwriting grading.</strong></p>
 
 <p align="center">
   <a href="https://claire101.ai">
@@ -13,9 +13,10 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python"/>
-  <img src="https://img.shields.io/badge/Claude-Sonnet_4-orange.svg" alt="Claude"/>
-  <img src="https://img.shields.io/badge/LangChain-ReAct-green.svg" alt="LangChain"/>
-  <img src="https://img.shields.io/badge/Streamlit-Cloud-red.svg" alt="Streamlit"/>
+  <img src="https://img.shields.io/badge/Claude-Haiku_|_Sonnet_|_Opus-orange.svg" alt="Claude"/>
+  <img src="https://img.shields.io/badge/React-18-61DAFB.svg" alt="React"/>
+  <img src="https://img.shields.io/badge/FastAPI-0.109-009688.svg" alt="FastAPI"/>
+  <img src="https://img.shields.io/badge/Supabase-Auth_+_Storage-3ECF8E.svg" alt="Supabase"/>
   <img src="https://img.shields.io/badge/license-MIT-lightgrey.svg" alt="MIT"/>
 </p>
 
@@ -25,155 +26,175 @@
 
 Most students cram for calc exams by re-reading notes or hoping ChatGPT explains it well enough. Claire is different.
 
-**Upload your actual past exams and lecture notes. Claire reads them, figures out what your professor tests the most, diagnoses where you're weak, and then guides you through exactly those problems — step by step, at your level.**
-
-It's not a chatbot. It's a study system built around your specific exam.
-
----
-
-## How it works
-
-```
-1. Upload your materials (past exams, notes, syllabus)
-          │
-          ▼
-2. Take a 5-minute diagnostic
-   Claire figures out if you're:
-   🌱 Shaky on fundamentals
-   📚 Know basics, but make method errors
-   🚀 Strong — just need speed and pattern recognition
-          │
-          ▼
-3. Get a personalized practice queue
-   Problems ranked by: weak topics × exam frequency × point value
-          │
-          ▼
-4. Practice with step-by-step guidance
-   Claire teaches the method, not just the answer
-   Language adapts to your level automatically
-```
+**Claire teaches you step-by-step through real UW exam problems using Socratic dialogue. When you're stuck, she guides you — never just gives the answer. Upload your handwritten work via phone camera and get instant feedback.**
 
 ---
 
 ## Features
 
-### 🎯 Diagnostic — Know Where You Stand
-5 multiple-choice questions, ~5 minutes. Uses your actual uploaded materials when available. Identifies weak topics across 20+ calculus subjects (u-substitution, Lagrange multipliers, series convergence, double integrals…).
+### 📚 Real UW Exam Problem Bank
+86 past exams from Math 124/125/126 (2018-2025). Every problem has source citation ("Au24 Final Q5"), topic labels, and difficulty rating.
 
-### 🚨 Exam Panic Mode
-Upload your past exams → Claire instantly tells you:
-- Which topics appear most (these are almost certainly on your exam)
-- What to study first given how many days you have left
-- Quick-reference solving steps for each high-frequency topic
+### 🧑‍🏫 Socratic Teaching
+Claire never dumps the answer. She teaches the method first, then guides you through each step:
+- "I'm stuck" → Claire gives the next micro-step, not the full solution
+- Wrong answer → Claire identifies the error type and hints at the fix
+- Correct → Claire confirms and moves to the next part
 
-### 📚 Smart Problem Bank
-Claire extracts every problem from your PDFs with source citations ("SP18 Midterm 2, Problem 5"), labels by topic and difficulty, and ranks them based on your diagnostic results.
+### 📱 Handwriting Grading via Phone
+Scan QR → snap photo of your work → instant grading:
+- **Gemini Vision** extracts your handwritten math
+- **SymPy** verifies correctness mathematically
+- Claire explains where you went wrong (if needed)
 
-### 🧑🏫 Adaptive Teaching
-Claire never just gives you the answer. She teaches the method first, then guides you to apply it — using language calibrated to your level:
-- **Beginner**: plain words, intuition-first, analogies, every step explained
-- **Intermediate**: method selection, common traps, guided reasoning
-- **Advanced**: concise, strategy-focused, pattern recognition drills
+### 🎯 Adaptive Difficulty
+5-minute diagnostic identifies your level:
+- 🌱 **Building Foundations** — needs basics review
+- 📈 **Exam Ready** — knows concepts, needs practice
+- 🏆 **4.0 Candidate** — ready for hard problems
 
-### 💾 Session Persistence
-Your materials, diagnostic results, and progress are saved automatically. Refresh the page, come back tomorrow — everything's still there. No account required.
-
-### 🔄 Model Tiering
-First 5 queries use Claude Sonnet (premium). Subsequent queries automatically switch to DeepSeek — still solid, just faster and free. Optional upgrade for continued Claude access.
-
----
-
-## Try it now
-
-👉 **[claire101.ai](https://claire101.ai)** — no installation, no account required.
-
-Upload any calc PDF and see how it works in under 2 minutes.
+### 🧠 Multi-Model Intelligence
+| Model | Role |
+|-------|------|
+| **Haiku** | Fast intent classification (< 100ms) |
+| **Sonnet** | Response generation, teaching dialogue |
+| **Opus** | Complex reasoning: answer verification, strategic teaching decisions |
 
 ---
 
-## Run locally
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| **LLM Orchestration** | Native Anthropic SDK (no LangChain) |
+| **Models** | Claude Haiku → Sonnet → Opus (tiered routing) |
+| **Vision** | Gemini Flash (handwriting OCR) |
+| **Math Verification** | SymPy |
+| **API** | FastAPI + SQLite (rate limiting, thread persistence) |
+| **Frontend** | Vite + React 18 + Tailwind + Framer Motion |
+| **Math Rendering** | KaTeX |
+| **Auth & Storage** | Supabase (Google OAuth, image storage) |
+| **Deployment** | Heroku (API) |
+
+---
+
+## Architecture
+
+```
+Student message
+     │
+     ▼
+┌─────────────────────────────────────────────────────────────┐
+│  tutor/pipeline.py — Main orchestration                     │
+├─────────────────────────────────────────────────────────────┤
+│  1. response_cache.py  → Check semantic cache (skip LLM?)   │
+│  2. classifier.py      → Haiku: intent + concept + language │
+│  3. retrieval.py       → Search teaching chunks (mock/pgvector) │
+│  4. strategist.py      → Decide: Sonnet or Opus?            │
+│  5. adapter.py         → Sonnet: generate response          │
+│     └─ OR teaching_planner.py → Opus: complex teaching      │
+└─────────────────────────────────────────────────────────────┘
+     │
+     ▼
+  Claire response (say / ask_back / concept_card)
+```
+
+### When does Opus activate?
+
+| Trigger | Why |
+|---------|-----|
+| `check_answer` intent | Need to verify correctness |
+| `ask_next_step` intent | Need teaching path decision |
+| Low retrieval score | No good teaching chunks found |
+| Student confused 3+ times | Need better strategy |
+| Low classification confidence | Uncertain intent |
+
+---
+
+## Project Structure
+
+```
+Claire/
+├── api.py                  # FastAPI backend (chat, mobile upload, recommendations)
+├── tutor/                  # Teaching pipeline (Phase 5)
+│   ├── pipeline.py         # Main orchestration
+│   ├── classifier.py       # Haiku: intent/concept classification
+│   ├── retrieval.py        # Teaching chunk search (mock embedding)
+│   ├── strategist.py       # Sonnet vs Opus routing
+│   ├── adapter.py          # Sonnet: response generation
+│   ├── teaching_planner.py # Task-based Socratic actions
+│   └── response_cache.py   # Semantic caching
+├── agent/                  # Native Anthropic SDK agent
+│   ├── claire_agent.py     # Multi-model orchestration
+│   ├── prompts.py          # System prompts
+│   └── teaching_tools.py   # Tool schemas + execution
+├── problems/               # 86 UW exam JSON files (Math 124/125/126)
+├── web/                    # Vite + React frontend
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── claire/     # TutorThread, WorkAreaCard, ClairePanel
+│   │   │   ├── dashboard/  # Dashboard, ProblemPractice
+│   │   │   └── onboarding/ # Diagnostic flow
+│   │   ├── context/        # AuthContext, ClaireContext
+│   │   └── api/            # chatApi, mobileUploadApi, supabaseApi
+│   └── package.json
+├── vision_analyzer.py      # Gemini Vision: handwriting extraction
+├── verifier.py             # SymPy: answer verification
+├── mobile_upload.py        # QR session management
+├── problem_loader.py       # Load problems from JSON
+└── Procfile                # Heroku deployment
+```
+
+---
+
+## Run Locally
 
 ```bash
-git clone https://github.com/lezhimiffyliu/Claire.git
+git clone https://github.com/yourusername/Claire.git
 cd Claire
 
+# Backend
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Create .env with your keys
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
-echo "DEEPSEEK_API_KEY=sk-..." >> .env
+# .env
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_API_KEY=...
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=...
 
-streamlit run app.py
+# Start API
+uvicorn api:app --reload --port 8000
+
+# Frontend (new terminal)
+cd web
+npm install
+npm run dev
 ```
 
-Open `http://localhost:8501`.
+Open `http://localhost:5173`
 
 ---
 
-## Supported topics
+## Supported Topics
 
-Calc I · Calc II · Calc III across:
+**Calc I** · Derivatives · Chain Rule · Implicit Differentiation · Related Rates · Optimization · L'Hôpital's Rule
 
-Derivatives · Chain Rule · Implicit Differentiation · Related Rates · Optimization · Critical Points · L'Hôpital's Rule · U-Substitution · Integration by Parts · Partial Fractions · Trig Substitution · Improper Integrals · Volume (Disk/Shell) · Arc Length · Series Convergence · Power Series · Taylor/Maclaurin Series · Partial Derivatives · Gradient · Directional Derivatives · Lagrange Multipliers · Double Integrals · Triple Integrals · Green's Theorem · Stokes' Theorem
+**Calc II** · U-Substitution · Integration by Parts · Partial Fractions · Trig Sub · Improper Integrals · Volumes · Arc Length · Series · Taylor/Maclaurin
 
----
-
-## Tech stack
-
-| Layer | Tech |
-|-------|------|
-| AI Agent | LangChain + LangGraph (ReAct) |
-| LLMs | Claude Sonnet 4 (premium) + DeepSeek (base) |
-| Math Engine | SymPy |
-| PDF Parser | PyMuPDF |
-| Topic Detection | Custom LLM-based classifier (20+ topics) |
-| Frontend | Streamlit |
-| Auth | Google OAuth via Supabase |
-| Session Storage | URL-keyed JSON + Supabase |
-| Deployment | Streamlit Cloud → claire101.ai |
-
----
-
-## Project structure
-
-```
-Claire/
-├── app.py                  # Main UI — all screens and routing
-├── claire_agent.py         # Adaptive ReAct teaching agent
-├── placement_test.py       # Diagnostic quiz + scoring + topic tracking
-├── exam_panic.py           # Exam Panic Mode — cram plan generator
-├── exam_mode.py            # Exam simulation (timed, scored)
-├── exam_parser.py          # PDF exam extraction + problem parsing
-├── question_bank.py        # Problem bank with source citations
-├── exam_context.py         # Uploaded materials context manager
-├── session_store.py        # Session persistence (URL-based)
-├── quota.py                # Usage quota (anon + logged-in tiers)
-├── practice_planner.py     # Problem prioritization by weak topics
-├── topics/
-│   ├── topic_detector.py   # LLM-based fine-grained topic classification
-│   ├── heuristic_loader.py # Maps topics → solving strategy templates
-│   └── calculus_topics.md  # Topic taxonomy
-├── heuristics/             # Solving strategy templates per topic
-│   ├── optimization.md
-│   ├── u_substitution.md
-│   ├── integration_by_parts.md
-│   ├── lagrange_multipliers.md
-│   └── ...
-└── tests/
-```
+**Calc III** · Partial Derivatives · Gradient · Directional Derivatives · Lagrange Multipliers · Double/Triple Integrals · Polar/Cylindrical Coordinates
 
 ---
 
 ## License
 
-MIT — use it, fork it, build on it.
+MIT
 
 ---
 
 <p align="center">
-  <strong>Claire</strong> — Built for students who have a week and need to make it count.
+  <strong>Claire</strong> — AI calculus tutor with real UW exam problems and Socratic teaching.
   <br>
   <a href="https://claire101.ai">claire101.ai</a>
 </p>
