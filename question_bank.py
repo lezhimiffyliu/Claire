@@ -577,7 +577,7 @@ RAW TEXT:
 def _get_parsing_llm():
     """Get LLM for PDF parsing. Uses DeepSeek (cheaper) for batch processing."""
     try:
-        from claire_agent_old import get_secret
+        from agent.claire_agent import get_secret
 
         # Try DeepSeek first (cheaper for batch processing)
         deepseek_key = get_secret("DEEPSEEK_API_KEY")
