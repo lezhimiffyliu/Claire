@@ -75,7 +75,13 @@ export function AuthProvider({ children }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      setUser(session?.user ?? null)
+      // Keep the user reference stable across token refreshes / focus-triggered
+      // re-emits. Supabase hands back a fresh user object on every event, which
+      // would otherwise change the `user` reference and re-fire any [user] effect
+      // (e.g. the dashboard data-load), unmounting in-progress views.
+      setUser((prev) =>
+        prev?.id === session?.user?.id ? prev : (session?.user ?? null)
+      )
       setLoading(false)
 
       // Sync when user logs in

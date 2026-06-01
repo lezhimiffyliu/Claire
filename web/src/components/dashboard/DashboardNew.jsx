@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -105,6 +105,20 @@ function Sidebar({ activeTab, onTabChange }) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           Mock Exams
+        </button>
+
+        <button
+          onClick={() => onTabChange('roadmap')}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            activeTab === 'roadmap'
+              ? 'bg-[var(--claire-navy)] text-white'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+          </svg>
+          Roadmap
         </button>
 
         <button
@@ -358,7 +372,7 @@ function Roadmap({ sections, currentSectionId, studyMode, onSelectSection }) {
         >
           <div className="h-px flex-1 border-t-2 border-dashed border-gray-300" />
           <span className="px-3 py-1 bg-white text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
-            Exam I
+            Midterm I
           </span>
           <div className="h-px flex-1 border-t-2 border-dashed border-gray-300" />
         </div>
@@ -370,7 +384,7 @@ function Roadmap({ sections, currentSectionId, studyMode, onSelectSection }) {
         >
           <div className="h-px flex-1 border-t-2 border-dashed border-gray-300" />
           <span className="px-3 py-1 bg-white text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
-            Exam II
+            Midterm II
           </span>
           <div className="h-px flex-1 border-t-2 border-dashed border-gray-300" />
         </div>
@@ -454,11 +468,14 @@ function Roadmap({ sections, currentSectionId, studyMode, onSelectSection }) {
 
 // =============================================================================
 // Exam Countdown Card - Shows countdown and optional plan mode
+// Never shows negative days - always clamp to 0
 // =============================================================================
 function ExamCountdownCard({ data }) {
   if (!data) return null
 
-  const progress = Math.max(0, Math.min(100, ((30 - data.days_until) / 30) * 100))
+  // Never show negative days - clamp to 0
+  const displayDays = Math.max(0, data.days_until ?? 0)
+  const progress = Math.max(0, Math.min(100, ((30 - displayDays) / 30) * 100))
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -471,7 +488,7 @@ function ExamCountdownCard({ data }) {
           <div className="text-2xl font-bold text-[var(--claire-navy)]">{data.next_exam_display}</div>
         </div>
         <div className="text-right">
-          <div className="text-3xl font-bold text-[var(--claire-navy)]">{data.days_until}</div>
+          <div className="text-3xl font-bold text-[var(--claire-navy)]">{displayDays}</div>
           <div className="text-xs text-gray-400">days left</div>
         </div>
       </div>
@@ -560,7 +577,11 @@ export default function DashboardNew({ onBack }) {
   const { user, signOut } = useAuth()
 
   const [activeTab, setActiveTab] = useState('home')
+  // `loading` only gates the full-screen spinner on the FIRST load. Background
+  // refetches (e.g. when `user` changes) must NOT flip this back on, otherwise
+  // they unmount whatever view is showing (like an in-progress practice session).
   const [loading, setLoading] = useState(true)
+  const hasLoadedRef = useRef(false)
 
   // Study mode: 'normal' | 'cram' (for future)
   const [studyMode, setStudyMode] = useState('normal')
@@ -578,6 +599,8 @@ export default function DashboardNew({ onBack }) {
   // Onboarding popup states
   const [showExamDatePopup, setShowExamDatePopup] = useState(false)
   const [showPrepLevelPopup, setShowPrepLevelPopup] = useState(false)
+  // Track if popup is required (exam expired - can't skip)
+  const [examPopupRequired, setExamPopupRequired] = useState(false)
 
   // Practice states
   const [examMode, setExamMode] = useState(null)
@@ -620,7 +643,11 @@ export default function DashboardNew({ onBack }) {
 
   useEffect(() => {
     async function load() {
-      setLoading(true)
+      // Only show the blocking spinner on the initial load. Subsequent refetches
+      // run silently so they never tear down the current view.
+      if (!hasLoadedRef.current) {
+        setLoading(true)
+      }
       try {
         // Fetch API data (works for logged-in users)
         const [countdown, roadmap, quota] = await Promise.all([
@@ -658,6 +685,13 @@ export default function DashboardNew({ onBack }) {
           today.setHours(0, 0, 0, 0)
           const daysUntil = Math.ceil((examDateObj - today) / (1000 * 60 * 60 * 24))
 
+          // Check if exam has passed (negative days)
+          if (daysUntil < 0) {
+            // Exam expired - show required popup to set new exam
+            setExamPopupRequired(true)
+            setShowExamDatePopup(true)
+          }
+
           setExamCountdown({
             ...effectiveCountdown,
             next_exam: savedExamType || effectiveCountdown.next_exam,
@@ -684,6 +718,7 @@ export default function DashboardNew({ onBack }) {
       } catch (e) {
         console.error('Load error:', e)
       }
+      hasLoadedRef.current = true
       setLoading(false)
     }
     load()
@@ -699,6 +734,8 @@ export default function DashboardNew({ onBack }) {
       next_exam_display: data.examLabel,
       days_until: data.daysUntil,
     }))
+    // Reset required flag if it was set (exam expired scenario)
+    setExamPopupRequired(false)
     // Show prep level popup next
     setShowPrepLevelPopup(true)
   }
@@ -849,26 +886,13 @@ export default function DashboardNew({ onBack }) {
       <div className="ml-52 min-h-screen">
         {activeTab === 'home' && (
           <div className="flex">
-            {/* Center: Topic Entry + Roadmap - fills available space */}
+            {/* Center: Topic Entry Card - fills available space */}
             <div className="flex-1 min-w-0">
-              {/* Sticky Topic Entry Card */}
-              <div className="sticky top-0 z-20 bg-gray-50 pt-6 pb-4 px-6">
+              {/* Topic Entry Card */}
+              <div className="pt-6 pb-4 px-6">
                 <TopicEntryCard
                   currentSection={currentSection}
                   onStartPractice={handleStartPractice}
-                />
-              </div>
-
-              {/* Scrollable Roadmap */}
-              <div className="px-6 pb-12 overflow-visible">
-                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">
-                  Your Path
-                </div>
-                <Roadmap
-                  sections={roadmapState?.sections || []}
-                  currentSectionId={roadmapState?.current_section_id}
-                  studyMode={studyMode}
-                  onSelectSection={handleSelectSection}
                 />
               </div>
             </div>
@@ -932,6 +956,39 @@ export default function DashboardNew({ onBack }) {
           </div>
         )}
 
+        {activeTab === 'roadmap' && (
+          <div className="flex">
+            {/* Center: Roadmap - fills available space */}
+            <div className="flex-1 min-w-0">
+              {/* Scrollable Roadmap */}
+              <div className="px-6 pt-6 pb-12 overflow-visible">
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">
+                  Your Path
+                </div>
+                <Roadmap
+                  sections={roadmapState?.sections || []}
+                  currentSectionId={roadmapState?.current_section_id}
+                  studyMode={studyMode}
+                  onSelectSection={handleSelectSection}
+                />
+              </div>
+            </div>
+
+            {/* Right Sidebar */}
+            <div className="w-80 border-l border-gray-200 bg-white min-h-screen">
+              <div className="sticky top-0 p-6 space-y-5">
+                <UserProfile
+                  user={user}
+                  examCountdown={examCountdown}
+                  onProfileClick={() => setActiveTab('profile')}
+                />
+                <ExamCountdownCard data={examCountdown} />
+                <PremiumCard isPro={quotaStatus?.is_pro} onUpgrade={handleUpgrade} />
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'profile' && (
           <ProfilePage
             user={user}
@@ -945,8 +1002,14 @@ export default function DashboardNew({ onBack }) {
       {/* Onboarding Popups */}
       <ExamDatePopup
         isOpen={showExamDatePopup}
-        onClose={() => setShowExamDatePopup(false)}
+        onClose={() => {
+          // Only allow closing if not required
+          if (!examPopupRequired) {
+            setShowExamDatePopup(false)
+          }
+        }}
         onSave={handleExamDateSave}
+        required={examPopupRequired}
       />
       <PrepLevelPopup
         isOpen={showPrepLevelPopup}
