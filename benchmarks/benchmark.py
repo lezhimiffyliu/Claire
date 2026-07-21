@@ -318,7 +318,7 @@ class ClaireModel:
 
     def _init_agent(self):
         if self.agent is None:
-            from claire_agent import ClaireAgent
+            from claire_agent_old import ClaireAgent
             self.agent = ClaireAgent(benchmark_mode=True)
 
     def query(self, problem: str) -> Dict[str, Any]:

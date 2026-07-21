@@ -1,0 +1,1467 @@
+{
+  "uw_math_124_au18_p1_a": {
+    "start": [
+      "Watch that second log inside the first one."
+    ]
+  },
+  "uw_math_124_au18_p1_b": {
+    "start": [
+      "\u201cWatch that x in front \u2014 it\u2019s multiplied, not part of the fraction inside.\u201d"
+    ]
+  },
+  "uw_math_124_au18_p1_c": {
+    "start": [
+      "The base and the exponent both have t's."
+    ]
+  },
+  "uw_math_124_au18_p2_a": {
+    "start": [
+      "Watch the sign when you combine those fractions."
+    ]
+  },
+  "uw_math_124_au18_p2_b": {
+    "start": [
+      "Inside the square root, that plus 5x is the whole story."
+    ]
+  },
+  "uw_math_124_au18_p2_c": {
+    "start": [
+      "That numerator factors clean, by the way."
+    ]
+  },
+  "uw_math_124_au18_p3": {
+    "start": [
+      "The radius is 0.8, not 1 \u2014 that'll sneak into your area formula."
+    ]
+  },
+  "uw_math_124_au18_p4": {
+    "start": [
+      "Those two speeds, 5 and 13, are actually a nice ratio."
+    ]
+  },
+  "uw_math_124_au18_p5_a": {
+    "start": [
+      "x to the fourth minus 2x squared y squared \u2014 that's symmetric in a sneaky way."
+    ]
+  },
+  "uw_math_124_au18_p5_b": {
+    "start": [
+      "Don\u2019t forget to check that point actually lies on the curve."
+    ]
+  },
+  "uw_math_124_au18_p5_c": {
+    "start": [
+      "Huh \u2014 they want the estimate from the tangent line, not the curve itself."
+    ]
+  },
+  "uw_math_124_au18_p6_a": {
+    "start": [
+      "Don't forget there are two t-values that hit that point."
+    ]
+  },
+  "uw_math_124_au18_p6_b": {
+    "start": [
+      "Check the denominator \u2014 you\u2019re dividing by something squared."
+    ]
+  },
+  "uw_math_124_au18_p7_a": {
+    "start": [
+      "Bottom's zero at x equals two and negative two."
+    ]
+  },
+  "uw_math_124_au18_p7_b": {
+    "start": [
+      "Those 2's change nothing \u2014 end behavior lands at y = 1."
+    ]
+  },
+  "uw_math_124_au18_p7_c": {
+    "start": [
+      "Is that second x\u00b2 really negative down there?"
+    ]
+  },
+  "uw_math_124_au18_p7_d": {
+    "start": [
+      "Watch that x\u00b2 making your second derivative vanish too."
+    ]
+  },
+  "uw_math_124_au18_p7_e": {
+    "start": [
+      "That 4\u2019s a disguised x\u00b2 minus something squared."
+    ]
+  },
+  "uw_math_124_au18_p7_f": {
+    "start": [
+      "x\u00b2 over x\u00b2 minus 4 \u2014 that numerator and denominator have the same leading term."
+    ]
+  },
+  "uw_math_124_au19_p1_a": {
+    "start": [
+      "Point at the $e^{7x}$ inside the sine: \"Doof, the chain keeps on goin' inside that sin."
+    ]
+  },
+  "uw_math_124_au19_p1_b": {
+    "start": [
+      "The 10\u02e3 part just feels clean, I\u2019d leave it alone first and\u2014 okay yeah."
+    ]
+  },
+  "uw_math_124_au19_p2_a": {
+    "start": [
+      "You've got a variable in the exponent and down there in the arctan."
+    ]
+  },
+  "uw_math_124_au19_p2_b": {
+    "start": [
+      "\u201cThere's a 1/x\u00b2 stuffed inside that sine.\u201d"
+    ]
+  },
+  "uw_math_124_au19_p3_a": {
+    "start": [
+      "Check the top \u2014 that x\u00b2 inside the square root is squared."
+    ]
+  },
+  "uw_math_124_au19_p3_b": {
+    "start": [
+      "\u201cThe x under the square root dominates.\u201d"
+    ]
+  },
+  "uw_math_124_au19_p4": {
+    "start": [
+      "Volume is fixed at one-sixth, so that's your constraint."
+    ]
+  },
+  "uw_math_124_au19_p5_a": {
+    "start": [
+      "\u201cOoh \u2014 watch that hole at x equals 4.\u201d"
+    ]
+  },
+  "uw_math_124_au19_p5_b": {
+    "start": [
+      "Coming from the right, so watch which side of that hole you're on."
+    ]
+  },
+  "uw_math_124_au19_p5_c": {
+    "start": [
+      "Looks like the graph's falling through most of those gaps, doesn't it?"
+    ]
+  },
+  "uw_math_124_au19_p5_d": {
+    "start": [
+      "Look at where the slope actually flips, not just where it\u2019s zero."
+    ]
+  },
+  "uw_math_124_au19_p5_e": {
+    "start": [
+      "x in the denominator goes to zero, so watch the sign of the slope."
+    ]
+  },
+  "uw_math_124_au19_p5_f": {
+    "start": [
+      "\u201cThey want the derivative at x equals 3.\u201d"
+    ]
+  },
+  "uw_math_124_au19_p6": {
+    "start": [
+      "Oh \u2014 slow down on that $-1/3$, it gives a parabola that slaws'--- skip not just hit  from typical region. Wait, fix them:\n\nOnly\n---\nHere's the one take replacing that over-mimic residue:\n\n---\n\n\"That shared point might hook both tangents, actually."
+    ]
+  },
+  "uw_math_124_au19_p7_a": {
+    "start": [
+      "Don't lose the negative on the 6x\u00b2 during derivative."
+    ]
+  },
+  "uw_math_124_au19_p7_b": {
+    "start": [
+      "Vertical slopes happen when dy/dx has a zero denominator."
+    ]
+  },
+  "uw_math_124_au19_p7_c": {
+    "start": [
+      "Oh, that d(quadratic term)/yy means implicit here."
+    ]
+  },
+  "uw_math_124_au19_p8": {
+    "start": [
+      "Watch the chain rule with that volume formula."
+    ]
+  },
+  "uw_math_124_au19_p9": {
+    "start": [
+      "Careful\u2014that y's on both sides right there."
+    ]
+  },
+  "uw_math_124_au19_p10_a": {
+    "start": [
+      "Oops \u2014 that middle sign flips from '\u2717 -' to a derivative speed."
+    ]
+  },
+  "uw_math_124_au19_p10_b": {
+    "start": [
+      "Look at the sine\u2019s sign flipping inside that second derivative."
+    ]
+  },
+  "uw_math_124_au19_p10_c": {
+    "start": [
+      "First two critical points are the easier ones."
+    ]
+  },
+  "uw_math_124_au19_p10_d": {
+    "start": [
+      "\u201cThose intercepts you found in part (a) should line up on your sketch.\u201d"
+    ]
+  },
+  "uw_math_124_au21_p1_a": {
+    "start": [
+      "See the square root in the first denominator \u2014 that's your main spot."
+    ]
+  },
+  "uw_math_124_au21_p1_b": {
+    "start": [
+      "Order of operations hides a double cancellation. Let\u2019s parse together if it\u2019s _quite_ there yet?"
+    ]
+  },
+  "uw_math_124_au21_p1_c": {
+    "start": [
+      "Slow x minus something \u2014 sign's shifted."
+    ]
+  },
+  "uw_math_124_au21_p2_a": {
+    "start": [
+      "Bottom\u2019s got an exponential and a chain rule inside."
+    ]
+  },
+  "uw_math_124_au21_p2_b": {
+    "start": [
+      "Oh \u2014 it stops before the dv."
+    ]
+  },
+  "uw_math_124_au21_p2_c": {
+    "start": [
+      "\u201cThat last term's got both the base and the exponent in play.\u201d"
+    ]
+  },
+  "uw_math_124_au21_p3_a": {
+    "start": [
+      "Looks like the hole's right above negative three."
+    ]
+  },
+  "uw_math_124_au21_p3_b": {
+    "start": [
+      "See how it jumps right at minus five \u2014 that's the vertical asymptote."
+    ]
+  },
+  "uw_math_124_au21_p3_c": {
+    "start": [
+      "Empty circle over on the right side of the asymptote."
+    ]
+  },
+  "uw_math_124_au21_p3_d": {
+    "start": [
+      "Careful\u20140 in the denominator's a different story."
+    ]
+  },
+  "uw_math_124_au21_p3_e": {
+    "start": [
+      "\u201cWatch the open circles \u2014 not all flat spots count.\u201d"
+    ]
+  },
+  "uw_math_124_au21_p3_f": {
+    "start": [
+      "\u201cThe peak around here \u2014 that\u2019s the boundary you\u2019re looking for.\u201d"
+    ]
+  },
+  "uw_math_124_au21_p3_g": {
+    "start": [
+      "Second derivative negative means the curve\u2019s bending downward\u2014here, like sighing arcs shaped like a frown\u2014so pay attention to where smile shapes turn into outward loopy bits just beyond 18 points.\" # Actually this der uses pointers e w da drawing edges tks. Wen points shaped nearly just\u2014no pads subtle catch ph line points flipping on parabola a be ending extents leads toward gl"
+    ]
+  },
+  "uw_math_124_au21_p3_h": {
+    "start": [
+      "\u201cThat\u2019s the derivative definition, right there.\u201d"
+    ]
+  },
+  "uw_math_124_au21_p4_a": {
+    "start": [
+      "...Right, 1,y-blah - makes garbage after quadratically?\"\n\nWait, that was contradictory/unfit; better verbal tone:  \n\n\"Oh \u2014 you only use the line if the slope's defined there.\"\n\nLet me instead try short/speech+demonstratable:  \n\"The slope\u2019s got the corner piece over (3y\u00b2 \u2212 xy)."
+    ]
+  },
+  "uw_math_124_au21_p4_b": {
+    "start": [
+      "Second derivative's positive right there."
+    ]
+  },
+  "uw_math_124_au21_p5": {
+    "start": [
+      "Point P's the other crossing\u2014not the tangency."
+    ]
+  },
+  "uw_math_124_au21_p6": {
+    "start": [
+      "And don't forget, both \u2113's are changing at the same rate."
+    ]
+  },
+  "uw_math_124_au21_p7": {
+    "start": [
+      "- \"The circle's radius is 3, not 6."
+    ]
+  },
+  "uw_math_124_au21_p8_a": {
+    "start": [
+      "\u201cPay close attention to that x\u00b2 under the fraction.\u201d"
+    ]
+  },
+  "uw_math_124_au21_p8_b": {
+    "start": [
+      "-\"Top of f's rational part is one power below the bottom."
+    ]
+  },
+  "uw_math_124_au21_p8_c": {
+    "start": [
+      "It's composite on the bottom, not just one factor for sure."
+    ]
+  },
+  "uw_math_124_au21_p8_d": {
+    "start": [
+      "What's that denominator doing to the second derivative?"
+    ]
+  },
+  "uw_math_124_au21_p8_e": {
+    "start": [
+      "The denominator is always positive, so the whole thing\u2019s smooth sailing."
+    ]
+  },
+  "uw_math_124_au22_p1_a": {
+    "start": [
+      "Cosine inside is the squared one, not just plain cos."
+    ]
+  },
+  "uw_math_124_au22_p1_b": {
+    "start": [
+      "That numerator's never zero \u2014 only the denominator flares up."
+    ]
+  },
+  "uw_math_124_au22_p1_c": {
+    "start": [
+      "Huh, those ln\u2019s should simplify together."
+    ]
+  },
+  "uw_math_124_au22_p2_a": {
+    "start": [
+      "The arctan's numerator is all over that e, so every term takes the derivative."
+    ]
+  },
+  "uw_math_124_au22_p2_b": {
+    "start": [
+      "There\u2019s a whole chain inside the sine\u2014piece by piece."
+    ]
+  },
+  "uw_math_124_au22_p2_c": {
+    "start": [
+      "\u201cThat \u2018times\u2019 between the ln and arctan means it's a product rule.\u201d"
+    ]
+  },
+  "uw_math_124_au22_p3_a": {
+    "start": [
+      "Right there at 2.5 \u2014 that's a corner."
+    ]
+  },
+  "uw_math_124_au22_p3_b": {
+    "start": [
+      "It askin' for g'(5)."
+    ]
+  },
+  "uw_math_124_au22_p3_c": {
+    "start": [
+      "Notice there's a corner in f at x=2."
+    ]
+  },
+  "uw_math_124_au22_p3_d": {
+    "start": [
+      "The hard part's right there inside the nested f."
+    ]
+  },
+  "uw_math_124_au22_p3_e": {
+    "start": [
+      "Nested values inside the square will matter."
+    ]
+  },
+  "uw_math_124_au22_p4_a": {
+    "start": [
+      "Might be worth doing per ya \\[ln\\] both sides right away on this one."
+    ]
+  },
+  "uw_math_124_au22_p4_b": {
+    "start": [
+      "Woah \u2014 that y in the exponent is the dependent variable."
+    ]
+  },
+  "uw_math_124_au22_p4_c": {
+    "start": [
+      "My $x$ against her $y$ in your exponent just swapped sides of the roof, buddy."
+    ]
+  },
+  "uw_math_124_au22_p5_a": {
+    "start": [
+      "Ah, the y has a cubic and a quadratic wearing a trench coat. To find the slopes just proceed as you normally would chain rule."
+    ]
+  },
+  "uw_math_124_au22_p5_b": {
+    "start": [
+      "t equal to 1 and \u20131 give the same x, of course\u2014since x is t squared."
+    ]
+  },
+  "uw_math_124_au22_p5_c": {
+    "start": [
+      "Both derivatives are zero at that t, so the curve slows to a stop there."
+    ]
+  },
+  "uw_math_124_au22_p5_d": {
+    "start": [
+      "Wait\u2014at t = -1, dx/dt is negative, so the x is moving left."
+    ]
+  },
+  "uw_math_124_au22_p6": {
+    "start": [
+      "35 meters from the wall \u2014 that's not her distance along the track."
+    ]
+  },
+  "uw_math_124_au22_p7": {
+    "start": [
+      "Swim speed's half the run speed, so that ratio's built right in."
+    ]
+  },
+  "uw_math_124_au22_p8_a": {
+    "start": [
+      "Right \u2014 that ln means x has to be positive."
+    ]
+  },
+  "uw_math_124_au22_p8_b": {
+    "start": [
+      "Actually open up that dash\u2014vertical asymptote at horizontal axis sounds like an alien speaking & I skipped reading beyond literal ln, x-pie? Sorry repeat: right answer casual:  \ncheck inside that ln \u2014 x approaches zero from the right."
+    ]
+  },
+  "uw_math_124_au22_p8_c": {
+    "start": [
+      "Watch for the ln x waking up when you differentiate."
+    ]
+  },
+  "uw_math_124_au22_p8_d": {
+    "start": [
+      "The log term\u2019s got that ln x hiding under your derivative too."
+    ]
+  },
+  "uw_math_124_au22_p8_e": {
+    "start": [
+      "\u03c0\u03c1\u03ce\u03c4\u03bf\u03c2 \u03cc\u03c1\u03bf\u03c2 x \u03b5\u03bd\u03ce\u03bd\" Sorry. It looks like you intended the response to be a remark related to derivatives local ext setting ... \"These natural logs just kick in as constant denominators."
+    ]
+  },
+  "uw_math_124_au22_p8_f": {
+    "start": [
+      "The log's inside a minus sign\u2014watch the double negative there."
+    ]
+  },
+  "uw_math_124_au22_p8_g": {
+    "start": [
+      "That whole third term determines way more than you'd think."
+    ]
+  },
+  "uw_math_124_au23_p1_a": {
+    "start": [
+      "Watch the x in the denominator \u2014 it factors when x is 2."
+    ]
+  },
+  "uw_math_124_au23_p1_b": {
+    "start": [
+      "The zero in the denominator is also the one up top."
+    ]
+  },
+  "uw_math_124_au23_p1_c": {
+    "start": [
+      "Watch the exponent pull \\( \\sin x \\) near zero way faster."
+    ]
+  },
+  "uw_math_124_au23_p2_a": {
+    "start": [
+      "Top and bottom are both products, not single pieces."
+    ]
+  },
+  "uw_math_124_au23_p2_b": {
+    "start": [
+      "Look \u2014 that whole messy inside is just a string of three constants and e^x."
+    ]
+  },
+  "uw_math_124_au23_p2_c": {
+    "start": [
+      "Watch for that quotient hiding inside the arctan."
+    ]
+  },
+  "uw_math_124_au23_p3_a": {
+    "start": [
+      "Look near \u2014 oh, and f is the squiggly top curve."
+    ]
+  },
+  "uw_math_124_au23_p3_b": {
+    "start": [
+      "Oh \u2014 the layers in the graph at x=7 will trap you."
+    ]
+  },
+  "uw_math_124_au23_p3_c": {
+    "start": [
+      "g has a break right where f puts it."
+    ]
+  },
+  "uw_math_124_au23_p3_d": {
+    "start": [
+      "Huh \u2014 there\u2019s a jump inside g at 5."
+    ]
+  },
+  "uw_math_124_au23_p3_e": {
+    "start": [
+      "Oh \u2014 careful, v is the square of f, so its sign doesn't change."
+    ]
+  },
+  "uw_math_124_au23_p4": {
+    "start": [
+      "\u201cThe x squared minus y squared part gives away the symmetry.\u201d"
+    ]
+  },
+  "uw_math_124_au23_p5_a": {
+    "start": [
+      "Look at y'(t) =\u202f3t\u00b2\u202f+\u202f8t \u2014 that's just factoring straight away."
+    ]
+  },
+  "uw_math_124_au23_p5_b": {
+    "start": [
+      "Watch the sign of that concave-down region."
+    ]
+  },
+  "uw_math_124_au23_p6": {
+    "start": [
+      "Is that $\\pi/6$ coming from the triangle's right angle?"
+    ]
+  },
+  "uw_math_124_au23_p7": {
+    "start": [
+      "Oh \u2014 the line runs right through (1,2)."
+    ]
+  },
+  "uw_math_124_au23_p8_a": {
+    "start": [
+      "The top goes to 1 but the bottom vanishes from different sides."
+    ]
+  },
+  "uw_math_124_au23_p8_b": {
+    "start": [
+      "Gotta separate e^x over x into both infinities."
+    ]
+  },
+  "uw_math_124_au23_p8_c": {
+    "start": [
+      "Yeah, don\u2019t forget the derivative of the numerator\u2019s just itself."
+    ]
+  },
+  "uw_math_124_au23_p8_d": {
+    "start": [
+      "On the denominator, that x\u00b2 in the second derivative stays positive."
+    ]
+  },
+  "uw_math_124_au23_p8_e": {
+    "start": [
+      "Forget the x entirely when growth kicks in near zero."
+    ]
+  },
+  "uw_math_124_au24_p1_a": {
+    "start": [
+      "Well that radical cleans up real neat."
+    ]
+  },
+  "uw_math_124_au24_p1_b": {
+    "start": [
+      "Careful \u2014 the 3\u03b8 and 2\u03b8 aren't the same angle."
+    ]
+  },
+  "uw_math_124_au24_p1_c": {
+    "start": [
+      "Watch the x\u00b2 out front and the sine \u2014 easy to miss how they play together."
+    ]
+  },
+  "uw_math_124_au24_p2_a": {
+    "start": [
+      "Might wanna grab the chain rule on both pieces there."
+    ]
+  },
+  "uw_math_124_au24_p2_b": {
+    "start": [
+      "Well, there's a square root inside another square root."
+    ]
+  },
+  "uw_math_124_au24_p2_c": {
+    "start": [
+      "Now that's an exponent that depends on x and shows up as the base. Gotta handle both."
+    ]
+  },
+  "uw_math_124_au24_p3_a": {
+    "start": [
+      "f has corners where those two pieces meet."
+    ]
+  },
+  "uw_math_124_au24_p3_b": {
+    "start": [
+      "\u201cThere's that sharp corner in the dashed one moving through.\u201d"
+    ]
+  },
+  "uw_math_124_au24_p3_c": {
+    "start": [
+      "g of x is the dashed one, right?"
+    ]
+  },
+  "uw_math_124_au24_p3_d": {
+    "start": [
+      "Ugh \u2014 the right-hand limit, not two-sided."
+    ]
+  },
+  "uw_math_124_au24_p3_e": {
+    "start": [
+      "Don\u2019t forget that denominator swings to zero right at 3."
+    ]
+  },
+  "uw_math_124_au24_p3_f": {
+    "start": [
+      "9's an asymptote for f, so denominator blows up."
+    ]
+  },
+  "uw_math_124_au24_p3_g": {
+    "start": [
+      "See the inner curve's tilting the whole thing."
+    ]
+  },
+  "uw_math_124_au24_p4_a": {
+    "start": [
+      "\u201cWhoa \u2014 that left side is hiding a double square.\u201d"
+    ]
+  },
+  "uw_math_124_au24_p4_b": {
+    "start": [
+      "Keep your eyes on that x\u00b2 + y\u00b2 inside the parentheses."
+    ]
+  },
+  "uw_math_124_au24_p5_a": {
+    "start": [
+      "Yeah\u2014watch the domain: t has to stay above zero."
+    ]
+  },
+  "uw_math_124_au24_p5_b": {
+    "start": [
+      "The ln t at the top shows up inside a secant line from (c)... oh wait, wrong part. Let me just see \u2014 yes, \"That ln t piece is  steepest right near zero."
+    ]
+  },
+  "uw_math_124_au24_p6": {
+    "start": [
+      "Bet there's a lurking right triangle in there."
+    ]
+  },
+  "uw_math_124_au24_p7": {
+    "start": [
+      "P\u2019s distance from the left side pushes both those smaller angles."
+    ]
+  },
+  "uw_math_124_au24_p8_a": {
+    "start": [
+      "The \\-x\u00b2 on top tells the whole story here."
+    ]
+  },
+  "uw_math_124_au24_p8_b": {
+    "start": [
+      "Left tail\u2019s basically flat as well."
+    ]
+  },
+  "uw_math_124_au24_p8_c": {
+    "start": [
+      "\u201cx alone out front, not x squared \u2014 that derivative's gonna be quick.\u201d"
+    ]
+  },
+  "uw_math_124_au24_p8_d": {
+    "start": [
+      "The \u2212x\u00b2/6 puts the bump off-center, doesn't it."
+    ]
+  },
+  "uw_math_124_au24_p8_e": {
+    "start": [
+      "That negative exponent flips sign when you differentiate."
+    ]
+  },
+  "uw_math_124_au24_p8_f": {
+    "start": [
+      "\u201cSecond derivative\u2019s where the sign flips live, not the first.\u201d"
+    ]
+  },
+  "uw_math_124_au24_p8_g": {
+    "start": [
+      "That \ud835\udc65 inside goes into the inflection-point formula twice here, actually."
+    ]
+  },
+  "uw_math_124_au24_p8_h": {
+    "start": [
+      "Notice that exponent's got a minus x\u00b2 over six tucked in there."
+    ]
+  },
+  "uw_math_124_au25_p1_a": {
+    "start": [
+      "Inside the log it's (x+2) over x\u2014that\u2019s almost 1."
+    ]
+  },
+  "uw_math_124_au25_p1_b": {
+    "start": [
+      "First \u2014 that's x in the exponent, not a number."
+    ]
+  },
+  "uw_math_124_au25_p1_c": {
+    "start": [
+      "Don't forget that denominator's factored inside."
+    ]
+  },
+  "uw_math_124_au25_p2_a": {
+    "start": [
+      "e to the negative x squared over two \u2014 that's composition on composition."
+    ]
+  },
+  "uw_math_124_au25_p2_b": {
+    "start": [
+      "Careful \u2014 the variable\u2019s in the exponent and inside the base."
+    ]
+  },
+  "uw_math_124_au25_p2_c": {
+    "start": [
+      "Denominator's just an x, not a product rule."
+    ]
+  },
+  "uw_math_124_au25_p3_a": {
+    "start": [
+      "Yep \u2014 just plug 8 plus h right into that L(x) you wrote."
+    ]
+  },
+  "uw_math_124_au25_p3_b": {
+    "start": [
+      "Keep an eye\u2014that 8.1 becomes 8.12."
+    ]
+  },
+  "uw_math_124_au25_p4": {
+    "start": [
+      "Lot of subtracted y\u00b2s kicking around in there."
+    ]
+  },
+  "uw_math_124_au25_p5_a": {
+    "start": [
+      "There's a triple angle beast brewing inside that $\\sin(3t)$."
+    ]
+  },
+  "uw_math_124_au25_p5_b": {
+    "start": [
+      "Multiply before you subtract when they repeat, right?"
+    ]
+  },
+  "uw_math_124_au25_p6": {
+    "start": [
+      "Ooh \u2014 those are horizontal pieces, not slanted."
+    ]
+  },
+  "uw_math_124_au25_p7": {
+    "start": [
+      "Top of the cylinder\u2019s hidden at some height, not at the cone's tip."
+    ]
+  },
+  "uw_math_124_au25_p8_a": {
+    "start": [
+      "Oh \u2014 tidy up that middle term before you factor."
+    ]
+  },
+  "uw_math_124_au25_p8_b": {
+    "start": [
+      "Verb error \u2014 everything small enough now"
+    ]
+  },
+  "uw_math_124_au25_p8_c": {
+    "start": [
+      "The whole top cubes plus something after the quotient implies flat spots."
+    ]
+  },
+  "uw_math_124_au25_p8_d": {
+    "start": [
+      "\u201cRight \u2014 it\u2019s that constant numerator on a variable denominator again.\u201d"
+    ]
+  },
+  "uw_math_124_au25_p8_e": {
+    "start": [
+      "Not pictured \u2014 the slant that rationalises to y = 1/x."
+    ]
+  },
+  "uw_math_124_sp18_p1_a": {
+    "start": [
+      "Hmm\u2014that denominator has a chain rule nesting right inside the square root."
+    ]
+  },
+  "uw_math_124_sp18_p1_b": {
+    "start": [
+      "Head's up \u2014 that tan's power itself has an 'x'."
+    ]
+  },
+  "uw_math_124_sp18_p1_c": {
+    "start": [
+      "The whole thing\u2019s inside one ln, so watch that ln-and-power relationship."
+    ]
+  },
+  "uw_math_124_sp18_p2_a": {
+    "start": [
+      "Oh \u2014 there\u2019s a derivative hiding in that limit form."
+    ]
+  },
+  "uw_math_124_sp18_p2_b": {
+    "start": [
+      "Both terms have that 1/t factor."
+    ]
+  },
+  "uw_math_124_sp18_p2_c": {
+    "start": [
+      "\u201cThe sines have two different coefficients inside.\u201d"
+    ]
+  },
+  "uw_math_124_sp18_p3_a": {
+    "start": [
+      "Gotta treat that xy term as a product."
+    ]
+  },
+  "uw_math_124_sp18_p3_b": {
+    "start": [
+      "That number inside \u2014 it\u2019s floating time side by side, good a not yours 1 the x is on else my bottom case but minor shift than you. Might from to read end and. Must loosely take caution closer around decimal- a soft integer grip what, we relate which parts result (starting remark): Must let rounding near \\(1.92\\))\u2014tiny shifts note fumble fine hold"
+    ]
+  },
+  "uw_math_124_sp18_p3_c": {
+    "start": [
+      "\u201cWait \u2014 does linearization overestimate or underestimate here? That\u2019s really about concavity.\u201d"
+    ]
+  },
+  "uw_math_124_sp18_p4": {
+    "start": [
+      "Uh \u2014 that\u2019s the hypotenuse, not the horizontal distance."
+    ]
+  },
+  "uw_math_124_sp18_p5": {
+    "start": [
+      "Hold on\u20141.5 liters is 1500 cm\u00b3, not 150."
+    ]
+  },
+  "uw_math_124_sp18_p6_a": {
+    "start": [
+      "There's a common factor lurking in there."
+    ]
+  },
+  "uw_math_124_sp18_p6_b": {
+    "start": [
+      "Three factors of x\u00b3 pull right out of that polynomial."
+    ]
+  },
+  "uw_math_124_sp18_p6_c": {
+    "start": [
+      "Look at that common x\u00b3 factor hidden in there."
+    ]
+  },
+  "uw_math_124_sp18_p6_d": {
+    "start": [
+      "The x\u00b3 coming out front reveals the zeros."
+    ]
+  },
+  "uw_math_124_sp18_p7_a": {
+    "start": [
+      "Plug in x=1, those two pieces have to match."
+    ]
+  },
+  "uw_math_124_sp18_p7_b": {
+    "start": [
+      "Middle piece got that naked x plus a constant \u2013 different shape."
+    ]
+  },
+  "uw_math_124_sp19_p1_a": {
+    "start": [
+      "Note the x\u00b2 inside the sine."
+    ]
+  },
+  "uw_math_124_sp19_p1_b": {
+    "start": [
+      "The 2t inside the ln means there's a chain rule lurking.\u201d"
+    ]
+  },
+  "uw_math_124_sp19_p1_c": {
+    "start": [
+      "Stacking a square root exponent on a linear base \u2014 the log'll straighten that out."
+    ]
+  },
+  "uw_math_124_sp19_p2_a": {
+    "start": [
+      "x\u00b3 minus x factors, top and bottom both hit zero."
+    ]
+  },
+  "uw_math_124_sp19_p2_b": {
+    "start": [
+      "Root minus linear rationalization \u2014 textbook sneaky..."
+    ]
+  },
+  "uw_math_124_sp19_p2_c": {
+    "start": [
+      "\u201cKeep in mind the sine argument is going way faster than you think.\u201d"
+    ]
+  },
+  "uw_math_124_sp19_p3": {
+    "start": [
+      "\u201cSide length 3 \u2014 so that x can\u2019t go past 1.5.\u201d"
+    ]
+  },
+  "uw_math_124_sp19_p4": {
+    "start": [
+      "Make sure you're handling those units right at the end."
+    ]
+  },
+  "uw_math_124_sp19_p5_a": {
+    "start": [
+      "Be careful \u2014 that's the point $(1, -2)$, not $(1, 2)$."
+    ]
+  },
+  "uw_math_124_sp19_p5_b": {
+    "start": [
+      "That cube roots making it double when it swaps sign."
+    ]
+  },
+  "uw_math_124_sp19_p5_c": {
+    "start": [
+      "Right\u2014can\u2019t have negative under the square root when you solve for y."
+    ]
+  },
+  "uw_math_124_sp19_p6_a": {
+    "start": [
+      "Right here \u2014 open circles mean the derivative itself isn't defined there."
+    ]
+  },
+  "uw_math_124_sp19_p6_b": {
+    "start": [
+      "X equals -9\u2014right at the closed endpoint\u2019s questionable."
+    ]
+  },
+  "uw_math_124_sp19_p6_c": {
+    "start": [
+      "Wait\u2014those two sharp corners mean the derivative's undefined there, right?"
+    ]
+  },
+  "uw_math_124_sp19_p6_d": {
+    "start": [
+      "Concave down means the derivative's decreasing \u2014 watch the slope of that curve there."
+    ]
+  },
+  "uw_math_124_sp19_p6_e": {
+    "start": [
+      "Wait\u2014that's asking about the second derivative at 4."
+    ]
+  },
+  "uw_math_124_sp19_p6_f": {
+    "start": [
+      "They gave you x exactly at \u20132, so the slope's right from the graph."
+    ]
+  },
+  "uw_math_124_sp19_p7_a": {
+    "start": [
+      "Yeah, careful \u2014 that one's got \\(t^3\\), the other one\u2019s got \\(t^2\\)."
+    ]
+  },
+  "uw_math_124_sp19_p7_b": {
+    "start": [
+      "The derivative of the exponent"
+    ]
+  },
+  "uw_math_124_sp19_p7_c": {
+    "start": [
+      "Do not even look at the denominator \u2014 look at that timing"
+    ]
+  },
+  "uw_math_124_sp19_p8_a": {
+    "start": [
+      "x\u00b3 plus one in the bottom \u2014 watch where that goes to zero."
+    ]
+  },
+  "uw_math_124_sp19_p8_b": {
+    "start": [
+      "It\u2019s the 1\u2019s that cancel out on top."
+    ]
+  },
+  "uw_math_124_sp19_p8_c": {
+    "start": [
+      "3 and that minus sign in the top fraction? Watch that step."
+    ]
+  },
+  "uw_math_124_sp19_p8_d": {
+    "start": [
+      "\u201cOh \u2014 denominator never hits zero, so that\u2019s one worry gone.\u201d"
+    ]
+  },
+  "uw_math_124_sp19_p8_e": {
+    "start": [
+      "The x\u00b3\u2019s are about all the heavy lifting."
+    ]
+  },
+  "uw_math_124_sp22_p1_a": {
+    "start": [
+      "Sin theta's basically 2 for a hot second.\u201d"
+    ]
+  },
+  "uw_math_124_sp22_p1": {
+    "start": [
+      "The 7\u03b8\u00b2 in the numerator is increasing over \\([0,30\u00b0]\\)."
+    ]
+  },
+  "uw_math_124_sp22_p1_b": {
+    "start": [
+      "It\u2019s just plugging in 3 after that. Nothing tricksy."
+    ]
+  },
+  "uw_math_124_sp22_p1_c": {
+    "start": [
+      "Multiply top and bottom of the left piece by 3, that's the trick."
+    ]
+  },
+  "uw_math_124_sp22_p2_a": {
+    "start": [
+      "oh, that tan is nested inside the exponent."
+    ]
+  },
+  "uw_math_124_sp22_p2_b": {
+    "start": [
+      "Top function's got a square inside and a square outside \u2014 cos\u00b2(3x)."
+    ]
+  },
+  "uw_math_124_sp22_p2_c": {
+    "start": [
+      "Just watch \u2014 the exponent\u2019s e^x, not a plain e."
+    ]
+  },
+  "uw_math_124_sp22_p2_d": {
+    "start": [
+      "Watch the e\u02e3 sitting on top of that fraction with the root directly beneath."
+    ]
+  },
+  "uw_math_124_sp22_p3_a": {
+    "start": [
+      "Uh \u2014 there's no break in the graph at 5."
+    ]
+  },
+  "uw_math_124_sp22_p3_b": {
+    "start": [
+      "Approaching from the right side of 3 \u2014 follow that branch."
+    ]
+  },
+  "uw_math_124_sp22_p3_c": {
+    "start": [
+      "Watch the dot closed there at zero."
+    ]
+  },
+  "uw_math_124_sp22_p3_d": {
+    "start": [
+      "You\u2019re reading \u2014 don\u2019t guess from the grid lines."
+    ]
+  },
+  "uw_math_124_sp22_p3_e": {
+    "start": [
+      "Look for where f is zero \u2014 that's when g' is zero too."
+    ]
+  },
+  "uw_math_124_sp22_p3_f": {
+    "start": [
+      "\u201cInside function's slope there is zero at three.\u201d"
+    ]
+  },
+  "uw_math_124_sp22_p4_a": {
+    "start": [
+      "Uh \u2014 (1,1) actually satisfies that equation."
+    ]
+  },
+  "uw_math_124_sp22_p4_b": {
+    "start": [
+      "You're at the point (1,1), right?"
+    ]
+  },
+  "uw_math_124_sp22_p4_c": {
+    "start": [
+      "x to the third plus y to the third looks symmetric but derivative breaking it."
+    ]
+  },
+  "uw_math_124_sp22_p5_a": {
+    "start": [
+      "The \\( x'(t) \\) has a \\(\\pi\\) in it, but just roll with it."
+    ]
+  },
+  "uw_math_124_sp22_p5_b": {
+    "start": [
+      "Q on top finally shows up in this half."
+    ]
+  },
+  "uw_math_124_sp22_p5_c": {
+    "start": [
+      "Curve's an ellipse, by the way."
+    ]
+  },
+  "uw_math_124_sp22_p6_a": {
+    "start": [
+      "Watch that sign on the height."
+    ]
+  },
+  "uw_math_124_sp22_p6_b": {
+    "start": [
+      "The height's shrinking faster than the base is growing, in percentage terms."
+    ]
+  },
+  "uw_math_124_sp22_p7": {
+    "start": [
+      "Half the length is x, not 2x \u2014 watch that."
+    ]
+  },
+  "uw_math_124_sp22_p8_a": {
+    "start": [
+      "Bottom there \u2014 sneaky that it can't be zero."
+    ]
+  },
+  "uw_math_124_sp22_p8_b": {
+    "start": [
+      "Bottom blows up way faster than the top."
+    ]
+  },
+  "uw_math_124_sp22_p8_c": {
+    "start": [
+      "Bottom's never zero, so the critical numbers are only where the derivative's zero."
+    ]
+  },
+  "uw_math_124_sp22_p8_d": {
+    "start": [
+      "Heads-up \u2014 page ends before the rest; just (d)'s showing."
+    ]
+  },
+  "uw_math_124_sp22_p8_e": {
+    "start": [
+      "The denominator gives you smooth sailing all the way."
+    ]
+  },
+  "uw_math_124_sp22_p8_f": {
+    "start": [
+      "\u201cThe second derivative flips sign at two places, looks like.\u201d"
+    ]
+  },
+  "uw_math_124_sp22_p8_g": {
+    "start": [
+      "\u201cDon't miss that it's centered at zero, by the way.\u201d"
+    ]
+  },
+  "uw_math_124_sp23_p1_a": {
+    "start": [
+      "What\u2019s inside both is an x and a log fighting each other."
+    ]
+  },
+  "uw_math_124_sp23_p1_b": {
+    "start": [
+      "Better hope that denominator isn't zero at the limit."
+    ]
+  },
+  "uw_math_124_sp23_p1_c": {
+    "start": [
+      "Zero denominator doesn't automatically blow up\u2014sign matters."
+    ]
+  },
+  "uw_math_124_sp23_p2_a": {
+    "start": [
+      "The sine squares \u2014 yeah those\u2019re gonna give you chain rule twice."
+    ]
+  },
+  "uw_math_124_sp23_p2_b": {
+    "start": [
+      "Treat those constants like numbers, not variables."
+    ]
+  },
+  "uw_math_124_sp23_p2_c": {
+    "start": [
+      "What minus inside your co-n-co sine? Ca-reful:\" okay but honestly \u2014 scratch that, that's legible i guess.\n\nHere's what's tighter:\n\n-\"Uhm is there another that inswill their maybe\"\u2014 nah missed.\n\nToo sc old real form return: like right-\n\nDifferent audience see: I stand next point say aloud one quick true-voice dumb just smart-human happens problem"
+    ]
+  },
+  "uw_math_124_sp23_p3_a": {
+    "start": [
+      "C\u2019s section shape plus that arrow heading"
+    ]
+  },
+  "uw_math_124_sp23_p3_b": {
+    "start": [
+      "Eleven's right where that slope takes a nosedive."
+    ]
+  },
+  "uw_math_124_sp23_p3_c": {
+    "start": [
+      "\u201cEvery hump in f prime here means a turning point in f.\u201d"
+    ]
+  },
+  "uw_math_124_sp23_p3_d": {
+    "start": [
+      "Concave down is where that thing's slope is negative."
+    ]
+  },
+  "uw_math_124_sp23_p3_e": {
+    "start": [
+      "\u201cDon\u2019t forget the chain rule \u2014 there\u2019s an f on the inside too.\u201d"
+    ]
+  },
+  "uw_math_124_sp23_p4_a": {
+    "start": [
+      "Better pull out product rule for that 3xy term."
+    ]
+  },
+  "uw_math_124_sp23_p4_b": {
+    "start": [
+      "Yeah \u2014 nice that both coordinates are 1, makes the slope clean."
+    ]
+  },
+  "uw_math_124_sp23_p4_c": {
+    "start": [
+      "And the xy term means you\u2019ll need product rule both times."
+    ]
+  },
+  "uw_math_124_sp23_p5": {
+    "start": [
+      "In the ln, the x over 12 cancels nicely at 12."
+    ]
+  },
+  "uw_math_124_sp23_p6": {
+    "start": [
+      "Constant rate problems \u2014 watch the 8 and the 10 start moving at different times."
+    ]
+  },
+  "uw_math_124_sp23_p7": {
+    "start": [
+      "The boat's speed is slower, so don't cut straight across."
+    ]
+  },
+  "uw_math_124_sp23_p8_a": {
+    "start": [
+      "e^{-0.1x} never hits zero, so it's just the sign in front."
+    ]
+  },
+  "uw_math_124_sp23_p8_b": {
+    "start": [
+      "0.5 came along for the whole ride"
+    ]
+  },
+  "uw_math_124_sp23_p8_c": {
+    "start": [
+      "That domain looks big enough to find at least two."
+    ]
+  },
+  "uw_math_124_sp23_p8_d": {
+    "start": [
+      "That e^{-0.1x} will flatten it fast for large x."
+    ]
+  },
+  "uw_math_124_sp23_p8_e": {
+    "start": [
+      "\u201cThe 0.5 up front is multiplying, not in the exponent.\u201d"
+    ]
+  },
+  "uw_math_124_sp24_p1_a": {
+    "start": [
+      "The 2x\u00b3 and 8x\u00b3 are what you compare."
+    ]
+  },
+  "uw_math_124_sp24_p1_b": {
+    "start": [
+      "\u201cOh \u2014 the denominator's zero at x=1 too.\u201d"
+    ]
+  },
+  "uw_math_124_sp24_p1_c": {
+    "start": [
+      "ln(x) shoots to negative infinity as x approaches zero from the right."
+    ]
+  },
+  "uw_math_124_sp24_p1_d": {
+    "start": [
+      "Oh \u2014 the numerator\u2019s just the derivative definition."
+    ]
+  },
+  "uw_math_124_sp24_p2_a": {
+    "start": [
+      "Watch the log in the top \u2014 that constant's inside it."
+    ]
+  },
+  "uw_math_124_sp24_p2_b": {
+    "start": [
+      "Huh, that plus peeks out inside the sine, but it\u2019s buried one more layer."
+    ]
+  },
+  "uw_math_124_sp24_p2_c": {
+    "start": [
+      "Hey \u2014 that first term's a sneaky one with the variable in both places."
+    ]
+  },
+  "uw_math_124_sp24_p2_d": {
+    "start": [
+      "Inside\u2019s not constant, so chain rule says hi."
+    ]
+  },
+  "uw_math_124_sp24_p3_a": {
+    "start": [
+      "Those dotted lines at \u20135 are pointing right at zero."
+    ]
+  },
+  "uw_math_124_sp24_p3_b": {
+    "start": [
+      "\\\"Oh \u2014 f-prime of negative one is sitting right where the x-axis hits.\\"
+    ]
+  },
+  "uw_math_124_sp24_p3_c": {
+    "start": [
+      "Nope, third point just exits \u2014 there's no f before minus . I mean start but inside parenthesis puts an empty point us giving ambiguous point it means don \u2018re beyond.' \u2014 ' ... piece exists when closer route, the sign.\u201d wait I have to reframe.\n\nActually that was off. I can't deliver now correctly one teacher line briefly formatted due vision on formatting mismark. Pausing"
+    ]
+  },
+  "uw_math_124_sp24_p3_d": {
+    "start": [
+      "What's happening past that last bump \u2014 does it flatten out?"
+    ]
+  },
+  "uw_math_124_sp24_p3_e": {
+    "start": [
+      "Limits at infinity track the ends of the graph here."
+    ]
+  },
+  "uw_math_124_sp24_p3_f": {
+    "start": [
+      "For f, not necessarily the derivative."
+    ]
+  },
+  "uw_math_124_sp24_p3_g": {
+    "start": [
+      "\u201cMmm \u2014 those three spots where the graph crosses the x-axis.\u201d"
+    ]
+  },
+  "uw_math_124_sp24_p3_h": {
+    "start": [
+      "The peak of that wave on the derivative is where.</SYS>"
+    ]
+  },
+  "uw_math_124_sp24_p3_i": {
+    "start": [
+      "Inside the bracket \u2014 yeah that notch there."
+    ]
+  },
+  "uw_math_124_sp24_p3_j": {
+    "start": [
+      "The derivative's slope tells you the story there."
+    ]
+  },
+  "uw_math_124_sp24_p4": {
+    "start": [
+      "Opposite and adjacent are swapping sizes at different rates."
+    ]
+  },
+  "uw_math_124_sp24_p5": {
+    "start": [
+      "The cost is the surface area you're working with \u2013 not the volume."
+    ]
+  },
+  "uw_math_124_sp24_p6_a": {
+    "start": [
+      "One of those derivatives is zero already \u2014 you can just factor."
+    ]
+  },
+  "uw_math_124_sp24_p6_b": {
+    "start": [
+      "The curve crosses over itself right where that point P lands."
+    ]
+  },
+  "uw_math_124_sp24_p7_a": {
+    "start": [
+      "Sin of a point plus 2s \u2014 not tiny at all."
+    ]
+  },
+  "uw_math_124_sp24_p7_b": {
+    "start": [
+      "That second derivative\u2019s crunch-y, yeah, grab a sec with it if you can."
+    ]
+  },
+  "uw_math_124_sp24_p8_a": {
+    "start": [
+      "See that x in the numerator?"
+    ]
+  },
+  "uw_math_124_sp24_p8_b": {
+    "start": [
+      "The x\u00b2 down there dominates as x gets big."
+    ]
+  },
+  "uw_math_124_sp24_p8_c": {
+    "start": [
+      "Derivative's a quotient, so watch that denominator squared."
+    ]
+  },
+  "uw_math_124_sp24_p8_d": {
+    "start": [
+      "Only the derivative's sign matters here."
+    ]
+  },
+  "uw_math_124_sp24_p8_e": {
+    "start": [
+      "Aha \u2014 the x\u00b2 denominator dominates as it grows."
+    ]
+  },
+  "uw_math_124_sp24_p8_f": {
+    "start": [
+      "There\u2019s still a zero in the denominator wherever you look."
+    ]
+  },
+  "uw_math_124_sp24_p8_g": {
+    "start": [
+      "The denominator never zero, by the way."
+    ]
+  },
+  "uw_math_124_sp24_p8_h": {
+    "start": [
+      "Still, that x\u00b2 + 1 downstairs never reaches zero."
+    ]
+  },
+  "uw_math_124_wi19_p1_a": {
+    "start": [
+      "\u201cWhoa, look at the denominator again.\u201d"
+    ]
+  },
+  "uw_math_124_wi19_p1_b": {
+    "start": [
+      "That nested structure's just repeating."
+    ]
+  },
+  "uw_math_124_wi19_p1_c": {
+    "start": [
+      "That exponent has both an x and a function of x\u2014look closely at it."
+    ]
+  },
+  "uw_math_124_wi19_p2_a": {
+    "start": [
+      "Watch the x\u207b\u00b2 coming off the denominator first."
+    ]
+  },
+  "uw_math_124_wi19_p2_b": {
+    "start": [
+      "Uh-oh\u2014the absolute value\u2019s about to split inlinebreaking: xec_deepline"
+    ]
+  },
+  "uw_math_124_wi19_p2_c": {
+    "start": [
+      "Trig in the numerator is squared, not the angle."
+    ]
+  },
+  "uw_math_124_wi19_p3": {
+    "start": [
+      "The cube models have that subtle second term nested inside them."
+    ]
+  },
+  "uw_math_124_wi19_p4": {
+    "start": [
+      "That \u201cr\u00b2 \u2212 &frac;1 ten r\u00b2 thing wasnplus wasteful \u2013 subtract savings inside area not beyond real quote it.\u201d Wait, wait too many trying verb adjust-real short."
+    ]
+  }
+}

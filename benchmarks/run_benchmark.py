@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from evaluator import BenchmarkRunner, BenchmarkResult
-from claire_agent import ClaireAgent
+from claire_agent_old import ClaireAgent
 
 
 def run_claire_benchmark(

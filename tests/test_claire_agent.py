@@ -160,7 +160,7 @@ class TestAgentInitialization:
     def test_conversation_history_starts_empty(self):
         """Test that conversation history starts empty on fresh agent."""
         # Create fresh agent without using fixture
-        from claire_agent import ClaireAgent
+        from claire_agent_old import ClaireAgent
         original_key = os.environ.pop("ANTHROPIC_API_KEY", None)
         fresh_agent = ClaireAgent()
         if original_key:
@@ -170,7 +170,7 @@ class TestAgentInitialization:
 
     def test_executor_none_without_api_key(self):
         """Test that executor is None when API key is missing."""
-        from claire_agent import ClaireAgent
+        from claire_agent_old import ClaireAgent
         original_key = os.environ.pop("ANTHROPIC_API_KEY", None)
         agent = ClaireAgent()
         if original_key:

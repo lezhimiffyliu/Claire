@@ -173,7 +173,7 @@ class ModelInterface:
 
     def _query_claire(self, problem: str) -> Dict[str, Any]:
         """Query Claire agent (uses tools)."""
-        from claire_agent import ClaireAgent
+        from claire_agent_old import ClaireAgent
 
         if self._client is None:
             self._client = ClaireAgent(benchmark_mode=True)

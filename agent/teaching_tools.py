@@ -20,8 +20,32 @@ Why doesn't the orchestrator write the prose directly?
 
 import os
 import json
+import re
 from typing import Optional
 from anthropic import Anthropic
+
+
+def _extract_json(text: str) -> str:
+    """Extract JSON from model output, handling various formats."""
+    text = text.strip()
+
+    # 1. Strip markdown code fences: ```json ... ``` or ``` ... ```
+    fence_pattern = r'^```(?:json)?\s*\n?(.*?)\n?```$'
+    match = re.match(fence_pattern, text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+
+    # 2. Find JSON object/array in the text
+    # Look for { ... } or [ ... ]
+    brace_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL)
+    if brace_match:
+        return brace_match.group(0)
+
+    bracket_match = re.search(r'\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\]', text, re.DOTALL)
+    if bracket_match:
+        return bracket_match.group(0)
+
+    return text
 
 _client: Optional[Anthropic] = None
 
@@ -212,6 +236,7 @@ Constraints:
     )
 
     raw = resp.content[0].text.strip()
+    raw = _extract_json(raw)
     try:
         parsed = json.loads(raw)
         question = parsed.get("question", raw)
@@ -257,6 +282,7 @@ Use $...$ for inline math, $$...$$ for display math. Output ONLY the JSON."""
     )
 
     raw = resp.content[0].text.strip()
+    raw = _extract_json(raw)
     try:
         card = json.loads(raw)
     except json.JSONDecodeError:

@@ -5,63 +5,34 @@ import { useClaire, CLAIRE_MESSAGES, CLAIRE_STATE } from '../../context/ClaireCo
 import { createSolveSession, updateSolveSession } from '../../api/supabaseApi'
 import { getProblemHelp, sendMessage } from '../../api/chatApi'
 import { createMobileSession, pollSessionResult } from '../../api/mobileUploadApi'
-import ClaireHint from '../claire/ClaireHint'
+import { useClaireAgent, willHydrateClaire } from '../../hooks/useClaireAgent'
+import PartTutorPanel from '../claire/PartTutorPanel'
+import ClaireL0Strip from '../claire/ClaireL0Strip'
+import ClaireCorner from '../claire/ClaireCorner'
+import WorkAreaCard from '../claire/WorkAreaCard'
+import MathText from '../ui/MathText'
 import MathInput from '../ui/MathInput'
-import katex from 'katex'
-import 'katex/dist/katex.min.css'
 
-// Render LaTeX using KaTeX
-function MathText({ text, className = '' }) {
-  if (!text) return null
+// Tutor intervention levels - represents Claire's engagement intensity, NOT UI state
+const TutorLevel = {
+  L0_AMBIENT: 'L0_AMBIENT',           // Quiet observation, student working independently
+  L1_LIGHT_INTERVENTION: 'L1_LIGHT_INTERVENTION',  // Small inline nudge (future)
+  L2_TEACHING: 'L2_TEACHING',         // Deep teaching mode, Socratic dialogue
+}
 
-  const renderMath = (str) => {
-    const parts = str.split(/(\$\$[^$]+\$\$|\$[^$]+\$|\\[[^\]]+\\]|\\\\[[^\]]+\\\\])/g)
+// Claire ambient strip - the quiet "always-on teacher" observation (L0).
+// Conversation now lives in the bottom-right ClaireCorner bubble (L1), so this
+// strip only surfaces the pre-authored ambient observation for the problem.
+function ClaireResponseStrip({ l0Dismissed, problem, currentPart, onDismissL0 }) {
+  if (l0Dismissed) return null
 
-    return parts.map((part, i) => {
-      if ((part.startsWith('$$') && part.endsWith('$$')) ||
-          (part.startsWith('\\[') && part.endsWith('\\]'))) {
-        const math = part.startsWith('$$') ? part.slice(2, -2) : part.slice(2, -2)
-        try {
-          const html = katex.renderToString(math, {
-            throwOnError: false,
-            displayMode: true,
-            strict: false,
-          })
-          return (
-            <span
-              key={i}
-              className="block my-3"
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          )
-        } catch (e) {
-          return <span key={i} className="font-mono">{math}</span>
-        }
-      }
-      if (part.startsWith('$') && part.endsWith('$')) {
-        const math = part.slice(1, -1)
-        try {
-          const html = katex.renderToString(math, {
-            throwOnError: false,
-            displayMode: false,
-            strict: false,
-          })
-          return (
-            <span
-              key={i}
-              className="mx-0.5"
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          )
-        } catch (e) {
-          return <span key={i} className="font-mono">{math}</span>
-        }
-      }
-      return <span key={i} dangerouslySetInnerHTML={{ __html: part }} />
-    })
-  }
-
-  return <span className={`math-text ${className}`}>{renderMath(text)}</span>
+  return (
+    <ClaireL0Strip
+      problem={problem}
+      currentPart={currentPart}
+      onDismiss={onDismissL0}
+    />
+  )
 }
 
 // Format exam name for display
@@ -290,20 +261,12 @@ function ClaireFeedback({ result, onContinue, onTryAgain }) {
                 Continue to next part
               </button>
             ) : (
-              <>
-                <button
-                  onClick={onTryAgain}
-                  className="px-5 py-2.5 bg-[var(--claire-navy)] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity"
-                >
-                  Try again
-                </button>
-                <button
-                  onClick={onContinue}
-                  className="px-5 py-2.5 text-gray-500 font-medium hover:text-gray-700 transition-colors"
-                >
-                  Skip this part
-                </button>
-              </>
+              <button
+                onClick={onTryAgain}
+                className="px-5 py-2.5 bg-[var(--claire-navy)] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Try again
+              </button>
             )}
           </div>
         </div>
@@ -313,9 +276,9 @@ function ClaireFeedback({ result, onContinue, onTryAgain }) {
 }
 
 // Step Progress Dot Component
-function StepDot({ label, status, isMain }) {
-  const baseClasses = "flex items-center justify-center rounded-full font-bold text-xs transition-all"
-  const sizeClasses = isMain ? "w-8 h-8" : "w-6 h-6"
+function StepDot({ label, status, onClick }) {
+  const baseClasses = "flex items-center justify-center rounded-full font-bold text-xs transition-all w-8 h-8"
+  const interactiveClasses = onClick ? "cursor-pointer hover:ring-4 hover:ring-[var(--claire-next-bg)] hover:scale-105" : ""
 
   const statusClasses = {
     completed: "bg-[var(--claire-teal)] text-white",
@@ -325,7 +288,13 @@ function StepDot({ label, status, isMain }) {
   }
 
   return (
-    <div className={`${baseClasses} ${sizeClasses} ${statusClasses[status]}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Go to part ${label}`}
+      aria-current={status === 'current' ? 'step' : undefined}
+      className={`${baseClasses} ${interactiveClasses} ${statusClasses[status]}`}
+    >
       {status === 'completed' ? (
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -333,13 +302,32 @@ function StepDot({ label, status, isMain }) {
       ) : (
         label
       )}
-    </div>
+    </button>
   )
 }
 
 export default function ProblemPractice({ section, problem: directProblem, onBack, isExamMode = false }) {
   const { user } = useAuth()
   const { setClaire } = useClaire()
+
+  // Generate unique instance ID for this practice session (stable across remounts)
+  const instanceIdRef = useRef(`practice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
+  const instanceId = instanceIdRef.current
+
+  // Track mount/unmount with detailed logging
+  useEffect(() => {
+    console.log('[ProblemPractice] MOUNT', {
+      instanceId,
+      problemId: directProblem?.id || section?.section_id,
+      timestamp: Date.now()
+    })
+    return () => {
+      console.log('[ProblemPractice] UNMOUNT', {
+        instanceId,
+        timestamp: Date.now()
+      })
+    }
+  }, [instanceId, directProblem?.id, section?.section_id])
 
   // Section context with filtered problems (or single direct problem for exam mode)
   const sectionProblems = directProblem ? [directProblem] : (section?.problems || [])
@@ -350,7 +338,6 @@ export default function ProblemPractice({ section, problem: directProblem, onBac
   const [completedSteps, setCompletedSteps] = useState(new Set())
   const [session, setSession] = useState(null)
   const [claireFeedback, setClaireFeedback] = useState(null)
-  const [claireHintMessage, setClaireHintMessage] = useState(CLAIRE_MESSAGES.problemHint)
 
   // QR Upload state
   const [qrModalOpen, setQrModalOpen] = useState(false)
@@ -375,12 +362,66 @@ export default function ProblemPractice({ section, problem: directProblem, onBac
   const [typedAnswer, setTypedAnswer] = useState({ latex: '', text: '' })
   const [submittingAnswer, setSubmittingAnswer] = useState(false)
 
+  // Tutor level - Claire's intervention intensity (NOT UI state)
+  // Default is L0_AMBIENT (quiet observation)
+  // Only escalate to L2_TEACHING when student needs deep help
+  const [tutorLevel, setTutorLevel] = useState(TutorLevel.L0_AMBIENT)
+
+  // Upload modal state - separate from tutor level (upload is a UI action, not a mode)
+  const [isUploadOpen, setIsUploadOpen] = useState(false)
+
+  // L0 observation strip state
+  const [l0Dismissed, setL0Dismissed] = useState(false)
+
+  // ClaireCorner (L1): idle-peek opens the bubble once per part ("teacher
+  // glances over") and triggers an L1 nudge fetch. nudgeRequestedRef guards
+  // against re-fetching the nudge each time the bubble is reopened.
+  const [cornerAutoOpen, setCornerAutoOpen] = useState(false)
+  const nudgeRequestedRef = useRef(false)
+
   const parts = problem?.parts || []
   const currentPart = parts[currentStepIndex]
   const totalSteps = parts.length
 
-  // Find the "main" question - typically (b) or the second part
-  const mainQuestionIndex = parts.length > 1 ? 1 : 0
+  // NOTE: Future work — treat one part (e.g. part b) as the "main" question and the
+  // others as scaffolding/auxiliary parts. Deferred for now; all parts are shown as
+  // equal peers. See docs/TUTOR_LAYERS.md ("Main-part assumption — deferred").
+
+  // Claire agent hook - pass instanceId for session tracking
+  const claire = useClaireAgent({
+    sessionId: problem?.id,
+    problemContext: problem,
+    userId: user?.id,
+    instanceId
+  })
+
+  // RENDER STATE LOGGING - helps debug hydration timing
+  console.log('[ProblemPractice] render', {
+    tutorLevel,
+    isUploadOpen,
+    threadLength: claire.thread.length,
+    isHydrated: claire.isHydrated,
+    loading: claire.loading,
+    problemId: problem?.id
+  })
+
+  // Track previous step/problem to detect actual changes (not just re-renders)
+  const prevStepRef = useRef(currentStepIndex)
+  const prevProblemRef = useRef(currentProblemIndex)
+
+  // Thread growth no longer triggers tutorLevel change
+  // Student asking questions stays in L0_AMBIENT - Claire responds in the strip
+  // Only explicit escalation (repeated errors, deep help request) goes to L2_TEACHING
+
+  // Idle-peek for the ClaireCorner bubble. Opens once ~75s into a part if the
+  // student hasn't finished / given up. Reset on part or problem change.
+  useEffect(() => {
+    setCornerAutoOpen(false)
+    nudgeRequestedRef.current = false
+    if (showAnswer || claireFeedback) return
+    const timer = setTimeout(() => setCornerAutoOpen(true), 75000)
+    return () => clearTimeout(timer)
+  }, [currentStepIndex, currentProblemIndex, showAnswer, claireFeedback])
 
   // Create solve_session on mount
   useEffect(() => {
@@ -403,20 +444,50 @@ export default function ProblemPractice({ section, problem: directProblem, onBac
     }
   }, [])
 
-  // Reset state when step changes
+  // Reset UI state when step changes (within same problem)
   useEffect(() => {
+    // Skip if step hasn't actually changed
+    if (prevStepRef.current === currentStepIndex) {
+      return
+    }
+
+    const oldStep = prevStepRef.current
+    prevStepRef.current = currentStepIndex
+
+    console.log('[ProblemPractice] Step changed', { from: oldStep, to: currentStepIndex })
+
+    // Reset UI state for new step
     setClaireFeedback(null)
     setShowAnswer(false)
     setAiHelp(null)
     setShowHintPanel(false)
     setShowManualInput(false)
     setTypedAnswer({ latex: '', text: '' })
-    // Reset hint message for new step
-    setClaireHintMessage(CLAIRE_MESSAGES.problemHint)
-  }, [currentStepIndex])
+    setTutorLevel(TutorLevel.L0_AMBIENT)
+    setIsUploadOpen(false)
+    setQrSession(null)
+    setQrStatus(null)
+    setQrError(null)
+    setL0Dismissed(false)
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
 
-  // Reset state when problem changes
+    // Reset Claire session for new step
+    claire.reset('step_changed')
+  }, [currentStepIndex, claire])
+
+  // Reset UI state when problem changes (different problem in section)
   useEffect(() => {
+    // Skip if problem hasn't actually changed
+    if (prevProblemRef.current === currentProblemIndex) {
+      return
+    }
+
+    const oldProblem = prevProblemRef.current
+    prevProblemRef.current = currentProblemIndex
+
+    console.log('[ProblemPractice] Problem changed', { from: oldProblem, to: currentProblemIndex })
+
+    // Reset all state for new problem
     setCurrentStepIndex(0)
     setCompletedSteps(new Set())
     setClaireFeedback(null)
@@ -425,15 +496,31 @@ export default function ProblemPractice({ section, problem: directProblem, onBac
     setShowHintPanel(false)
     setShowManualInput(false)
     setTypedAnswer({ latex: '', text: '' })
-    setClaireHintMessage(CLAIRE_MESSAGES.problemHint)
-  }, [currentProblemIndex])
+    setTutorLevel(TutorLevel.L0_AMBIENT)
+    setIsUploadOpen(false)
+    setQrSession(null)
+    setQrStatus(null)
+    setQrError(null)
+    setL0Dismissed(false)
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+
+    // Reset Claire session for new problem
+    claire.reset('problem_changed')
+  }, [currentProblemIndex, claire])
+
+  // Wrapper for back navigation - marks session as intentionally ended
+  const handleBackNavigation = (reason) => {
+    console.log('[ProblemPractice] Back navigation', { reason, instanceId })
+    claire.markSessionEnded(reason)
+    onBack()
+  }
 
   const handleNextProblem = () => {
     if (currentProblemIndex < sectionProblems.length - 1) {
       setCurrentProblemIndex(currentProblemIndex + 1)
     } else {
-      // All problems done, go back
-      onBack()
+      // All problems done, go back to dashboard
+      handleBackNavigation('all_problems_complete')
     }
   }
 
@@ -441,6 +528,34 @@ export default function ProblemPractice({ section, problem: directProblem, onBac
     if (currentProblemIndex > 0) {
       setCurrentProblemIndex(currentProblemIndex - 1)
     }
+  }
+
+  // Panel action handler (for upload)
+  const handlePanelAction = async (action) => {
+    if (action === 'done') {
+      setIsUploadOpen(true)
+      handleStartQRUpload()
+    }
+  }
+
+  // Handle message from work area input - stays in L0_AMBIENT, shows response in strip
+  const handlePanelMessage = async (text) => {
+    claire.appendUserMessage(text)
+
+    // Check if user wants to submit their work
+    const submitPatterns = /^(done|finished|i'?m done|check|submit|all done|ready)/i
+    if (submitPatterns.test(text.trim())) {
+      setIsUploadOpen(true)
+      handleStartQRUpload()
+      return
+    }
+
+    // Send to Claire, stay in L0_AMBIENT - response shows in strip
+    claire.sendMessage(text, {
+      actionType: 'followup',
+      partId: currentStepIndex.toString(),
+      stepIndex: claire.thread.length,
+    })
   }
 
   // Update Claire's panel message when feedback is received
@@ -451,8 +566,6 @@ export default function ProblemPractice({ section, problem: directProblem, onBac
       } else {
         setClaire(CLAIRE_STATE.INTERVENING, CLAIRE_MESSAGES.afterSubmitIncorrect)
       }
-      // Clear the inline hint since we have feedback
-      setClaireHintMessage(null)
     }
   }, [claireFeedback, setClaire])
 
@@ -484,7 +597,7 @@ export default function ProblemPractice({ section, problem: directProblem, onBac
       })
 
       setQrSession(sessionData)
-      setQrModalOpen(true)
+      // Don't open modal - show QR inline in PartTutorPanel
       setQrStatus({ status: 'pending' })
       startPolling(sessionData.sessionId)
 
@@ -515,7 +628,17 @@ export default function ProblemPractice({ section, problem: directProblem, onBac
           clearInterval(pollIntervalRef.current)
           if (result.status === 'completed') {
             setClaireFeedback(result)
+            setIsUploadOpen(false)
             setQrModalOpen(false)
+
+            // For now, stay in L0_AMBIENT and show feedback
+            // Future: escalate to L2_TEACHING if repeated errors or needs deep help
+            if (!result.isCorrect && result.teachingMessage) {
+              // Add Claire's feedback to thread for context
+              claire.sendMessage(
+                `The student just submitted work and got feedback: ${result.teachingMessage}. They might need guidance on the next step.`
+              )
+            }
           }
         }
       } catch (error) {
@@ -527,7 +650,7 @@ export default function ProblemPractice({ section, problem: directProblem, onBac
   const handleRetryQR = () => {
     setQrSession(null)
     setQrStatus(null)
-    setQrModalOpen(false)
+    setQrError(null)
     handleStartQRUpload()
   }
 
@@ -610,12 +733,12 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
     }
   }
 
-  const handleSkipStep = () => {
-    if (currentStepIndex < totalSteps - 1) {
-      setCurrentStepIndex(currentStepIndex + 1)
-    } else {
-      onBack()
-    }
+  const handleSelectPart = (index) => {
+    if (index === currentStepIndex) return
+    // Clear any in-progress feedback / answer state when switching parts
+    setClaireFeedback(null)
+    setShowAnswer(false)
+    setCurrentStepIndex(index)
   }
 
   const handleMarkComplete = async () => {
@@ -626,7 +749,7 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
         console.error('[ProblemPractice] Failed to update session:', error)
       }
     }
-    onBack()
+    handleBackNavigation('marked_complete')
   }
 
   const getStepStatus = (index) => {
@@ -637,7 +760,6 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
   }
 
   const currentLabel = currentPart?.label || String.fromCharCode(97 + currentStepIndex)
-  const isMainQuestion = currentStepIndex === mainQuestionIndex
 
   // Handle empty section state
   if (!problem) {
@@ -653,7 +775,7 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
             doesn't have any practice problems available right now.
           </p>
           <button
-            onClick={onBack}
+            onClick={() => handleBackNavigation('back_button')}
             className="px-6 py-3 bg-[var(--claire-navy)] text-white font-semibold rounded-lg hover:opacity-90"
           >
             Back to Roadmap
@@ -663,6 +785,40 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
     )
   }
 
+  // Latest Claire turn drives the corner bubble (L1 nudge surface).
+  // For a teaching-card nudge we lead with the concept bridge (what's going on /
+  // the analogy), then the first-step scaffold — never a full solution.
+  const lastClaireTurn = [...claire.thread].reverse().find(e => e.role === 'claire')
+  let cornerMessage = ''
+  if (lastClaireTurn?.type === 'teaching_action') {
+    cornerMessage = [lastClaireTurn.conceptBridge, lastClaireTurn.nextMicroStep]
+      .filter(Boolean)
+      .join('\n\n')
+  } else if (lastClaireTurn) {
+    cornerMessage = lastClaireTurn.text || lastClaireTurn.question || lastClaireTurn.nextMicroStep || ''
+  }
+  const cornerReplies = lastClaireTurn?.quickReplies || []
+
+  // First time the bubble opens on a part (idle peek or click), fetch an L1
+  // nudge: clarify the problem + give the first-step scaffold / guiding question.
+  const handleCornerOpen = () => {
+    const hasClaireTurn = claire.thread.some(e => e.role === 'claire')
+    if (hasClaireTurn || claire.loading || nudgeRequestedRef.current) return
+    nudgeRequestedRef.current = true
+    claire.executeTeachingAction('student_stuck', currentStepIndex)
+  }
+
+  // Student follow-up after seeing the nudge — free interaction.
+  // sendMessage records the user turn itself, so don't append it again here
+  // (a double record would duplicate the message in the context we send back).
+  const handleCornerRespond = (text) => {
+    claire.sendMessage(text, {
+      actionType: 'followup',
+      partId: currentStepIndex.toString(),
+      stepIndex: claire.thread.length,
+    })
+  }
+
   return (
     <div className="min-h-screen bg-[var(--claire-bg)]">
       {/* Top Bar - hidden in exam mode (sidebar has navigation) */}
@@ -670,7 +826,7 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <button
-            onClick={onBack}
+            onClick={() => handleBackNavigation('back_button')}
             className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -687,11 +843,6 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
             <span className="text-gray-600 font-medium">
               {formatExamName(problem.exam)} Problem {problem.problem_number}
             </span>
-            {sectionProblems.length > 1 && (
-              <span className="text-gray-400 font-medium">
-                ({currentProblemIndex + 1}/{sectionProblems.length})
-              </span>
-            )}
             {totalSteps > 1 && (
               <span className="text-gray-400 font-medium">
                 · Part {currentLabel}
@@ -708,9 +859,22 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
         <div className="flex gap-8">
           {/* Main Content */}
           <div className="flex-1 max-w-2xl">
-            {/* Claire's hint at the top (before submission) */}
-            {!claireFeedback && claireHintMessage && (
-              <ClaireHint message={claireHintMessage} />
+            {/* Claire's say bubble or fallback hint */}
+            {/* Claire error display */}
+            {claire.error && (
+              <div className="mb-4 px-3 py-2 bg-red-50 text-red-600 text-sm rounded-lg">
+                Error: {claire.error}
+              </div>
+            )}
+
+            {/* Claire Strip - shows observation or latest response (L0_AMBIENT) */}
+            {tutorLevel === TutorLevel.L0_AMBIENT && !claireFeedback && !showAnswer && (
+              <ClaireResponseStrip
+                l0Dismissed={l0Dismissed}
+                problem={problem}
+                currentPart={currentPart}
+                onDismissL0={() => setL0Dismissed(true)}
+              />
             )}
 
             {/* Problem Stem (if exists) */}
@@ -731,23 +895,9 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
               >
                 {/* Step Label */}
                 <div className="flex items-center gap-3 mb-4">
-                  <span className={`px-3 py-1.5 rounded-full font-bold text-sm ${
-                    isMainQuestion
-                      ? 'bg-[var(--claire-navy)] text-white'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
+                  <span className="px-3 py-1.5 rounded-full font-bold text-sm bg-[var(--claire-navy)] text-white">
                     Part ({currentLabel})
                   </span>
-                  {isMainQuestion && (
-                    <span className="text-xs font-semibold text-[var(--claire-navy)] uppercase tracking-wide">
-                      Main Question
-                    </span>
-                  )}
-                  {currentStepIndex === 0 && totalSteps > 1 && (
-                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-                      Warm-up
-                    </span>
-                  )}
                 </div>
 
                 {/* Question Text */}
@@ -768,116 +918,48 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
                     <ClaireFeedback
                       result={claireFeedback}
                       onContinue={handleNextStep}
-                      onTryAgain={() => setClaireFeedback(null)}
+                      onTryAgain={() => {
+                        setClaireFeedback(null)
+                        // Stay in L0_AMBIENT - student continues working
+                        // Clear QR session for fresh start
+                        setQrSession(null)
+                        setQrStatus(null)
+                        setQrError(null)
+                      }}
                     />
                   </div>
                 )}
 
-                {/* Main Submission Area */}
-                {!claireFeedback && !showAnswer && (
-                  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                    <div className="p-6">
-                      <div className="flex items-start gap-6">
-                        {/* Left: Instructions */}
-                        <div className="flex-1">
-                          <h3 className="font-bold text-gray-800 mb-2">Write it on paper</h3>
-                          <p className="text-gray-500 text-sm leading-relaxed">
-                            Solve on paper like you would in an exam. Show your full work —
-                            Claire will check each step and explain any mistakes.
-                          </p>
-                        </div>
-
-                        {/* Right: Scan Button */}
-                        <button
-                          onClick={handleStartQRUpload}
-                          disabled={qrLoading || !user}
-                          className="flex-shrink-0 px-6 py-4 bg-[var(--claire-navy)] text-white font-bold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-3 shadow-md"
-                        >
-                          {qrLoading ? (
-                            <>
-                              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                              </svg>
-                              <span>Creating...</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                              </svg>
-                              <span>Scan to Submit</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {!user && (
-                        <p className="mt-4 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
-                          Sign in to submit your work
-                        </p>
-                      )}
-
-                      {qrError && (
-                        <p className="mt-4 text-sm text-[var(--claire-weak)] bg-[var(--claire-weak-bg)] px-3 py-2 rounded-lg">
-                          {qrError}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Secondary: Type answer */}
-                    <div className="px-6 py-3 bg-gray-50 border-t border-gray-100">
-                      <button
-                        onClick={() => setShowManualInput(!showManualInput)}
-                        className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-                      >
-                        {showManualInput ? '← Back to scan' : 'Or type your answer manually →'}
-                      </button>
-                    </div>
-
-                    {/* Manual Input Area */}
-                    <AnimatePresence>
-                      {showManualInput && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="p-6 border-t border-gray-100">
-                            <label className="block text-sm font-medium text-gray-700 mb-3">
-                              Your answer
-                            </label>
-                            <MathInput
-                              value={typedAnswer.latex}
-                              onChange={setTypedAnswer}
-                              placeholder="Type or click buttons to enter math..."
-                              disabled={submittingAnswer}
-                            />
-                            <div className="mt-4 flex items-center justify-end">
-                              <button
-                                onClick={handleSubmitTypedAnswer}
-                                disabled={(!typedAnswer.latex && !typedAnswer.text) || submittingAnswer}
-                                className="px-6 py-3 bg-[var(--claire-navy)] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
-                              >
-                                {submittingAnswer ? (
-                                  <>
-                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                    </svg>
-                                    Checking...
-                                  </>
-                                ) : (
-                                  'Check my answer'
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                {/* Default: Minimal work area (L0_AMBIENT, not uploading) */}
+                {!claireFeedback && !showAnswer && tutorLevel === TutorLevel.L0_AMBIENT && !isUploadOpen && (
+                  <div className="space-y-6">
+                    <WorkAreaCard
+                      onShowClaire={() => {
+                        setIsUploadOpen(true)
+                        handleStartQRUpload()
+                      }}
+                      onMessage={handlePanelMessage}
+                      loading={qrLoading}
+                    />
                   </div>
+                )}
+
+                {/* Upload UI: Show QR panel (isUploadOpen, not a mode) */}
+                {!claireFeedback && !showAnswer && isUploadOpen && (
+                  <PartTutorPanel
+                    panelState="upload"
+                    partLabel={currentPart?.label || String.fromCharCode(97 + currentStepIndex)}
+                    threadEvents={[]}
+                    loading={false}
+                    onAction={handlePanelAction}
+                    onSendMessage={handlePanelMessage}
+                    onBackToReady={() => setIsUploadOpen(false)}
+                    qrUrl={qrSession?.qrUrl}
+                    qrLoading={qrLoading}
+                    qrStatus={qrStatus}
+                    qrError={qrError}
+                    onRetryQR={handleRetryQR}
+                  />
                 )}
 
                 {/* Show Answer State */}
@@ -902,30 +984,13 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
                   </motion.div>
                 )}
 
-                {/* Step Navigation (at bottom of current step) */}
-                {!claireFeedback && !showAnswer && (
-                  <div className="mt-6 flex items-center justify-between">
-                    <button
-                      onClick={handleSkipStep}
-                      className="text-gray-400 hover:text-gray-600 text-sm font-medium transition-colors"
-                    >
-                      Skip this part
-                    </button>
-                    <button
-                      onClick={() => setShowAnswer(true)}
-                      className="text-gray-400 hover:text-gray-600 text-sm font-medium transition-colors"
-                    >
-                      I give up, show answer
-                    </button>
-                  </div>
-                )}
               </motion.div>
             </AnimatePresence>
           </div>
 
-          {/* Right Sidebar */}
-          <div className="w-72 flex-shrink-0">
-            <div className="sticky top-24 space-y-6">
+          {/* Right Sidebar - minimal */}
+          <div className="w-64 flex-shrink-0">
+            <div className="sticky top-24 space-y-4">
               {/* Progress Indicator */}
               {totalSteps > 1 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -936,15 +1001,9 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
                     {parts.map((part, index) => {
                       const label = part.label || String.fromCharCode(97 + index)
                       const status = getStepStatus(index)
-                      const isMain = index === mainQuestionIndex
                       return (
                         <div key={index} className="flex flex-col items-center gap-1">
-                          <StepDot label={label} status={status} isMain={isMain} />
-                          {isMain && (
-                            <span className="text-[10px] font-medium text-[var(--claire-navy)]">
-                              main
-                            </span>
-                          )}
+                          <StepDot label={label} status={status} onClick={() => handleSelectPart(index)} />
                         </div>
                       )
                     })}
@@ -952,64 +1011,11 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
                 </div>
               )}
 
-              {/* Tip about warm-up */}
-              {currentStepIndex === 0 && totalSteps > 1 && (
-                <div className="bg-[var(--claire-next-bg)] rounded-xl p-4">
-                  <p className="text-sm text-gray-600 leading-relaxed">
-                    <span className="font-semibold text-[var(--claire-navy)]">Tip:</span> Part (a)
-                    helps you build up to the main question. You can skip it or come back anytime.
-                  </p>
-                </div>
-              )}
-
-              {/* What happens next */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">
-                  What happens next?
-                </p>
-                <div className="space-y-3">
-                  {[
-                    { icon: '📱', text: 'Scan your handwritten work' },
-                    { icon: '🔍', text: 'Claire reads and checks it' },
-                    { icon: '💬', text: 'Get step-by-step feedback' },
-                  ].map((step, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <span className="text-lg">{step.icon}</span>
-                      <span className="text-sm text-gray-600">{step.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Ask Claire for hint */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                  Need a hint?
-                </p>
-                <button
-                  onClick={handleAskClaire}
-                  disabled={aiLoading}
-                  className="w-full py-2.5 text-sm font-medium text-[var(--claire-navy)] bg-[var(--claire-ai-bg)] rounded-lg hover:bg-[var(--claire-next-bg)] transition-colors disabled:opacity-50"
-                >
-                  {aiLoading ? 'Thinking...' : 'Ask Claire for a hint'}
-                </button>
-
-                {showHintPanel && aiHelp && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600 leading-relaxed"
-                  >
-                    {aiHelp}
-                  </motion.div>
-                )}
-              </div>
-
               {/* Problem Navigation (when multiple problems in section) */}
               {sectionProblems.length > 1 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                    Problems in this section
+                    PROBLEMS IN THIS SECTION
                   </p>
                   <div className="flex items-center justify-between">
                     <button
@@ -1052,6 +1058,19 @@ Please check if my answer is correct. If it's correct, confirm it. If it's wrong
         sessionStatus={qrStatus}
         onRetry={handleRetryQR}
       />
+
+      {/* Always-on Claire (L1) - bottom-right corner presence */}
+      {!isExamMode && !isUploadOpen && (
+        <ClaireCorner
+          message={cornerMessage}
+          quickReplies={cornerReplies}
+          loading={claire.loading}
+          autoOpen={cornerAutoOpen}
+          onOpen={handleCornerOpen}
+          onRespond={handleCornerRespond}
+          onEscalate={() => setTutorLevel(TutorLevel.L2_TEACHING)}
+        />
+      )}
     </div>
   )
 }

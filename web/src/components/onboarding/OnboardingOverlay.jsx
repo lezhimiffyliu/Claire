@@ -1,13 +1,17 @@
 import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PathSelection from './PathSelection'
-import GoalSelection from './GoalSelection'
-import TimelineSelection from './TimelineSelection'
+import ExamSelection from './ExamSelection'
 import DiagnosticQuestion from './DiagnosticQuestion'
 import ReportGenerating from './ReportGenerating'
 import DiagnosticProgress from './DiagnosticProgress'
 import BackButton from '../ui/BackButton'
-import { getNextQuestion, analyzeResults } from '../../data/questionBanks'
+import {
+  getNextQuestion,
+  analyzeResults,
+  getNextExamQuestion,
+  analyzeExamResults,
+} from '../../data/questionBanks'
 import { useAuth } from '../../context/AuthContext'
 import {
   PlacementComplete,
@@ -21,8 +25,7 @@ import {
 
 const PHASES = {
   COURSE_SELECT: 'course',
-  GOAL_SELECT: 'goal',
-  TIMELINE_SELECT: 'timeline',
+  EXAM_SELECT: 'exam',
   DIAGNOSTIC: 'diagnostic',
   GENERATING: 'generating',
   // Post-placement flow
@@ -40,11 +43,7 @@ function OnboardingOverlay({ onExit, onComplete, initialSelections = {} }) {
   const [direction, setDirection] = useState(1)
   const [selections, setSelections] = useState({
     course: null,
-    goal: null,
-    timeline: null,
-    daysUntilExam: null,
-    urgency: null,
-    examTimeline: null,
+    exam: null,
     ...initialSelections,
   })
   const [testState, setTestState] = useState({
@@ -104,45 +103,37 @@ function OnboardingOverlay({ onExit, onComplete, initialSelections = {} }) {
     }
   }, [user])
 
-  const handleCourseSelected = () => {
-    setDirection(1)
-    setPhase(PHASES.GOAL_SELECT)
-  }
-
-  const handleGoalSelected = () => {
-    setDirection(1)
-    setPhase(PHASES.TIMELINE_SELECT)
-  }
-
-  const handleTimelineSelected = () => {
-    setDirection(1)
-    // Fetch first question from adaptive engine
+  const startDiagnostic = () => {
     const course = selections.course || 'math126'
-    const firstQ = getNextQuestion([], course)
+    const exam = selections.exam
+
+    // Use exam-specific diagnostic for Math 126
+    let firstQ
+    if (course === 'math126' && exam) {
+      firstQ = getNextExamQuestion([], course, exam)
+    } else {
+      // Legacy adaptive for Math 124/125
+      firstQ = getNextQuestion([], course)
+    }
+
     setCurrentQuestionData(firstQ)
     setTestState((prev) => ({ ...prev, startTime: Date.now(), answers: [] }))
     setPhase(PHASES.DIAGNOSTIC)
   }
 
-  const handleSkipDiagnostic = () => {
-    // Skip diagnostic entirely - go straight to generating with "unknown" results
+  const handleCourseSelected = () => {
     setDirection(1)
-    const skippedAnalysis = {
-      skillLevel: 'Let\'s Find Out',
-      skillEmoji: '🎯',
-      skillColor: '#1cb0f6',
-      levelDescription: 'Start practicing to discover your strengths and gaps!',
-      gaps: [],
-      strengths: [],
-      blockerMessage: 'Complete some practice problems and we\'ll map your skills.',
-      predictedGrade: 'TBD',
-      highestTier: 0,
-      totalAnswered: 0,
-      correctCount: 0,
-      diagnosticSkipped: true,
+    // For Math 126, ask which exam; for others, go directly to diagnostic
+    if (selections.course === 'math126') {
+      setPhase(PHASES.EXAM_SELECT)
+    } else {
+      startDiagnostic()
     }
-    setTestState((prev) => ({ ...prev, analysis: skippedAnalysis }))
-    setPhase(PHASES.GENERATING)
+  }
+
+  const handleExamSelected = () => {
+    setDirection(1)
+    startDiagnostic()
   }
 
   const handleAnswerSubmit = useCallback((questionId, isCorrect, skipped = false) => {
@@ -154,9 +145,23 @@ function OnboardingOverlay({ onExit, onComplete, initialSelections = {} }) {
 
   const handleNextQuestion = useCallback(() => {
     const course = selections.course || 'math126'
-    // Build updated answers array with the just-submitted answer
+    const exam = selections.exam
     const updatedAnswers = testState.answers
-    const nextQ = getNextQuestion(updatedAnswers, course)
+
+    // Use exam-specific diagnostic for Math 126
+    let nextQ, analysis
+    if (course === 'math126' && exam) {
+      nextQ = getNextExamQuestion(updatedAnswers, course, exam)
+      if (!nextQ) {
+        analysis = analyzeExamResults(updatedAnswers, course, exam)
+      }
+    } else {
+      // Legacy adaptive for Math 124/125
+      nextQ = getNextQuestion(updatedAnswers, course)
+      if (!nextQ) {
+        analysis = analyzeResults(updatedAnswers, course)
+      }
+    }
 
     if (nextQ) {
       // More questions to go
@@ -164,15 +169,21 @@ function OnboardingOverlay({ onExit, onComplete, initialSelections = {} }) {
       setCurrentQuestionData(nextQ)
     } else {
       // Test complete - analyze results
-      const analysis = analyzeResults(updatedAnswers, course)
       setTestState((prev) => ({ ...prev, analysis }))
       setPhase(PHASES.GENERATING)
     }
-  }, [testState.answers, selections.course])
+  }, [testState.answers, selections.course, selections.exam])
 
   const handleGeneratingComplete = () => {
     if (!testState.analysis) {
-      const analysis = analyzeResults(testState.answers, selections.course)
+      const course = selections.course || 'math126'
+      const exam = selections.exam
+      let analysis
+      if (course === 'math126' && exam) {
+        analysis = analyzeExamResults(testState.answers, course, exam)
+      } else {
+        analysis = analyzeResults(testState.answers, course)
+      }
       setTestState((prev) => ({ ...prev, analysis }))
     }
     setPhase(PHASES.PLACEMENT_COMPLETE)
@@ -222,15 +233,17 @@ function OnboardingOverlay({ onExit, onComplete, initialSelections = {} }) {
 
   const handleBack = () => {
     if (phase === PHASES.DIAGNOSTIC) {
-      // In adaptive mode, going back exits diagnostic entirely (no question history navigation)
+      // Going back exits diagnostic entirely
       setDirection(-1)
-      setPhase(PHASES.TIMELINE_SELECT)
+      // Go back to exam select for math126, otherwise course select
+      if (selections.course === 'math126') {
+        setPhase(PHASES.EXAM_SELECT)
+      } else {
+        setPhase(PHASES.COURSE_SELECT)
+      }
       setCurrentQuestionData(null)
       setTestState((prev) => ({ ...prev, answers: [] }))
-    } else if (phase === PHASES.TIMELINE_SELECT) {
-      setDirection(-1)
-      setPhase(PHASES.GOAL_SELECT)
-    } else if (phase === PHASES.GOAL_SELECT) {
+    } else if (phase === PHASES.EXAM_SELECT) {
       setDirection(-1)
       setPhase(PHASES.COURSE_SELECT)
     } else if (phase === PHASES.KNOWLEDGE_MAP) {
@@ -242,15 +255,12 @@ function OnboardingOverlay({ onExit, onComplete, initialSelections = {} }) {
     } else if (phase === PHASES.COURSE_SELECT) {
       onExit()
     }
-    // For other phases (GENERATING, PLACEMENT_COMPLETE, REGISTRATION_GATE, POST_LOGIN_CELEBRATION, MAIN_HOME),
-    // back button is not shown, so this shouldn't be called
   }
 
   // Determine which phases show back button
   const phasesWithBackButton = [
     PHASES.COURSE_SELECT,
-    PHASES.GOAL_SELECT,
-    PHASES.TIMELINE_SELECT,
+    PHASES.EXAM_SELECT,
     PHASES.DIAGNOSTIC,
     PHASES.KNOWLEDGE_MAP,
     PHASES.REWARD_PREVIEW,
@@ -325,22 +335,11 @@ function OnboardingOverlay({ onExit, onComplete, initialSelections = {} }) {
             />
           )}
 
-          {phase === PHASES.GOAL_SELECT && (
-            <GoalSelection
-              key="goal"
+          {phase === PHASES.EXAM_SELECT && (
+            <ExamSelection
+              key="exam"
               direction={direction}
-              onNext={handleGoalSelected}
-              selections={selections}
-              updateSelection={updateSelection}
-            />
-          )}
-
-          {phase === PHASES.TIMELINE_SELECT && (
-            <TimelineSelection
-              key="timeline"
-              direction={direction}
-              onNext={handleTimelineSelected}
-              onSkipDiagnostic={handleSkipDiagnostic}
+              onNext={handleExamSelected}
               selections={selections}
               updateSelection={updateSelection}
             />

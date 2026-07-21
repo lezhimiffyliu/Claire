@@ -16,7 +16,7 @@ def mock_agent():
     Create a ClaireAgent without initializing the LLM.
     Useful for testing system commands and state management.
     """
-    from claire_agent import ClaireAgent
+    from claire_agent_old import ClaireAgent
 
     # Temporarily remove API key to avoid LLM initialization
     original_key = os.environ.pop("ANTHROPIC_API_KEY", None)

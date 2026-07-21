@@ -27,8 +27,9 @@ load_dotenv()
 
 
 # Orchestrator model — does the judgment work (which tool, what params)
+# Phase 5: Use Opus for strategic decisions, Sonnet for simple queries
 ORCHESTRATOR_MODEL_PREMIUM = "claude-opus-4-5"
-ORCHESTRATOR_MODEL_BASIC = "claude-haiku-4-5"
+ORCHESTRATOR_MODEL_BASIC = "claude-sonnet-4-20250514"  # Sonnet for simple intents
 
 # Cap agent loop iterations as a safety net
 MAX_TURNS_PER_QUERY = 6

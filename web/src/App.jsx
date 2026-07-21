@@ -182,6 +182,14 @@ function AppRoutes() {
 }
 
 function App() {
+  // LIFECYCLE DEBUG - logs on every App component mount (including StrictMode double-mount)
+  useEffect(() => {
+    console.log('[APP] MOUNT - component mounted', { timestamp: Date.now() })
+    return () => {
+      console.log('[APP] UNMOUNT - component unmounting', { timestamp: Date.now() })
+    }
+  }, [])
+
   return (
     <ErrorBoundary>
       <BrowserRouter>

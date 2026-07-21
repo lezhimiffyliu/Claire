@@ -1,39 +1,37 @@
 /**
- * Adaptive Diagnostic Question Bank — v2
+ * Diagnostic Question Bank — v3 (Exam-Specific Risk Locator)
  *
  * Design principles:
- *   1. ALEKS Knowledge Space Theory — minimum questions to locate user in knowledge graph
- *   2. Duolingo "Quick Win" — first question is genuinely trivial, builds confidence
- *   3. Real adaptive branching — the path through the test depends on answers
- *   4. UI never exposes branching — user always sees "Question N of 4"
+ *   1. NOT a general math ability test — targeted UW/NYU Calc exam risk locator
+ *   2. Fixed 4 questions per exam (Midterm 1, Midterm 2, Final)
+ *   3. No adaptive branching, no recovery questions
+ *   4. Each question maps to a specific weakTopic for targeted practice
  *
- * Tier system (each tier is a gateway, not just a difficulty label):
- *   T1 Foundation — pre-calc fluency, 2-second answer expected
- *   T2 Concept    — scenario-based conceptual understanding, NO calculation
- *   T3 UW Exam    — method recognition on UW midterm style problems
- *   T4 Elite      — "4.0 separator", catches reflexive mistakes from strong students
- *
- * Adaptive branching (replaces fixed 4-question set):
- *
- *   Q1: T1 main
- *     ├─ correct → Q2: T2 main
- *     └─ wrong   → Q2: T1 recovery (second chance, same tier)
- *
- *   Q2: T2 main / T1 recovery
- *     ├─ correct → Q3: T3 main
- *     └─ wrong   → Q3: T2 simplified (protect confidence)
- *
- *   Q3: T3 main / T2 simplified
- *     ├─ correct → Q4: T4 elite (challenge)
- *     └─ wrong   → Q4: T3 guided (method given, asks for execution)
- *
- *   Q4: dynamic based on running performance
+ * Flow:
+ *   1. Select course (Math 124 / 125 / 126)
+ *   2. Select exam (Midterm 1 / Midterm 2 / Final)
+ *   3. Answer 4 fixed conceptual questions
+ *   4. Get risk report with specific weak topics to practice
  */
 
 // =============================================================================
-// TIER METADATA
+// EXAM METADATA
 // =============================================================================
 
+export const EXAM_INFO = {
+  midterm1: { name: 'Midterm 1', shortName: 'M1' },
+  midterm2: { name: 'Midterm 2', shortName: 'M2' },
+  final: { name: 'Final', shortName: 'Final' },
+}
+
+// Exam options for UI selection (step 2 of diagnostic)
+export const EXAM_OPTIONS = [
+  { id: 'midterm1', label: 'Midterm 1', description: 'Velocity/Acceleration, Quadric Surfaces, Lines & Planes, Space Curves' },
+  { id: 'midterm2', label: 'Midterm 2', description: 'Tangent Planes, Double Integrals, Polar Coordinates, Optimization' },
+  { id: 'final', label: 'Final', description: 'Partial Derivatives, Double Integrals, Extrema, Taylor Series' },
+]
+
+// Legacy export for backward compatibility
 export const TIER_INFO = {
   1: { name: 'Foundation', skill: 'Pre-calc Fluency',     color: '#2FBF9F' },
   2: { name: 'Concept',    skill: 'Core Understanding',   color: '#5B8DEF' },
@@ -478,154 +476,210 @@ const MATH_125 = [
 ]
 
 // =============================================================================
-// MATH 126 — Multivariable Calculus & Series
+// MATH 126 — Exam-Specific Diagnostic (v3)
 // =============================================================================
 
-const MATH_126 = [
-  // ---------- T1: Foundation (visual, not memorization) ----------
+// Midterm 1: Vectors, Lines/Planes, Space Curves
+const MATH_126_MIDTERM_1 = [
   {
-    id: 'm126_t1_main',
-    tier: 1,
-    role: 'main',
-    topic: 'Vectors',
-    taxonomyTopic: 'vectors_and_geometry',
-    skill: 'Geometric Reading',
-    question: 'Looking at the two vectors below, they are:',
-    svg: SVG.perpendicularVectors,
-    options: ['Parallel', 'Equal', 'Perpendicular', 'Both zero'],
-    correct: 2,
-    explanation: 'They meet at a right angle (90°), so they\'re perpendicular (also called orthogonal). For such vectors, $\\vec{a}\\cdot\\vec{b} = 0$.',
-    skillGap: 'vectors_and_geometry',
-  },
-  {
-    id: 'm126_t1_recovery',
-    tier: 1,
-    role: 'recovery',
-    topic: 'Vectors',
-    taxonomyTopic: 'vectors_and_geometry',
-    skill: 'Vector Addition',
-    question: 'If $\\vec{u} = \\langle 1, 2\\rangle$ and $\\vec{v} = \\langle 3, 4\\rangle$, then $\\vec{u} + \\vec{v} = \\;?$',
+    id: 'm126_m1_q1',
+    exam: 'midterm1',
+    topic: 'Velocity and Acceleration',
+    question: 'A particle has velocity $\\mathbf{v}(t)$ and acceleration $\\mathbf{a}(t)$. At some instant, the vectors point in **opposite directions**. What can you conclude?',
     options: [
-      '$\\langle 3, 8\\rangle$',
-      '$\\langle 4, 8\\rangle$',
-      '$\\langle 2, 2\\rangle$',
-      '$\\langle 4, 6\\rangle$',
-    ],
-    correct: 3,
-    explanation: 'Vector addition is component-wise: $\\langle 1+3,\\, 2+4\\rangle = \\langle 4, 6\\rangle$.',
-    skillGap: 'vectors_and_geometry',
-  },
-
-  // ---------- T2: Concept (no calculation, tests understanding) ----------
-  {
-    id: 'm126_t2_main',
-    tier: 2,
-    role: 'main',
-    topic: 'Multivariable Calculus',
-    taxonomyTopic: 'multivariable_optimization',
-    skill: 'Critical Point Classification (Second Derivative Test)',
-    question: 'At point $(1, 2)$, the function $f(x,y)$ satisfies $f_x = 0$ and $f_y = 0$. The second partials are $f_{xx} = 2$, $f_{yy} = 8$, $f_{xy} = 5$. What type of point is $(1, 2)$?',
-    options: [
-      'Local minimum',
-      'Saddle point',
-      'Local maximum',
-      'Cannot be determined',
+      'The particle must be turning',
+      'The particle is slowing down',
+      'The particle is moving backward',
+      'The acceleration is zero',
     ],
     correct: 1,
-    explanation: 'The discriminant $D = f_{xx} \\cdot f_{yy} - (f_{xy})^2 = 2 \\cdot 8 - 25 = -9 < 0$, so it\'s a saddle point. The 3.5 trap: seeing $f_{xx} > 0$ and $f_{yy} > 0$ and concluding "local min" without checking the mixed partial.',
-    skillGap: 'multivariable_optimization',
+    explanation: 'When $\\mathbf{v}$ and $\\mathbf{a}$ point opposite, acceleration opposes the motion → the particle decelerates (slows down). Same direction = speeding up.',
+    weakTopic: 'velocity_acceleration',
   },
   {
-    id: 'm126_t2_simplified',
-    tier: 2,
-    role: 'simplified',
-    topic: 'Multivariable Calculus',
-    taxonomyTopic: 'partial_derivatives',
-    skill: 'Partial Derivative Meaning',
-    question: 'For $f(x, y)$, the partial derivative $\\dfrac{\\partial f}{\\partial x}$ measures:',
+    id: 'm126_m1_q2',
+    exam: 'midterm1',
+    topic: 'Quadric Surfaces',
+    question: 'Which surface is a **hyperboloid of one sheet**?',
     options: [
-      'How $f$ changes as both $x$ and $y$ vary',
-      'The total change in $f$',
-      'How $f$ changes as $x$ varies, with $y$ held constant',
-      'The slope of a level curve',
+      '$\\dfrac{x^2}{4} + \\dfrac{y^2}{9} - z^2 = 1$',
+      '$\\dfrac{x^2}{4} + \\dfrac{y^2}{9} - z^2 = -1$',
+      '$z = x^2 + y^2$',
+      '$z = x^2 - y^2$',
     ],
-    correct: 2,
-    explanation: 'A partial derivative isolates one variable: you freeze the others and ask how $f$ responds to changes in just that one.',
-    skillGap: 'partial_derivatives',
+    correct: 0,
+    explanation: 'Hyperboloid of one sheet: two positive terms, one negative, equals $+1$. The form $\\frac{x^2}{a^2} + \\frac{y^2}{b^2} - \\frac{z^2}{c^2} = 1$ is one sheet. Equals $-1$ gives two sheets.',
+    weakTopic: 'quadric_surfaces',
   },
-
-  // ---------- T3: UW Exam ----------
   {
-    id: 'm126_t3_main',
-    tier: 3,
-    role: 'main',
-    topic: 'Double Integrals',
-    taxonomyTopic: 'polar_coordinates',
-    skill: 'Coordinate Choice',
-    question: 'You need to compute $\\displaystyle\\iint_{R} f(x,y)\\,dA$ over the disk $R$ shown below. Which coordinate system gives the simplest bounds?',
-    svg: SVG.diskRegion,
+    id: 'm126_m1_q3',
+    exam: 'midterm1',
+    topic: 'Lines and Planes',
+    question: 'A line is perpendicular to the plane $2x - y + 3z = 7$. A student claims the line could have direction vector $\\langle 1, 2, 3 \\rangle$. Why is this **wrong**?',
     options: [
-      'Cartesian with $x$ outer, $y$ inner',
-      'Spherical coordinates',
-      'Polar coordinates: $0 \\leq r \\leq 2$, $0 \\leq \\theta \\leq 2\\pi$',
-      'Cylindrical coordinates',
-    ],
-    correct: 2,
-    explanation: 'Circular symmetry → polar. The bounds become rectangular in $(r, \\theta)$, whereas Cartesian gives $\\sqrt{}$-bounds. Don\'t forget the Jacobian: $dA = r\\,dr\\,d\\theta$.',
-    skillGap: 'polar_coordinates',
-  },
-  {
-    id: 'm126_t3_guided',
-    tier: 3,
-    role: 'guided',
-    topic: 'Double Integrals',
-    taxonomyTopic: 'double_integrals',
-    skill: 'Polar Jacobian',
-    question: 'When converting a double integral to polar coordinates, $dA$ becomes:',
-    options: ['$dr\\,d\\theta$', '$r\\,dr\\,d\\theta$', '$r^{2}\\,dr\\,d\\theta$', '$\\dfrac{1}{r}\\,dr\\,d\\theta$'],
-    correct: 1,
-    explanation: 'The Jacobian for polar conversion is $r$, so $dA = r\\,dr\\,d\\theta$. Forgetting this $r$ is the most common polar mistake on UW exams.',
-    skillGap: 'double_integrals',
-  },
-
-  // ---------- T4: Elite (4.0 separators) ----------
-  {
-    id: 'm126_t4_main',
-    tier: 4,
-    role: 'main',
-    topic: 'Constrained Optimization',
-    taxonomyTopic: 'multivariable_optimization',
-    skill: 'What Lagrange Actually Gives',
-    question: 'You apply Lagrange multipliers to maximize $f$ subject to $g = c$, and solve $\\nabla f = \\lambda\\nabla g$ to find three points $A$, $B$, $C$ all satisfying this. The maximum is:',
-    options: [
-      'Always point $A$ (the first one found)',
-      'The point where $\\lambda$ is largest',
-      'Always exists at every Lagrange point',
-      'Whichever of $A$, $B$, $C$ gives the **largest value of $f$** — Lagrange only finds candidates',
-    ],
-    correct: 3,
-    explanation: 'Lagrange equations identify **candidate** points (analogous to critical points). You still have to evaluate $f$ at each candidate and compare. The 3.5 trap: stopping after solving $\\nabla f = \\lambda\\nabla g$ and assuming you\'re done.',
-    skillGap: 'multivariable_optimization',
-  },
-  {
-    id: 'm126_t4_alt',
-    tier: 4,
-    role: 'main',
-    topic: 'Taylor Polynomials',
-    taxonomyTopic: 'taylor_polynomials_and_series',
-    skill: 'Error Bound (Taylor\'s Inequality)',
-    question: 'You approximate $e^{0.1}$ using the degree-2 Taylor polynomial $T_2(x)$ of $f(x) = e^x$ centered at $x = 0$. According to Taylor\'s Inequality, the error bound $|R_2(0.1)|$ is:',
-    options: [
-      '$\\dfrac{1}{3!}(0.1)^3$',
-      '$\\dfrac{M}{3!}\\,|0.1|^3$, where $M$ is an upper bound for $|f\'\'\'(x)|$ on $[0, 0.1]$',
-      '$\\dfrac{f\'\'\'(0)}{3!}(0.1)^3$',
-      '$0$, because $e^x$ is analytic and equals its Taylor series',
+      'Direction vectors must contain a zero',
+      'A perpendicular line must use the plane\'s normal vector direction',
+      'The direction vector should come from points on the plane',
+      'Perpendicular lines in 3D do not have direction vectors',
     ],
     correct: 1,
-    explanation: 'Taylor\'s Inequality: $|R_n(x)| \\leq \\frac{M}{(n+1)!}|x-a|^{n+1}$, where $M$ must be an **upper bound** for $|f^{(n+1)}|$ on the interval, not a point value. The 3.5 trap: writing $1$ instead of $M$, or using $f\'\'\'(0)$ (a specific value) instead of an upper bound. "$e^x$ is analytic" is irrelevant — $T_2$ is a finite approximation with nonzero error.',
-    skillGap: 'taylor_polynomials_and_series',
+    explanation: 'A line perpendicular to a plane must be parallel to the normal vector $\\langle 2, -1, 3 \\rangle$. The vector $\\langle 1, 2, 3 \\rangle$ is not a scalar multiple of this normal.',
+    weakTopic: 'planes',
+  },
+  {
+    id: 'm126_m1_q4',
+    exam: 'midterm1',
+    topic: 'Space Curves',
+    question: 'A particle moves along a space curve $\\mathbf{r}(t)$. A student says: "$\\mathbf{r}\'(t)$ points toward the center of the curve." This statement is:',
+    options: [
+      'Always true',
+      'Always false',
+      'True only when speed is constant',
+      'True only for circles',
+    ],
+    correct: 1,
+    explanation: '$\\mathbf{r}\'(t)$ is the velocity/tangent vector — it points along the curve (tangent direction), not toward any center. The normal vector $\\mathbf{N}$ points toward the center of curvature.',
+    weakTopic: 'space_curves',
   },
 ]
+
+// Midterm 2: Tangent Planes, Double Integrals, Polar, Optimization
+const MATH_126_MIDTERM_2 = [
+  {
+    id: 'm126_m2_q1',
+    exam: 'midterm2',
+    topic: 'Tangent Plane Approximation',
+    question: 'Suppose you already know the tangent plane approximation of $f(x,y)$ at $(2,3)$. Which value would this approximation usually estimate **most accurately**?',
+    options: [
+      '$f(2.01, 3.02)$',
+      '$f(10, 12)$',
+      '$f(-5, 7)$',
+      '$f(100, 100)$',
+    ],
+    correct: 0,
+    explanation: 'Tangent plane approximation is a local linearization — it\'s most accurate near the point of tangency. $(2.01, 3.02)$ is closest to $(2, 3)$.',
+    weakTopic: 'tangent_planes',
+  },
+  {
+    id: 'm126_m2_q2',
+    exam: 'midterm2',
+    topic: 'Double Integrals',
+    question: 'A region is bounded by $y = x^3$, $y = 2x + 4$, $y = 0$. When reversing the order of integration, the region most likely:',
+    options: [
+      'Stays as one simple integral',
+      'Becomes impossible to integrate',
+      'Must be split into multiple pieces',
+      'Must use polar coordinates',
+    ],
+    correct: 2,
+    explanation: 'When curves intersect at multiple points or have different "top/bottom" relationships in different parts, reversing order requires splitting the region.',
+    weakTopic: 'double_integrals',
+  },
+  {
+    id: 'm126_m2_q3',
+    exam: 'midterm2',
+    topic: 'Polar Coordinates',
+    question: 'The region of integration is $x^2 + y^2 \\leq 4$. Which bounds are **most natural** in polar coordinates?',
+    options: [
+      '$-2 \\leq x \\leq 2,\\; -\\sqrt{4-x^2} \\leq y \\leq \\sqrt{4-x^2}$',
+      '$0 \\leq r \\leq 2,\\; 0 \\leq \\theta \\leq 2\\pi$',
+      '$0 \\leq r \\leq 4,\\; 0 \\leq \\theta \\leq \\pi$',
+      '$-2 \\leq r \\leq 2,\\; 0 \\leq \\theta \\leq 2\\pi$',
+    ],
+    correct: 1,
+    explanation: 'For $x^2 + y^2 \\leq 4$, we have $r^2 \\leq 4$, so $r \\leq 2$. Full disk means $\\theta$ goes from $0$ to $2\\pi$. Note: $r$ is always $\\geq 0$ in standard polar.',
+    weakTopic: 'polar_coordinates',
+  },
+  {
+    id: 'm126_m2_q4',
+    exam: 'midterm2',
+    topic: 'Absolute Extrema',
+    question: 'A student finds the absolute max/min of $f(x,y)$ on $x^2 + y^2 \\leq 4$. They find one critical point inside where $f(1,1) = 3$, and two boundary points where $f = 5$ and $f = -2$. What is the **absolute minimum**?',
+    options: [
+      '$3$',
+      '$5$',
+      '$-2$',
+      'Cannot determine',
+    ],
+    correct: 2,
+    explanation: 'For absolute extrema on a closed region: check interior critical points AND boundary. Compare all values: $3, 5, -2$. The minimum is $-2$.',
+    weakTopic: 'optimization_closed_region',
+  },
+]
+
+// Final: Cumulative + Taylor Series
+const MATH_126_FINAL = [
+  {
+    id: 'm126_f_q1',
+    exam: 'final',
+    topic: 'Partial Derivatives',
+    question: 'Let $f(x,y) = x^2 y + e^{xy}$. What is $f_x(1, 0)$?',
+    options: [
+      '$0$',
+      '$1$',
+      '$2$',
+      '$3$',
+    ],
+    correct: 1,
+    explanation: '$f_x = 2xy + ye^{xy}$. At $(1, 0)$: $f_x = 2(1)(0) + 0 \\cdot e^0 = 0$. But we also need $\\frac{\\partial}{\\partial x}(e^{xy}) = ye^{xy}$, so the full derivative gives $f_x(1,0) = 1$.',
+    weakTopic: 'partial_derivatives',
+  },
+  {
+    id: 'm126_f_q2',
+    exam: 'final',
+    topic: 'Double Integrals',
+    question: 'A region is bounded by $y = x^3$, $y = 2x + 4$, $y = 0$. When reversing the order of integration, the region most likely:',
+    options: [
+      'Stays as one simple integral',
+      'Becomes impossible to integrate',
+      'Must be split into multiple pieces',
+      'Must use polar coordinates',
+    ],
+    correct: 2,
+    explanation: 'When curves intersect at multiple points or have different "top/bottom" relationships in different parts, reversing order requires splitting the region.',
+    weakTopic: 'double_integrals',
+  },
+  {
+    id: 'm126_f_q3',
+    exam: 'final',
+    topic: 'Absolute Extrema',
+    question: 'Find the **absolute maximum** value of $f(x,y) = x^2 + y^2$ on the disk $x^2 + y^2 \\leq 9$.',
+    options: [
+      '$0$',
+      '$3$',
+      '$9$',
+      '$18$',
+    ],
+    correct: 2,
+    explanation: '$f = x^2 + y^2$ equals $r^2$ in polar. Interior critical point at origin gives $f = 0$ (min). On boundary $r = 3$, we have $f = 9$ (max).',
+    weakTopic: 'optimization_closed_region',
+  },
+  {
+    id: 'm126_f_q4',
+    exam: 'final',
+    topic: 'Taylor Series',
+    question: 'The second-degree Taylor polynomial for $f(x) = e^x$ at $x = 0$ is:',
+    options: [
+      '$1 + x$',
+      '$1 + x + \\dfrac{x^2}{2}$',
+      '$x + \\dfrac{x^2}{2}$',
+      '$1 + \\dfrac{x^2}{2}$',
+    ],
+    correct: 1,
+    explanation: '$e^x = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\cdots$. The second-degree polynomial keeps terms up to $x^2$: $T_2(x) = 1 + x + \\frac{x^2}{2}$.',
+    weakTopic: 'taylor_series',
+  },
+]
+
+// Combined for legacy compatibility (flatten all exams)
+const MATH_126 = [...MATH_126_MIDTERM_1, ...MATH_126_MIDTERM_2, ...MATH_126_FINAL]
+
+// Exam-specific banks for Math 126
+export const MATH_126_EXAMS = {
+  midterm1: MATH_126_MIDTERM_1,
+  midterm2: MATH_126_MIDTERM_2,
+  final: MATH_126_FINAL,
+}
 
 // =============================================================================
 // QUESTION BANKS (export)
@@ -635,6 +689,125 @@ export const QUESTION_BANKS = {
   math124: MATH_124,
   math125: MATH_125,
   math126: MATH_126,
+}
+
+// =============================================================================
+// EXAM-SPECIFIC DIAGNOSTIC (v3) — Math 126
+// =============================================================================
+
+/**
+ * Get all 4 questions for a specific exam (no branching).
+ *
+ * @param {string} course — 'math126' (expandable to 124/125 later)
+ * @param {string} exam — 'midterm1' | 'midterm2' | 'final'
+ * @returns {Array} — array of 4 question objects
+ */
+export function getExamQuestions(course, exam) {
+  if (course === 'math126' && MATH_126_EXAMS[exam]) {
+    return MATH_126_EXAMS[exam]
+  }
+  // Fallback: return legacy adaptive bank
+  return null
+}
+
+/**
+ * Get the next question for exam-specific diagnostic.
+ * Simple: just return question at index = answers.length
+ *
+ * @param {Array} answers — array of {questionId, isCorrect} so far
+ * @param {string} course
+ * @param {string} exam — 'midterm1' | 'midterm2' | 'final'
+ * @returns {object|null} — { question, questionNumber, totalQuestions, progressPercent }
+ */
+export function getNextExamQuestion(answers, course, exam) {
+  const questions = getExamQuestions(course, exam)
+  if (!questions) return null
+
+  const n = answers.length
+  if (n >= questions.length) return null
+
+  const TOTAL = questions.length
+  const progressPercent = Math.round(((n + 1) / TOTAL) * 100)
+
+  return {
+    question: questions[n],
+    questionNumber: n + 1,
+    totalQuestions: TOTAL,
+    progressPercent,
+    displayLabel: `Question ${n + 1} of ${TOTAL}`,
+  }
+}
+
+/**
+ * Analyze exam-specific diagnostic results.
+ * Returns weak topics for targeted practice.
+ *
+ * @param {Array} answers — array of {questionId, isCorrect}
+ * @param {string} course
+ * @param {string} exam
+ * @returns {object} — { weakTopics, strongTopics, score, riskLevel, riskMessage }
+ */
+export function analyzeExamResults(answers, course, exam) {
+  const questions = getExamQuestions(course, exam)
+  if (!questions) return null
+
+  const weakTopics = []
+  const strongTopics = []
+
+  for (const answer of answers) {
+    const q = questions.find((x) => x.id === answer.questionId)
+    if (!q) continue
+
+    const entry = {
+      topic: q.topic,
+      weakTopic: q.weakTopic,
+      question: q.question,
+    }
+
+    if (answer.isCorrect) {
+      strongTopics.push(entry)
+    } else {
+      weakTopics.push(entry)
+    }
+  }
+
+  const correctCount = answers.filter((a) => a.isCorrect).length
+  const totalCount = answers.length
+  const score = totalCount > 0 ? correctCount / totalCount : 0
+
+  // Risk level based on wrong count
+  let riskLevel, riskColor, riskMessage
+  const wrongCount = totalCount - correctCount
+
+  if (wrongCount === 0) {
+    riskLevel = 'Low Risk'
+    riskColor = '#2FBF9F'
+    riskMessage = 'You\'re well-prepared for this exam. Review the topics briefly before test day.'
+  } else if (wrongCount === 1) {
+    riskLevel = 'Moderate Risk'
+    riskColor = '#5B8DEF'
+    riskMessage = `One gap detected: ${weakTopics[0]?.weakTopic}. Focus your practice here.`
+  } else if (wrongCount === 2) {
+    riskLevel = 'High Risk'
+    riskColor = '#FF9600'
+    riskMessage = `${wrongCount} weak areas found. Prioritize these topics before the exam.`
+  } else {
+    riskLevel = 'Critical Risk'
+    riskColor = '#E85D5D'
+    riskMessage = 'Multiple foundational gaps. Start with the basics and work systematically.'
+  }
+
+  return {
+    weakTopics,
+    strongTopics,
+    correctCount,
+    totalCount,
+    score,
+    riskLevel,
+    riskColor,
+    riskMessage,
+    exam: EXAM_INFO[exam]?.name || exam,
+  }
 }
 
 // =============================================================================

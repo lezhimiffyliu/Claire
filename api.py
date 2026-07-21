@@ -6,6 +6,8 @@ This replaces the Streamlit frontend with a proper API that can be deployed.
 
 import sqlite3
 import logging
+import re
+import json
 from datetime import date, datetime
 from contextlib import contextmanager, asynccontextmanager
 from pathlib import Path
@@ -16,6 +18,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from claire_agent_old import ClaireAgent
+from agent.claire_agent import ClaireAgent as NewClaireAgent
 from api_auth import verify_jwt, get_optional_auth
 
 # ============================================================
@@ -61,6 +64,26 @@ def init_db():
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_user_date ON usage(user_id, date)
         """)
+
+        # Phase 4: Problem thread persistence
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS problem_threads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                problem_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                initialized_once INTEGER DEFAULT 0,
+                events_json TEXT DEFAULT '[]',
+                warm_cache_json TEXT DEFAULT '{}',
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE(user_id, problem_id)
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_thread_user_problem ON problem_threads(user_id, problem_id)
+        """)
+
         conn.commit()
     logger.info(f"Database initialized at {DB_PATH}")
 
@@ -2019,6 +2042,338 @@ async def get_remediation(request: Request, body: RemediationRequest):
             "has_remediation": False,
             "items": [],
         }
+
+
+# ============================================================
+# Claire Agent API - Structured teaching actions
+# ============================================================
+
+import re
+import hashlib
+
+# Session cache for Claire agents (keyed by session_id)
+_claire_agent_sessions: dict[str, NewClaireAgent] = {}
+
+
+# ============================================================
+# Phase 4: Thread Persistence
+# ============================================================
+
+class ThreadGetRequest(BaseModel):
+    user_id: str
+    problem_id: str
+
+class ThreadSaveRequest(BaseModel):
+    user_id: str
+    problem_id: str
+    session_id: str
+    events: list[dict]
+    warm_cache: dict = {}
+    initialized_once: bool = False
+
+class ThreadResponse(BaseModel):
+    exists: bool
+    initialized_once: bool = False
+    events: list[dict] = []
+    warm_cache: dict = {}
+    session_id: Optional[str] = None
+
+
+@app.post("/api/claire/thread/get", response_model=ThreadResponse)
+async def get_thread(body: ThreadGetRequest):
+    """Get existing thread for a problem (Phase 4: avoid duplicate init)."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM problem_threads WHERE user_id = ? AND problem_id = ?",
+            (body.user_id, body.problem_id)
+        ).fetchone()
+
+        if not row:
+            return ThreadResponse(exists=False)
+
+        import json
+        return ThreadResponse(
+            exists=True,
+            initialized_once=bool(row['initialized_once']),
+            events=json.loads(row['events_json'] or '[]'),
+            warm_cache=json.loads(row['warm_cache_json'] or '{}'),
+            session_id=row['session_id']
+        )
+
+
+@app.post("/api/claire/thread/save")
+async def save_thread(body: ThreadSaveRequest):
+    """Save thread state for a problem."""
+    import json
+    now = datetime.now().isoformat()
+
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO problem_threads (user_id, problem_id, session_id, initialized_once, events_json, warm_cache_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, problem_id) DO UPDATE SET
+                session_id = excluded.session_id,
+                initialized_once = excluded.initialized_once,
+                events_json = excluded.events_json,
+                warm_cache_json = excluded.warm_cache_json,
+                updated_at = excluded.updated_at
+        """, (
+            body.user_id,
+            body.problem_id,
+            body.session_id,
+            1 if body.initialized_once else 0,
+            json.dumps(body.events),
+            json.dumps(body.warm_cache),
+            now,
+            now
+        ))
+        conn.commit()
+
+    return {"status": "ok"}
+
+
+# ============================================================
+# Phase 5: Intent Detection & Model Routing
+# ============================================================
+
+SONNET_INTENTS = {"hint", "cant_start", "ask_question", "check_work_image", "acknowledgment", "clarify"}
+OPUS_INTENTS = {"decide_teaching_strategy", "student_repeatedly_stuck", "complex_explanation"}
+
+def detect_intent(message: str, problem_context: Optional[dict] = None) -> str:
+    """
+    Detect user intent from message to route to appropriate model.
+    Returns intent string.
+    """
+    text = message.lower().strip()
+
+    # Simple pattern matching for common intents
+    if re.match(r'^(hint|give me a hint|提示)', text):
+        return "hint"
+
+    if re.match(r'^(i\'?m stuck|stuck|不会|怎么开始|how (do i |to )?start|where (do i |to )?start)', text):
+        return "cant_start"
+
+    if re.match(r'^(ok|好的?|懂了|got it|i see|明白|嗯)$', text):
+        return "acknowledgment"
+
+    if re.match(r'^(what|why|how|explain|can you|再解释|解释)', text):
+        return "ask_question"
+
+    if re.match(r'^(不懂|还是不懂|still don\'?t|confused|i don\'?t understand)', text):
+        return "student_repeatedly_stuck"
+
+    if "check" in text or "submit" in text or "done" in text or "answer" in text:
+        return "check_work_image"
+
+    # Default: needs strategic decision
+    return "decide_teaching_strategy"
+
+
+def get_model_for_intent(intent: str) -> str:
+    """Return model tier based on intent."""
+    if intent in SONNET_INTENTS:
+        return "basic"  # Use Sonnet
+    return "premium"  # Use Opus
+
+
+# ============================================================
+# Main Agent Endpoint (Phase 4 + 5 optimizations)
+# ============================================================
+
+class ClaireAgentRequest(BaseModel):
+    message: str
+    session_id: str
+    problem_context: Optional[dict] = None
+    user_id: Optional[str] = None  # For thread persistence
+
+
+class ClaireAgentResponse(BaseModel):
+    events: list[dict]
+    turns: int
+    intent: Optional[str] = None
+    model_used: Optional[str] = None
+
+
+@app.post("/api/claire/agent", response_model=ClaireAgentResponse)
+async def claire_agent_endpoint(body: ClaireAgentRequest):
+    """
+    Process a message through the Claire agent.
+
+    Optimizations:
+    - Phase 4: Thread persistence (frontend checks /thread/get first)
+    - Phase 5: Intent-based model routing (Sonnet for simple, Opus for strategic)
+    """
+    logger.info(f"[claire/agent] session={body.session_id}, message_len={len(body.message)}")
+
+    # Phase 5: Detect intent
+    intent = detect_intent(body.message, body.problem_context)
+    model_tier = get_model_for_intent(intent)
+    logger.info(f"[claire/agent] intent={intent}, model_tier={model_tier}")
+
+    # Get or create agent for this session
+    if body.session_id not in _claire_agent_sessions:
+        _claire_agent_sessions[body.session_id] = NewClaireAgent()
+        logger.info(f"[claire/agent] Created new agent for session={body.session_id}")
+
+    agent = _claire_agent_sessions[body.session_id]
+
+    # Phase 5: Set model tier based on intent
+    agent.set_model_tier(model_tier)
+
+    # Inject problem context into message if provided
+    if body.problem_context:
+        p = body.problem_context
+        stem = p.get('stem', '')
+        parts = p.get('parts', [])
+        parts_text = '\n'.join([
+            f"({part.get('label', chr(97+i))}): {part.get('question_text', '')}"
+            for i, part in enumerate(parts)
+        ])
+        message = f"[Current problem]\n{stem}\n{parts_text}\n\n---\n{body.message}"
+    else:
+        message = body.message
+
+    try:
+        # Process query through agent
+        result = agent.process_query(message)
+        events = result.get("events", [])
+
+        logger.info(
+            f"[claire/agent] session={body.session_id}, "
+            f"events={len(events)}, "
+            f"turns={result.get('turns', 0)}, "
+            f"model={model_tier}"
+        )
+
+        return ClaireAgentResponse(
+            events=events,
+            turns=result.get("turns", 0),
+            intent=intent,
+            model_used=model_tier
+        )
+
+    except Exception as e:
+        logger.error(f"[claire/agent] Error: {e}", exc_info=True)
+        # Return a fallback say event
+        return ClaireAgentResponse(
+            events=[{
+                "event": "say",
+                "text": "I'm having trouble processing that right now. Could you try again?",
+                "tone": "concerned"
+            }],
+            turns=0,
+            intent=intent,
+            model_used=model_tier
+        )
+
+
+# ============================================================
+# Tutor Pipeline Endpoint (Semantic retrieval-based)
+# ============================================================
+
+class TutorRequest(BaseModel):
+    message: str
+    session_id: str
+    problem_context: Optional[dict] = None
+    recent_thread: Optional[list] = None
+    user_id: Optional[str] = None
+    action_type: Optional[str] = None  # Explicit intent from button (e.g., "cant_start")
+    part_id: Optional[str] = None      # Current part identifier
+    step_index: Optional[int] = None   # Current step within part (0=start, 1=after hint, etc.)
+
+
+class TutorResponseModel(BaseModel):
+    events: list[dict]
+    intent: Optional[str] = None
+    concept: Optional[str] = None
+    model_used: str
+    response_cache_hit: bool   # True if returned from response cache (no LLM calls)
+    retrieval_cache_hit: bool  # True if high retrieval score (chunks reused)
+    retrieval_score: float
+    strategy_decision: str
+    chunks_used: list[str]
+
+
+@app.post("/api/tutor/respond", response_model=TutorResponseModel)
+async def tutor_respond_endpoint(body: TutorRequest):
+    """
+    Unified tutor endpoint - handles both chat and teaching actions.
+
+    Routes to appropriate handler based on action_type:
+    - Teaching actions (student_stuck, student_hint, etc.) → teaching_planner
+    - Chat messages → retrieval-based pipeline
+
+    Pipeline:
+    0. Check response cache (if action_type provided, no LLM needed for cache key)
+    1. Classify intent/concept (Haiku) - skipped if cache hit or action_type provided
+    2. Search teaching chunks (vector retrieval)
+    3. Decide if Opus needed (strategist)
+    4. Generate response (Sonnet adapter or Opus agent)
+    5. Cache response (if cacheable intent)
+
+    Frontend can pass action_type for button actions to avoid Haiku classification.
+    """
+    logger.info(f"[tutor/respond] session={body.session_id}, action_type={body.action_type}, message_len={len(body.message)}")
+
+    try:
+        from tutor.pipeline import route_tutor_request
+
+        response = route_tutor_request(
+            message=body.message,
+            session_id=body.session_id,
+            problem_context=body.problem_context,
+            recent_thread=body.recent_thread,
+            user_id=body.user_id,
+            action_type=body.action_type,
+            part_id=body.part_id,
+            step_index=body.step_index,
+        )
+
+        logger.info(
+            f"[tutor/respond] intent={response.intent}, "
+            f"model={response.model_used}, "
+            f"response_cache={response.response_cache_hit}, "
+            f"retrieval_cache={response.retrieval_cache_hit}"
+        )
+
+        return TutorResponseModel(
+            events=response.events,
+            intent=response.intent,
+            concept=response.concept,
+            model_used=response.model_used,
+            response_cache_hit=response.response_cache_hit,
+            retrieval_cache_hit=response.retrieval_cache_hit,
+            retrieval_score=response.retrieval_score,
+            strategy_decision=response.strategy_decision,
+            chunks_used=response.chunks_used,
+        )
+
+    except Exception as e:
+        logger.error(f"[tutor/respond] Error: {e}", exc_info=True)
+        return TutorResponseModel(
+            events=[{
+                "event": "say",
+                "text": "I'm having trouble processing that. Could you try again?",
+                "tone": "concerned"
+            }],
+            intent="error",
+            concept=None,
+            model_used="fallback",
+            response_cache_hit=False,
+            retrieval_cache_hit=False,
+            retrieval_score=0.0,
+            strategy_decision="error_fallback",
+            chunks_used=[],
+        )
+
+
+# ============================================================
+# Teaching Action Endpoint - DEPRECATED
+# Now unified into /api/tutor/respond with action_type parameter
+# ============================================================
+# The teaching_action endpoint has been removed.
+# Use /api/tutor/respond with action_type='student_stuck', 'student_hint', etc.
+# This enables caching for teaching actions and simplifies the API.
 
 
 # ============================================================

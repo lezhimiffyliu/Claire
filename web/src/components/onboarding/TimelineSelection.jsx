@@ -134,7 +134,7 @@ function TimelineSelection({ direction, onNext, onSkipDiagnostic, selections, up
               {selected === option.id && (
                 <div className="shrink-0">
                   <svg
-                    className="w-6 h-6 text-[#58cc02]"
+                    className="w-6 h-6 text-[#2FBF9F]"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >

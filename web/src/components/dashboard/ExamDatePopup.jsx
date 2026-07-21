@@ -15,9 +15,12 @@ const EXAM_OPTIONS = [
  * 1. Which exam are you preparing for? (Midterm I / Midterm II / Final)
  * 2. When is the exam? (date picker)
  *
+ * Props:
+ * - required: boolean - If true, "Skip for now" is hidden (used when previous exam has expired)
+ *
  * Returns { examType, examDate, daysUntil } via onSave callback
  */
-export default function ExamDatePopup({ isOpen, onClose, onSave }) {
+export default function ExamDatePopup({ isOpen, onClose, onSave, required = false }) {
   const [examType, setExamType] = useState('')
   const [date, setDate] = useState('')
   const [saving, setSaving] = useState(false)
@@ -119,10 +122,12 @@ export default function ExamDatePopup({ isOpen, onClose, onSave }) {
                 </svg>
               </div>
               <h2 className="text-xl font-bold text-[var(--claire-navy)] mb-2">
-                Set up your exam
+                {required ? 'Set your next exam' : 'Set up your exam'}
               </h2>
               <p className="text-gray-500 text-sm">
-                We'll create a personalized study plan based on your timeline.
+                {required
+                  ? 'Your previous exam date has passed. Please select your next exam to continue.'
+                  : "We'll create a personalized study plan based on your timeline."}
               </p>
             </div>
 
@@ -194,12 +199,15 @@ export default function ExamDatePopup({ isOpen, onClose, onSave }) {
                 )}
               </button>
 
-              <button
-                onClick={onClose}
-                className="w-full py-3 text-gray-500 hover:text-gray-700 text-sm transition-colors"
-              >
-                Skip for now
-              </button>
+              {/* Hide skip button when required (exam expired scenario) */}
+              {!required && (
+                <button
+                  onClick={onClose}
+                  className="w-full py-3 text-gray-500 hover:text-gray-700 text-sm transition-colors"
+                >
+                  Skip for now
+                </button>
+              )}
             </div>
           </motion.div>
         </motion.div>
