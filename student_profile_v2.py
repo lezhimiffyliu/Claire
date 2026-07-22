@@ -9,8 +9,11 @@ Key improvements over V1:
 
 from dataclasses import dataclass, field
 from typing import Optional, Dict
-import streamlit as st
 from taxonomy import get_subtopics, get_topic_for_subtopic, normalize_to_topic
+
+# NOTE: `streamlit` is imported lazily inside the session-storage helpers at the
+# bottom of this module, so the profile model itself stays importable in a
+# headless context (the claire_core loop, tests, API workers).
 
 
 @dataclass
@@ -39,6 +42,12 @@ class SubtopicEstimate:
     recent_attempts: list = field(default_factory=list)  # Last K attempts [True, False, False, ...]
     recent_k: int = 5  # Track last 5 attempts
 
+    # Hint-dependency tracking ⭐
+    # correct_after_hint: correct attempts that only came AFTER a hint was given.
+    # hint_used_count: attempts on this subtopic where the tutor gave a hint.
+    correct_after_hint: int = 0
+    hint_used_count: int = 0
+
     @property
     def confidence(self) -> float:
         """Confidence grows with attempts. Need ~3 to be confident."""
@@ -66,6 +75,17 @@ class SubtopicEstimate:
         if self.score < 0.8:
             return "showing progress"
         return "looking solid"
+
+    @property
+    def hint_dependency(self) -> float:
+        """Fraction of correct answers on this subtopic that needed a hint.
+
+        High (→1.0) means the student can only get it right with scaffolding;
+        low (→0.0) means they can do it unaided. 0.0 if never correct.
+        """
+        if self.correct == 0:
+            return 0.0
+        return min(1.0, self.correct_after_hint / self.correct)
 
     def get_dominant_error_type(self) -> Optional[str]:
         """Get the most common error type for this subtopic."""
@@ -174,14 +194,24 @@ class SubtopicEstimate:
             # Recent success or no recent attempts
             return 0.0
 
-    def record(self, correct: bool, error_type: Optional[str] = None):
-        """Update estimate based on one attempt."""
+    def record(self, correct: bool, error_type: Optional[str] = None,
+               used_hint: bool = False):
+        """Update estimate based on one attempt.
+
+        `used_hint` records whether the tutor scaffolded this attempt, feeding
+        the hint-dependency signal.
+        """
         self.attempts += 1
         delta = 0.1 if correct else -0.1
         self.score = max(0.0, min(1.0, self.score + delta))
 
+        if used_hint:
+            self.hint_used_count += 1
+
         if correct:
             self.correct += 1
+            if used_hint:
+                self.correct_after_hint += 1
         else:
             self.incorrect += 1
 
@@ -282,10 +312,11 @@ class TopicEstimateV2:
             self.subtopics[subtopic] = SubtopicEstimate(subtopic=subtopic)
         return self.subtopics[subtopic]
 
-    def record_subtopic(self, subtopic: str, correct: bool, error_type: Optional[str] = None):
+    def record_subtopic(self, subtopic: str, correct: bool,
+                        error_type: Optional[str] = None, used_hint: bool = False):
         """Record an attempt at a specific subtopic."""
         sub_est = self.get_or_create_subtopic(subtopic)
-        sub_est.record(correct, error_type)
+        sub_est.record(correct, error_type, used_hint=used_hint)
 
         # Update topic-level aggregates
         self.total_attempts += 1
@@ -323,6 +354,8 @@ class TopicEstimateV2:
                     "error_counts": v.error_counts,
                     "last_error_type": v.last_error_type,
                     "recent_attempts": v.recent_attempts,
+                    "correct_after_hint": v.correct_after_hint,
+                    "hint_used_count": v.hint_used_count,
                 }
                 for k, v in self.subtopics.items()
             },
@@ -352,6 +385,8 @@ class TopicEstimateV2:
             })
             sub.last_error_type = stats.get("last_error_type")
             sub.recent_attempts = stats.get("recent_attempts", [])
+            sub.correct_after_hint = stats.get("correct_after_hint", 0)
+            sub.hint_used_count = stats.get("hint_used_count", 0)
             te.subtopics[subtopic] = sub
 
         return te
@@ -405,7 +440,8 @@ class StudentProfileV2:
         subtopic: Optional[str],
         correct: bool,
         error_type: Optional[str] = None,
-        question_id: Optional[str] = None
+        question_id: Optional[str] = None,
+        used_hint: bool = False
     ):
         """
         Record a practice attempt at topic and/or subtopic level.
@@ -416,6 +452,7 @@ class StudentProfileV2:
             correct: Whether the attempt was correct
             error_type: Optional error classification
             question_id: Optional question ID for question-level tracking
+            used_hint: Whether the tutor scaffolded this attempt (hint dependency)
         """
         # Normalize topic
         canonical = normalize_to_topic(topic, self.course)
@@ -425,7 +462,7 @@ class StudentProfileV2:
 
         if subtopic:
             # Record at subtopic level
-            topic_est.record_subtopic(subtopic, correct, error_type)
+            topic_est.record_subtopic(subtopic, correct, error_type, used_hint=used_hint)
         else:
             # Record at topic level (no specific subtopic)
             # Still update topic aggregates
@@ -723,11 +760,13 @@ def migrate_from_v1(old_profile: "StudentProfile") -> StudentProfileV2:
 
 def get_profile_v2() -> Optional[StudentProfileV2]:
     """Get V2 profile from session state."""
+    import streamlit as st
     return st.session_state.get("student_profile_v2")
 
 
 def save_profile_v2(profile: StudentProfileV2):
     """Save V2 profile to session state."""
+    import streamlit as st
     st.session_state.student_profile_v2 = profile
 
 

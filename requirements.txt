@@ -1,8 +1,17 @@
 # Core dependencies
 python-dotenv>=1.0.0
-supabase>=2.0.0
+supabase>=2.0.0  # legacy auth/storage — being retired (see persistence_sqlalchemy)
 sympy>=1.12
 requests>=2.31.0
+
+# Standard Postgres persistence (Neon in prod, local Postgres in dev)
+SQLAlchemy>=2.0,<2.1
+alembic>=1.13
+psycopg2-binary>=2.9
+
+# Clerk JWT verification (JWKS / RS256)
+PyJWT>=2.8
+cryptography>=42.0
 streamlit>=1.28.0
 pymupdf>=1.24.0  # PDF parsing
 

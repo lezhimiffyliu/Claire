@@ -18,8 +18,8 @@ from typing import Optional
 from pydantic import BaseModel
 
 from claire_agent_old import ClaireAgent
-from agent.claire_agent import ClaireAgent as NewClaireAgent
-from api_auth import verify_jwt, get_optional_auth
+from api_auth import verify_jwt, get_optional_auth  # legacy Supabase auth (chat/mobile)
+from clerk_auth import get_optional_identity          # Clerk identity for /api/attempt
 
 # ============================================================
 # Configuration
@@ -159,11 +159,41 @@ def check_and_increment_usage(user_id: str) -> dict:
 # FastAPI App
 # ============================================================
 
+def _verify_postgres_schema():
+    """Fail loudly if the Postgres schema is behind the Alembic head.
+
+    Only runs when DATABASE_URL is configured (i.e. a real Postgres deployment).
+    Without it, the app runs in anonymous-only mode (no persistence) and this
+    check is skipped with a warning — we never silently create or reset tables.
+    """
+    import os
+
+    if not os.getenv("DATABASE_URL"):
+        logger.warning(
+            "[startup] DATABASE_URL not set — running without persistence "
+            "(anonymous mode). Set DATABASE_URL and run `alembic upgrade head` "
+            "to enable authenticated persistence."
+        )
+        return
+    from db.base import SchemaOutOfDateError, check_schema_current
+
+    try:
+        check_schema_current()
+        logger.info("[startup] Postgres schema is at Alembic head.")
+    except SchemaOutOfDateError:
+        logger.error(
+            "[startup] Postgres schema is out of date. "
+            "Run `alembic upgrade head` before serving."
+        )
+        raise
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan events for startup and shutdown."""
     # Startup
     init_db()
+    _verify_postgres_schema()
     logger.info("Claire API started")
     yield
     # Shutdown
@@ -478,6 +508,216 @@ async def get_recommendations(request: Request, course: str = "124"):
         }
 
 
+# ============================================================
+# Graded Attempt Endpoint — the single execution path for one
+# typed student attempt. Wraps claire_core.run_tutor_turn:
+#   verify (SymPy = ground truth) -> decide -> enforce -> classify
+#   -> persist attempt -> update mastery -> save teaching state
+#   -> recommend next problems.
+# Replaces the old typed-practice path (LLM free-text + frontend
+# string-matching) with deterministic grading. No fallback to it.
+# ============================================================
+
+class AttemptRequest(BaseModel):
+    problem_id: str
+    answer: str
+    course: Optional[str] = None       # inferred from problem if omitted
+    part_label: Optional[str] = None   # which part of a multi-part problem
+    source: str = "practice"           # diagnostic | practice | handwritten_upload
+    # Practice-session id: scopes teaching progression. Same id across requests
+    # continues one session; a new id (e.g. on "restart this problem") starts
+    # fresh. Namespaced under the authenticated user, so it is not identity and
+    # cannot be used to read another user's state.
+    attempt_session_id: Optional[str] = None
+
+
+class AttemptResponse(BaseModel):
+    is_correct: bool
+    is_uncertain: bool
+    grade_status: str                  # correct | incorrect | unverifiable
+    action: str                        # TutorAction enum value
+    hint_level: str                    # HintLevel enum value
+    misconception: Optional[str] = None
+    message: str
+    phase: str                         # ProblemPhase enum value
+    attempt_id: Optional[str] = None
+    recommendations: list = []
+    persisted: bool                    # True when written to Postgres (authed)
+
+
+def _build_tutor_agent():
+    """Factory for the tutoring LLM layer. Overridable in tests (stub agent)."""
+    from claire_core import TutorAgent
+
+    return TutorAgent()
+
+
+def _attempt_stores(user_id: Optional[str], attempt_session_id: str):
+    """Pick persistence for this turn.
+
+    Authenticated  -> SQLAlchemy stores on Postgres (Neon/local), teaching state
+                      scoped to `attempt_session_id`. persisted=True.
+    Anonymous       -> explicit non-persistent stores: the turn is graded and
+                      taught, but nothing is written and there is no cross-request
+                      progression. persisted=False. (We never silently stash anon
+                      teaching state in process memory.)
+
+    Returns (attempt_store, profile_store, teaching_state_store, persisted).
+    """
+    if user_id:
+        from claire_core.persistence_sqlalchemy import (
+            SQLAlchemyAttemptStore,
+            SQLAlchemyProfileStore,
+            SQLAlchemyTeachingStateStore,
+        )
+
+        return (
+            SQLAlchemyAttemptStore(attempt_session_id=attempt_session_id),
+            SQLAlchemyProfileStore(),
+            SQLAlchemyTeachingStateStore(attempt_session_id=attempt_session_id),
+            True,
+        )
+
+    from claire_core import (
+        NullAttemptStore,
+        NullProfileStore,
+        NullTeachingStateStore,
+    )
+
+    return (
+        NullAttemptStore(),
+        NullProfileStore(),
+        NullTeachingStateStore(),
+        False,
+    )
+
+
+def _load_core_problem(course: str, problem_id: str, part_label: Optional[str]):
+    """Build a claire_core.Problem from the question bank (official answer is
+    loaded server-side — never trusted from the client)."""
+    from problem_loader import get_problem_by_id
+    from claire_core import Problem as CoreProblem
+
+    p = get_problem_by_id(course, problem_id)
+    if not p or not p.parts:
+        return None
+
+    part = None
+    if part_label:
+        part = next((pt for pt in p.parts if pt.label == part_label), None)
+    if part is None:
+        part = p.parts[0]
+
+    text = ""
+    if p.stem:
+        text += f"{p.stem}\n\n"
+    if part.label:
+        text += f"({part.label}) "
+    text += part.question_text or ""
+
+    return CoreProblem(
+        id=problem_id,
+        text=text,
+        official_answer=part.final_answer or "",
+        topic=p.topic or "",
+        subtopic=None,
+        problem_type=None,      # verifier auto-detects
+        course=course,
+    )
+
+
+@app.post("/api/attempt", response_model=AttemptResponse)
+async def submit_attempt(request: Request, body: AttemptRequest):
+    """Grade one typed student attempt and advance the adaptive loop.
+
+    Authenticated users persist to Supabase (attempts, mastery, teaching state);
+    anonymous users are graded and taught with ephemeral state. Correctness is
+    always decided by the SymPy verifier inside run_tutor_turn — never by the LLM.
+    """
+    from claire_core import StudentAttempt, run_tutor_turn
+
+    # Identity comes ONLY from a verified Clerk token — never from a header or
+    # body field, so a client cannot act as another user.
+    user_id = get_optional_identity(request)
+
+    # Same daily rate limit as /chat — this path also spends an LLM call.
+    rl_id = get_user_id(request)
+    usage = check_and_increment_usage(rl_id)
+    if not usage["allowed"]:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "Daily limit reached",
+                "message": "今日免费额度已用完，明天再来！",
+                "used": usage["used"],
+                "limit": usage["limit"],
+            },
+        )
+
+    course = body.course or "124"
+    workspace_id = user_id or "anonymous"
+    # Session scope for teaching progression (defaults to a per-user single
+    # session when the client doesn't supply one).
+    attempt_session_id = body.attempt_session_id or "default"
+
+    core_problem = _load_core_problem(course, body.problem_id, body.part_label)
+    if core_problem is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "problem_not_found", "message": f"No problem {body.problem_id} in course {course}"},
+        )
+    if not core_problem.official_answer:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "no_official_answer", "message": "This problem/part has no answer to grade against."},
+        )
+
+    attempt_store, profile_store, state_store, persisted = _attempt_stores(
+        user_id, attempt_session_id
+    )
+
+    try:
+        result = run_tutor_turn(
+            problem=core_problem,
+            attempt=StudentAttempt(
+                problem_id=body.problem_id, answer=body.answer, source=body.source
+            ),
+            user_id=user_id or f"anon:{rl_id}",
+            workspace_id=workspace_id,
+            agent=_build_tutor_agent(),
+            attempt_store=attempt_store,
+            profile_store=profile_store,
+            teaching_state_store=state_store,
+            recommend_limit=3,
+        )
+    except Exception as exc:
+        logger.error(f"[attempt] run_tutor_turn failed: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "grading_failed", "message": str(exc)},
+        )
+
+    logger.info(
+        f"[attempt] user={user_id or 'anon'} problem={body.problem_id} "
+        f"status={result.grade.status.value} action={result.decision.action.value} "
+        f"persisted={persisted}"
+    )
+
+    return AttemptResponse(
+        is_correct=result.grade.is_correct,
+        is_uncertain=result.grade.is_uncertain,
+        grade_status=result.grade.status.value,
+        action=result.decision.action.value,
+        hint_level=result.hint_level.value,
+        misconception=result.misconception.value if result.misconception else None,
+        message=result.decision.message,
+        phase=result.phase.value,
+        attempt_id=result.attempt_id,
+        recommendations=result.recommendations,
+        persisted=persisted,
+    )
+
+
 @app.get("/stats")
 async def get_stats():
     """Admin endpoint - get usage statistics."""
@@ -639,59 +879,125 @@ def _analysis_to_dict(analysis: SolutionAnalysis) -> dict:
     }
 
 
-def _build_teaching_result(analysis: SolutionAnalysis, problem: Problem) -> dict:
-    """Build teaching decision from analysis result."""
+def _mobile_teaching_result(
+    analysis: SolutionAnalysis, problem: Problem, session_id: str
+) -> dict:
+    """Turn a handwritten-solution analysis into a teaching decision via the
+    canonical claire_core loop (`run_tutor_turn`), so mobile grading shares the
+    same enforcement + TutorAction vocabulary as `/api/attempt` — no more
+    hand-rolled enforce with divergent action names.
+
+    Multi-part note: `run_tutor_turn` grades one answer, so we focus the turn on
+    the part that needs attention (first incorrect, else first uncertain, else
+    the first part when all correct) and grade that. Wrong-problem detection
+    stays here — the symbolic loop has no notion of an off-topic submission.
+
+    Mobile stays ephemeral for now (Supabase session identity, not Clerk): the
+    turn is graded and taught but not persisted. Swap in real stores once mobile
+    auth is unified with `/api/attempt`.
+    """
     if not analysis:
         return {
-            "action": "error",
+            "action": "give_feedback",
             "message": "Could not analyze your solution.",
             "reasoning": "Vision analysis failed",
         }
 
-    # Handle invalid submission (wrong problem)
     if analysis.is_invalid_submission:
         return {
             "action": "give_feedback",
-            "message": f"This doesn't appear to be a solution to the current problem. {analysis.invalid_submission_reason or ''}",
+            "message": (
+                "This doesn't appear to be a solution to the current problem. "
+                f"{analysis.invalid_submission_reason or ''}"
+            ).strip(),
             "reasoning": "Submission doesn't match problem",
         }
 
-    # Determine overall correctness
-    all_correct = not analysis.any_incorrect and not analysis.any_uncertain
-    any_uncertain = analysis.any_uncertain
-
-    if all_correct:
-        return {
-            "action": "confirm_correct_and_stop",
-            "message": f"Great work! {analysis.overall_summary}",
-            "reasoning": "All parts verified correct",
-        }
-    elif any_uncertain:
-        # Find uncertain parts
-        uncertain_parts = [p for p in analysis.parts if p.is_uncertain]
-        part_labels = ", ".join(p.part_label or str(i+1) for i, p in enumerate(uncertain_parts))
+    parts = analysis.parts or []
+    if not parts:
         return {
             "action": "ask_clarification",
-            "message": f"I couldn't verify part(s) {part_labels} automatically. Could you walk me through your reasoning?",
-            "reasoning": "Some parts uncertain, need clarification",
+            "message": "I couldn't read a clear answer from your work. Could you re-upload a clearer photo?",
+            "reasoning": "No parts extracted from the image",
         }
-    else:
-        # Find incorrect parts
-        incorrect_parts = [p for p in analysis.parts if not p.is_correct and not p.is_uncertain]
-        if incorrect_parts:
-            first_wrong = incorrect_parts[0]
-            hint = first_wrong.hint or "Check your calculation."
-            return {
-                "action": "give_hint",
-                "message": f"{first_wrong.feedback}\n\nHint: {hint}",
-                "reasoning": f"Part {first_wrong.part_label or '1'} is incorrect",
-            }
-        else:
-            return {
-                "action": "give_feedback",
-                "message": analysis.overall_summary,
-                "reasoning": "General feedback",
-            }
+
+    focus = (
+        next((p for p in parts if not p.is_correct and not p.is_uncertain), None)
+        or next((p for p in parts if p.is_uncertain), None)
+        or parts[0]
+    )
+    prob_part = next(
+        (pt for pt in problem.parts if pt.label == focus.part_label),
+        problem.parts[0] if problem.parts else None,
+    )
+
+    text = ""
+    if problem.stem:
+        text += f"{problem.stem}\n\n"
+    if focus.part_label:
+        text += f"({focus.part_label}) "
+    if prob_part:
+        text += prob_part.question_text or ""
+
+    from claire_core import (
+        NullAttemptStore,
+        NullProfileStore,
+        NullTeachingStateStore,
+        Problem as CoreProblem,
+        StudentAttempt,
+        run_tutor_turn,
+    )
+
+    core_problem = CoreProblem(
+        id=problem.id,
+        text=text.strip(),
+        official_answer=focus.official_answer
+        or (prob_part.final_answer if prob_part else "")
+        or "",
+        topic=problem.topic or "",
+        subtopic=None,
+        problem_type=None,  # verifier auto-detects
+        course=problem.course or "124",
+    )
+    attempt = StudentAttempt(
+        problem_id=problem.id,
+        answer=focus.student_final_answer or "",
+        work="\n".join(focus.steps) if focus.steps else None,
+        source="handwritten_upload",
+    )
+
+    try:
+        result = run_tutor_turn(
+            problem=core_problem,
+            attempt=attempt,
+            user_id=f"mobile:{session_id}",
+            workspace_id=f"mobile:{session_id}",
+            agent=_build_tutor_agent(),
+            attempt_store=NullAttemptStore(),
+            profile_store=NullProfileStore(),
+            teaching_state_store=NullTeachingStateStore(),
+            recommend_limit=0,
+        )
+    except Exception as exc:
+        # Degrade to the vision model's own feedback rather than failing the
+        # whole upload if the tutoring loop errors.
+        logger.error(f"[mobile] run_tutor_turn failed: {exc}", exc_info=True)
+        message = focus.feedback or analysis.overall_summary or "Let's review your work."
+        if focus.hint and not focus.is_correct:
+            message += f"\n\nHint: {focus.hint}"
+        return {
+            "action": "confirm_correct" if focus.is_correct else "give_hint",
+            "message": message,
+            "reasoning": f"run_tutor_turn failed: {type(exc).__name__}",
+        }
+
+    return {
+        "action": result.decision.action.value,
+        "message": result.decision.message,
+        "reasoning": result.decision.reasoning_summary or "Graded via run_tutor_turn",
+        "hint_level": result.hint_level.value,
+        "misconception": result.misconception.value if result.misconception else None,
+    }
 
 
 # --- Mobile Upload Endpoints ---
@@ -929,8 +1235,8 @@ async def upload_mobile_image(
                 "error": analysis_error,
             }
 
-        # Build teaching decision
-        teaching_result = _build_teaching_result(analysis, problem)
+        # Build teaching decision through the canonical claire_core loop.
+        teaching_result = _mobile_teaching_result(analysis, problem, session_id)
 
         # Convert to dict for storage
         analysis_dict = _analysis_to_dict(analysis)
@@ -2045,17 +2351,6 @@ async def get_remediation(request: Request, body: RemediationRequest):
 
 
 # ============================================================
-# Claire Agent API - Structured teaching actions
-# ============================================================
-
-import re
-import hashlib
-
-# Session cache for Claire agents (keyed by session_id)
-_claire_agent_sessions: dict[str, NewClaireAgent] = {}
-
-
-# ============================================================
 # Phase 4: Thread Persistence
 # ============================================================
 
@@ -2130,141 +2425,6 @@ async def save_thread(body: ThreadSaveRequest):
         conn.commit()
 
     return {"status": "ok"}
-
-
-# ============================================================
-# Phase 5: Intent Detection & Model Routing
-# ============================================================
-
-SONNET_INTENTS = {"hint", "cant_start", "ask_question", "check_work_image", "acknowledgment", "clarify"}
-OPUS_INTENTS = {"decide_teaching_strategy", "student_repeatedly_stuck", "complex_explanation"}
-
-def detect_intent(message: str, problem_context: Optional[dict] = None) -> str:
-    """
-    Detect user intent from message to route to appropriate model.
-    Returns intent string.
-    """
-    text = message.lower().strip()
-
-    # Simple pattern matching for common intents
-    if re.match(r'^(hint|give me a hint|提示)', text):
-        return "hint"
-
-    if re.match(r'^(i\'?m stuck|stuck|不会|怎么开始|how (do i |to )?start|where (do i |to )?start)', text):
-        return "cant_start"
-
-    if re.match(r'^(ok|好的?|懂了|got it|i see|明白|嗯)$', text):
-        return "acknowledgment"
-
-    if re.match(r'^(what|why|how|explain|can you|再解释|解释)', text):
-        return "ask_question"
-
-    if re.match(r'^(不懂|还是不懂|still don\'?t|confused|i don\'?t understand)', text):
-        return "student_repeatedly_stuck"
-
-    if "check" in text or "submit" in text or "done" in text or "answer" in text:
-        return "check_work_image"
-
-    # Default: needs strategic decision
-    return "decide_teaching_strategy"
-
-
-def get_model_for_intent(intent: str) -> str:
-    """Return model tier based on intent."""
-    if intent in SONNET_INTENTS:
-        return "basic"  # Use Sonnet
-    return "premium"  # Use Opus
-
-
-# ============================================================
-# Main Agent Endpoint (Phase 4 + 5 optimizations)
-# ============================================================
-
-class ClaireAgentRequest(BaseModel):
-    message: str
-    session_id: str
-    problem_context: Optional[dict] = None
-    user_id: Optional[str] = None  # For thread persistence
-
-
-class ClaireAgentResponse(BaseModel):
-    events: list[dict]
-    turns: int
-    intent: Optional[str] = None
-    model_used: Optional[str] = None
-
-
-@app.post("/api/claire/agent", response_model=ClaireAgentResponse)
-async def claire_agent_endpoint(body: ClaireAgentRequest):
-    """
-    Process a message through the Claire agent.
-
-    Optimizations:
-    - Phase 4: Thread persistence (frontend checks /thread/get first)
-    - Phase 5: Intent-based model routing (Sonnet for simple, Opus for strategic)
-    """
-    logger.info(f"[claire/agent] session={body.session_id}, message_len={len(body.message)}")
-
-    # Phase 5: Detect intent
-    intent = detect_intent(body.message, body.problem_context)
-    model_tier = get_model_for_intent(intent)
-    logger.info(f"[claire/agent] intent={intent}, model_tier={model_tier}")
-
-    # Get or create agent for this session
-    if body.session_id not in _claire_agent_sessions:
-        _claire_agent_sessions[body.session_id] = NewClaireAgent()
-        logger.info(f"[claire/agent] Created new agent for session={body.session_id}")
-
-    agent = _claire_agent_sessions[body.session_id]
-
-    # Phase 5: Set model tier based on intent
-    agent.set_model_tier(model_tier)
-
-    # Inject problem context into message if provided
-    if body.problem_context:
-        p = body.problem_context
-        stem = p.get('stem', '')
-        parts = p.get('parts', [])
-        parts_text = '\n'.join([
-            f"({part.get('label', chr(97+i))}): {part.get('question_text', '')}"
-            for i, part in enumerate(parts)
-        ])
-        message = f"[Current problem]\n{stem}\n{parts_text}\n\n---\n{body.message}"
-    else:
-        message = body.message
-
-    try:
-        # Process query through agent
-        result = agent.process_query(message)
-        events = result.get("events", [])
-
-        logger.info(
-            f"[claire/agent] session={body.session_id}, "
-            f"events={len(events)}, "
-            f"turns={result.get('turns', 0)}, "
-            f"model={model_tier}"
-        )
-
-        return ClaireAgentResponse(
-            events=events,
-            turns=result.get("turns", 0),
-            intent=intent,
-            model_used=model_tier
-        )
-
-    except Exception as e:
-        logger.error(f"[claire/agent] Error: {e}", exc_info=True)
-        # Return a fallback say event
-        return ClaireAgentResponse(
-            events=[{
-                "event": "say",
-                "text": "I'm having trouble processing that right now. Could you try again?",
-                "tone": "concerned"
-            }],
-            turns=0,
-            intent=intent,
-            model_used=model_tier
-        )
 
 
 # ============================================================

@@ -5,30 +5,40 @@ Public API. Import from here rather than reaching into submodules:
 
     from claire_core import (
         Problem, StudentAttempt, TutorAgent, run_tutor_turn,
-        InMemoryAttemptStore, InMemoryProfileStore,
+        InMemoryAttemptStore, InMemoryProfileStore, InMemoryTeachingStateStore,
     )
 
 See claire_core/README.md for the architecture, state machine, and roadmap.
 """
 from .agent import StubTutorAgent, TutorAgent, TutorAgentProtocol
+from .classify import classify_math_error, coarse_bucket
 from .loop import TutorTurnResult, run_tutor_turn
 from .persistence import (
     AttemptStore,
     InMemoryAttemptStore,
     InMemoryProfileStore,
+    InMemoryTeachingStateStore,
+    NullAttemptStore,
+    NullProfileStore,
+    NullTeachingStateStore,
     ProfileStore,
+    TeachingStateStore,
 )
 from .state import (
     Grade,
+    GradeStatus,
+    HintLevel,
+    MisconceptionType,
     Problem,
-    SessionPhase,
+    ProblemPhase,
     StudentAttempt,
     TeachingDecision,
+    TeachingState,
     TutorAction,
     allowed_actions,
     default_decision_for,
     enforce,
-    phase_after,
+    next_hint_level,
 )
 
 __all__ = [
@@ -36,13 +46,20 @@ __all__ = [
     "Problem",
     "StudentAttempt",
     "Grade",
+    "GradeStatus",
     "TeachingDecision",
+    "TeachingState",
     "TutorAction",
-    "SessionPhase",
+    "ProblemPhase",
+    "HintLevel",
+    "MisconceptionType",
     "allowed_actions",
     "enforce",
     "default_decision_for",
-    "phase_after",
+    "next_hint_level",
+    # classify
+    "classify_math_error",
+    "coarse_bucket",
     # agent
     "TutorAgent",
     "StubTutorAgent",
@@ -50,8 +67,13 @@ __all__ = [
     # persistence
     "AttemptStore",
     "ProfileStore",
+    "TeachingStateStore",
     "InMemoryAttemptStore",
     "InMemoryProfileStore",
+    "InMemoryTeachingStateStore",
+    "NullAttemptStore",
+    "NullProfileStore",
+    "NullTeachingStateStore",
     # loop
     "run_tutor_turn",
     "TutorTurnResult",

@@ -12,9 +12,11 @@ import pytest
 from claire_core.agent import StubTutorAgent, TutorAgent, TutorAgentProtocol, _turn_prompt
 from claire_core.state import (
     Grade,
+    HintLevel,
     Problem,
     StudentAttempt,
     TeachingDecision,
+    TeachingState,
     TutorAction,
 )
 
@@ -53,17 +55,32 @@ def test_stub_returns_preset_decision():
 
 
 def test_turn_prompt_includes_verdict_and_legal_actions():
-    prompt = _turn_prompt(PROBLEM, ATTEMPT, _grade(False))
+    prompt = _turn_prompt(PROBLEM, ATTEMPT, _grade(False), TeachingState(problem_id="q1", attempt_count=1))
     assert "INCORRECT" in prompt
-    assert "give_feedback" in prompt
+    assert "identify_error" in prompt
     # Correct-only action must not be offered on a wrong answer.
-    assert "confirm_correct_and_stop" not in prompt
+    assert "confirm_correct" not in prompt
 
 
 def test_turn_prompt_correct_offers_only_confirm():
-    prompt = _turn_prompt(PROBLEM, StudentAttempt(problem_id="q1", answer="3x^2"), _grade(True))
-    assert "confirm_correct_and_stop" in prompt
+    prompt = _turn_prompt(
+        PROBLEM, StudentAttempt(problem_id="q1", answer="3x^2"), _grade(True)
+    )
+    assert "confirm_correct" in prompt
     assert "CORRECT" in prompt
+
+
+def test_turn_prompt_surfaces_teaching_history():
+    state = TeachingState(
+        problem_id="q1",
+        attempt_count=2,
+        hint_level=HintLevel.CONCEPT,
+        hints_given=["nudge", "concept"],
+    )
+    prompt = _turn_prompt(PROBLEM, ATTEMPT, _grade(False), state, "STUDENT MASTERY: weak")
+    assert "attempts so far" in prompt
+    assert "concept" in prompt
+    assert "STUDENT MASTERY: weak" in prompt
 
 
 @pytest.mark.skipif(
@@ -75,7 +92,7 @@ def test_real_agent_decides_within_allowed_actions():
 
     agent = TutorAgent()
     grade = _grade(False)
-    decision = agent.decide(PROBLEM, ATTEMPT, grade)
+    state = TeachingState(problem_id="q1", attempt_count=1)
+    decision = agent.decide(PROBLEM, ATTEMPT, grade, state)
     assert isinstance(decision, TeachingDecision)
-    # Even before enforce(), a well-behaved model should stay legal.
-    assert decision.action in allowed_actions(grade) or decision.action is not None
+    assert decision.action in allowed_actions(grade, state) or decision.action is not None

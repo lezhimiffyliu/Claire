@@ -23,9 +23,11 @@ from typing import List, Optional, Protocol, runtime_checkable
 
 from .state import (
     Grade,
+    GradeStatus,
     Problem,
     StudentAttempt,
     TeachingDecision,
+    TeachingState,
     allowed_actions,
     default_decision_for,
 )
@@ -37,12 +39,14 @@ DEFAULT_MODEL = "claude-sonnet-4-5"
 SYSTEM_PROMPT = """You are Claire, a Socratic calculus tutor.
 
 Rules you must obey:
-1. NEVER give away the final answer. Teach the formula/rule first, then let the
-   student apply it.
+1. NEVER give away the final answer prematurely. Teach the formula/rule first,
+   then let the student apply it.
 2. The correctness of the student's answer has ALREADY been decided by a symbolic
    verifier — treat that verdict as ground truth. Do not re-judge it.
 3. Be warm, concise (1-4 sentences), and end wrong-answer turns with a question
    that moves the student one concrete step forward.
+4. You are given the teaching history for THIS problem and the student's mastery.
+   If you have already hinted, go DEEPER than last time — do not repeat yourself.
 """
 
 
@@ -51,7 +55,12 @@ class TutorAgentProtocol(Protocol):
     """The interface loop.py depends on. Anything with .decide() works."""
 
     def decide(
-        self, problem: Problem, attempt: StudentAttempt, grade: Grade
+        self,
+        problem: Problem,
+        attempt: StudentAttempt,
+        grade: Grade,
+        state: Optional[TeachingState] = None,
+        profile_summary: Optional[str] = None,
     ) -> TeachingDecision:
         ...
 
@@ -59,15 +68,39 @@ class TutorAgentProtocol(Protocol):
 # --------------------------------------------------------------------------- #
 # Prompt construction
 # --------------------------------------------------------------------------- #
-def _turn_prompt(problem: Problem, attempt: StudentAttempt, grade: Grade) -> str:
-    if grade.is_correct:
-        verdict = "CORRECT"
-    elif grade.is_uncertain:
-        verdict = "UNCERTAIN (could not read/verify the work)"
-    else:
-        verdict = "INCORRECT"
+_VERDICT_LABEL = {
+    GradeStatus.CORRECT: "CORRECT",
+    GradeStatus.INCORRECT: "INCORRECT",
+    GradeStatus.UNVERIFIABLE: "UNVERIFIABLE (could not read/verify the work)",
+}
 
-    legal = sorted(a.value for a in allowed_actions(grade))
+
+def _state_block(state: Optional[TeachingState]) -> str:
+    if state is None:
+        return "TEACHING HISTORY: (this is the first turn on this problem)"
+    hints = ", ".join(state.hints_given) or "none yet"
+    concepts = ", ".join(state.explained_concepts) or "none yet"
+    return (
+        f"TEACHING HISTORY (this problem):\n"
+        f"  attempts so far        : {state.attempt_count}\n"
+        f"  current hint level     : {state.hint_level.value}\n"
+        f"  hints already given    : {hints}\n"
+        f"  concepts explained     : {concepts}\n"
+        f"  last action            : {state.last_action.value if state.last_action else 'none'}\n"
+        f"  diagnosed misconception: {state.diagnosed_misconception.value if state.diagnosed_misconception else 'none'}"
+    )
+
+
+def _turn_prompt(
+    problem: Problem,
+    attempt: StudentAttempt,
+    grade: Grade,
+    state: Optional[TeachingState] = None,
+    profile_summary: Optional[str] = None,
+) -> str:
+    verdict = _VERDICT_LABEL[grade.status]
+    legal = sorted(a.value for a in allowed_actions(grade, state))
+    profile = profile_summary or "STUDENT MASTERY: (no history yet)"
     return f"""PROBLEM ({problem.topic}): {problem.text}
 
 STUDENT'S ANSWER: {attempt.answer}
@@ -76,11 +109,19 @@ STUDENT'S WORK: {attempt.work or "(none provided)"}
 VERIFIER VERDICT (ground truth): {verdict}
 Verifier note: {grade.reason}
 
+{_state_block(state)}
+
+{profile}
+
 You may ONLY choose one of these actions: {legal}
-Pick the single best action and write the student-facing `message`. If the answer
-is CORRECT, confirm briefly and stop. If INCORRECT, do NOT reveal the answer —
-give a hint or targeted feedback and ask a forward question. If the verdict is
-INCORRECT, also set `error_type` to one of concept|algebra|logic|careless.
+Pick the single best action and write the student-facing `message`. Set
+`hint_level` to how much you reveal (none|nudge|concept|next_step|near_solution|
+full_solution) — escalate it if you have hinted before. If the verdict is
+INCORRECT, also set `diagnosed_misconception` to one of: power_rule_error,
+chain_rule_omission, product_rule_error, algebra_error, notation_error,
+conceptual_confusion, unknown. Put a one-line justification in `reasoning_summary`.
+If CORRECT, confirm briefly. Never reveal the final answer unless the action is
+show_solution.
 """
 
 
@@ -109,14 +150,24 @@ class TutorAgent:
 
     # -- grading-turn decision (single structured call) -------------------- #
     def decide(
-        self, problem: Problem, attempt: StudentAttempt, grade: Grade
+        self,
+        problem: Problem,
+        attempt: StudentAttempt,
+        grade: Grade,
+        state: Optional[TeachingState] = None,
+        profile_summary: Optional[str] = None,
     ) -> TeachingDecision:
         try:
             structured = self._model.with_structured_output(TeachingDecision)
             decision = structured.invoke(
                 [
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": _turn_prompt(problem, attempt, grade)},
+                    {
+                        "role": "user",
+                        "content": _turn_prompt(
+                            problem, attempt, grade, state, profile_summary
+                        ),
+                    },
                 ]
             )
             if isinstance(decision, TeachingDecision):
@@ -124,7 +175,7 @@ class TutorAgent:
             return TeachingDecision(**decision)  # dict fallback
         except Exception as exc:  # pragma: no cover - network path
             logger.warning("TutorAgent.decide fell back to default: %s", exc)
-            return default_decision_for(grade)
+            return default_decision_for(grade, state)
 
     # -- interactive Socratic loop (ReAct tool-calling) -------------------- #
     def _get_react_agent(self):
@@ -159,6 +210,11 @@ class StubTutorAgent:
         self._decision = decision
 
     def decide(
-        self, problem: Problem, attempt: StudentAttempt, grade: Grade
+        self,
+        problem: Problem,
+        attempt: StudentAttempt,
+        grade: Grade,
+        state: Optional[TeachingState] = None,
+        profile_summary: Optional[str] = None,
     ) -> TeachingDecision:
-        return self._decision or default_decision_for(grade)
+        return self._decision or default_decision_for(grade, state)

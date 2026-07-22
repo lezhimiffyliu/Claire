@@ -58,4 +58,6 @@ def lookup_heuristic_tool(pattern: str) -> str:
         return f"Heuristic lookup unavailable ({exc})."
 
 
-TUTOR_TOOLS = [verify_answer_tool, lookup_heuristic_tool]
+from .problem_retrieval import retrieve_teaching_example
+
+TUTOR_TOOLS = [verify_answer_tool, lookup_heuristic_tool, retrieve_teaching_example]

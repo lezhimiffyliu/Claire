@@ -12,6 +12,7 @@ from __future__ import annotations
 from claire_core import (
     InMemoryAttemptStore,
     InMemoryProfileStore,
+    InMemoryTeachingStateStore,
     Problem,
     StubTutorAgent,
     StudentAttempt,
@@ -29,7 +30,7 @@ PROBLEM = Problem(
 )
 
 
-def _turn(label: str, answer: str, agent, attempts, profiles) -> None:
+def _turn(label: str, answer: str, agent, attempts, profiles, states) -> None:
     result = run_tutor_turn(
         problem=PROBLEM,
         attempt=StudentAttempt(problem_id=PROBLEM.id, answer=answer),
@@ -38,13 +39,16 @@ def _turn(label: str, answer: str, agent, attempts, profiles) -> None:
         agent=agent,
         attempt_store=attempts,
         profile_store=profiles,
+        teaching_state_store=states,
     )
     profile = profiles.load("demo_user", "124")
     print(f"\n=== {label}: student answered '{answer}' ===")
     print(f"  grade      : correct={result.grade.is_correct} "
           f"uncertain={result.grade.is_uncertain} ({result.grade.verifier_type})")
-    print(f"  action     : {result.decision.action.value}")
+    print(f"  action     : {result.decision.action.value} "
+          f"(hint_level={result.hint_level.value})")
     print(f"  message    : {result.decision.message}")
+    print(f"  misconception: {result.misconception.value if result.misconception else '-'}")
     print(f"  phase      : {result.phase.value}")
     print(f"  persisted  : attempt_id={result.attempt_id[:8]}... "
           f"total_correct={profile.total_correct} total_incorrect={profile.total_incorrect}")
@@ -55,10 +59,11 @@ def main() -> None:
     agent = StubTutorAgent()  # deterministic, no LLM
     attempts = InMemoryAttemptStore()
     profiles = InMemoryProfileStore()
+    states = InMemoryTeachingStateStore()
 
     print("Claire agent-core demo — the loop is CLOSED (attempt -> grade -> persist -> profile -> recommend)")
-    _turn("Turn 1", "2*x", agent, attempts, profiles)      # wrong
-    _turn("Turn 2", "3*x**2", agent, attempts, profiles)   # correct
+    _turn("Turn 1", "2*x", agent, attempts, profiles, states)      # wrong
+    _turn("Turn 2", "3*x**2", agent, attempts, profiles, states)   # correct
 
     print(f"\nTotal attempts persisted for demo_user: {len(attempts.all_for('demo_user'))}")
 
