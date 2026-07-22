@@ -12,7 +12,12 @@ See claire_core/README.md for the architecture, state machine, and roadmap.
 """
 from .agent import StubTutorAgent, TutorAgent, TutorAgentProtocol
 from .classify import classify_math_error, coarse_bucket
-from .loop import TutorTurnResult, run_tutor_turn
+from .loop import (
+    TeachingTurnResult,
+    TutorTurnResult,
+    run_teaching_turn,
+    run_tutor_turn,
+)
 from .persistence import (
     AttemptStore,
     InMemoryAttemptStore,
@@ -25,6 +30,7 @@ from .persistence import (
     TeachingStateStore,
 )
 from .state import (
+    EvidenceRecord,
     Grade,
     GradeStatus,
     HintLevel,
@@ -34,6 +40,9 @@ from .state import (
     StudentAttempt,
     TeachingDecision,
     TeachingState,
+    ToolName,
+    ToolRequest,
+    TranscriptEntry,
     TutorAction,
     allowed_actions,
     default_decision_for,
@@ -49,6 +58,10 @@ __all__ = [
     "GradeStatus",
     "TeachingDecision",
     "TeachingState",
+    "ToolName",
+    "ToolRequest",
+    "EvidenceRecord",
+    "TranscriptEntry",
     "TutorAction",
     "ProblemPhase",
     "HintLevel",
@@ -77,4 +90,6 @@ __all__ = [
     # loop
     "run_tutor_turn",
     "TutorTurnResult",
+    "run_teaching_turn",
+    "TeachingTurnResult",
 ]

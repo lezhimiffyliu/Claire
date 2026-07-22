@@ -198,13 +198,15 @@ Ordered by leverage. Each item attaches to an existing seam.
    error_type, course)` (`claire_core/problem_retrieval.py`) does keyword/topic
    ranking over the `problems/*.json` corpus and is registered in `TUTOR_TOOLS`.
    Next: swap keyword matching for real embeddings behind the same signature.
-3. **Multi-turn `TEACHING` loop.** `ProblemPhase.TEACHING` exists but the
-   follow-up dialogue turn — carry the original verdict as background (never
-   re-grade), let the agent make at most one tool call and one move, then
-   `enforce → advance → save` — isn't orchestrated yet. Build it as a
-   `run_teaching_turn` sibling to `run_tutor_turn` on top of `TutorAgent`; a
-   pasted final answer should redirect to `/api/attempt` so the verifier stays
-   the sole answer authority.
+3. ~~**Multi-turn `TEACHING` loop.**~~ ✅ Done — `run_teaching_turn` (loop.py)
+   is the follow-up dialogue turn: it carries the original verdict as background
+   (never re-grades), lets the agent make **at most one tool call and one move**
+   via a bounded `tool_request` hop (`TutorAgent.propose` → `tools.run_tool` →
+   finalize), then `enforce → advance → save`. Per-problem `TeachingState` now
+   holds a bounded `transcript` + structured `evidence`. Exposed at
+   `POST /api/attempt/continue`; a pasted final answer returns `redirect_to_submit`
+   so the frontend uses `/api/attempt` (verifier stays the sole answer authority).
+   The orphaned `chat()` ReAct loop is intentionally NOT on this path.
 4. **Sharper classification.** `classify.py` is conservative (sign/constant-factor
    → `ALGEBRA_ERROR`; clean missing factor → `CHAIN_RULE_OMISSION`; else
    `UNKNOWN`). Add step-level evidence via `verify_intermediate_step` to

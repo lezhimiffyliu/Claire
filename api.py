@@ -718,6 +718,100 @@ async def submit_attempt(request: Request, body: AttemptRequest):
     )
 
 
+# ============================================================
+# Follow-up teaching turn — the multi-turn dialogue path. Wraps
+# claire_core.run_teaching_turn: the student replies to the tutor's last
+# message (a hint reply, a step, or a question); the agent makes AT MOST one
+# tool call and one teaching move. It does NOT re-grade the final answer — if
+# the student pastes a complete answer, `redirect_to_submit` tells the frontend
+# to use POST /api/attempt instead.
+# ============================================================
+
+class TeachingTurnRequest(BaseModel):
+    problem_id: str
+    message: str                       # the student's follow-up reply/question
+    course: Optional[str] = None
+    part_label: Optional[str] = None
+    attempt_session_id: Optional[str] = None
+
+
+class TeachingTurnResponse(BaseModel):
+    action: str                        # TutorAction enum value
+    message: str
+    hint_level: str
+    phase: str
+    ended: bool                        # dialogue is over (resolved/abandoned)
+    redirect_to_submit: bool           # a full answer was pasted → use /api/attempt
+    tool_used: Optional[str] = None    # which tool the agent invoked, if any
+    persisted: bool
+
+
+@app.post("/api/attempt/continue", response_model=TeachingTurnResponse)
+async def continue_teaching(request: Request, body: TeachingTurnRequest):
+    """Advance one follow-up teaching turn. See section header for the contract."""
+    from claire_core import run_teaching_turn
+
+    user_id = get_optional_identity(request)
+
+    rl_id = get_user_id(request)
+    usage = check_and_increment_usage(rl_id)
+    if not usage["allowed"]:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "Daily limit reached",
+                "message": "今日免费额度已用完，明天再来！",
+                "used": usage["used"],
+                "limit": usage["limit"],
+            },
+        )
+
+    course = body.course or "124"
+    attempt_session_id = body.attempt_session_id or "default"
+
+    core_problem = _load_core_problem(course, body.problem_id, body.part_label)
+    if core_problem is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "problem_not_found", "message": f"No problem {body.problem_id} in course {course}"},
+        )
+
+    _, profile_store, state_store, persisted = _attempt_stores(user_id, attempt_session_id)
+
+    try:
+        result = run_teaching_turn(
+            problem=core_problem,
+            student_message=body.message,
+            user_id=user_id or f"anon:{rl_id}",
+            agent=_build_tutor_agent(),
+            profile_store=profile_store,
+            teaching_state_store=state_store,
+        )
+    except Exception as exc:
+        logger.error(f"[continue] run_teaching_turn failed: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "teaching_failed", "message": str(exc)},
+        )
+
+    logger.info(
+        f"[continue] user={user_id or 'anon'} problem={body.problem_id} "
+        f"action={result.decision.action.value} tool={result.tool_used.value if result.tool_used else 'none'} "
+        f"ended={result.ended} redirect={result.redirect_to_submit}"
+    )
+
+    return TeachingTurnResponse(
+        action=result.decision.action.value,
+        message=result.decision.message,
+        hint_level=result.hint_level.value,
+        phase=result.phase.value,
+        ended=result.ended,
+        redirect_to_submit=result.redirect_to_submit,
+        tool_used=result.tool_used.value if result.tool_used else None,
+        persisted=persisted,
+    )
+
+
 @app.get("/stats")
 async def get_stats():
     """Admin endpoint - get usage statistics."""

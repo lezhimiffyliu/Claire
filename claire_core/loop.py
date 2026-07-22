@@ -34,6 +34,7 @@ from .agent import TutorAgentProtocol
 from .classify import classify_math_error, coarse_bucket
 from .persistence import AttemptStore, ProfileStore, TeachingStateStore
 from .state import (
+    EvidenceRecord,
     Grade,
     GradeStatus,
     HintLevel,
@@ -42,6 +43,8 @@ from .state import (
     ProblemPhase,
     StudentAttempt,
     TeachingDecision,
+    ToolName,
+    TutorAction,
     enforce,
 )
 
@@ -58,6 +61,18 @@ class TutorTurnResult(BaseModel):
     misconception: Optional[MisconceptionType]
     attempt_id: Optional[str]
     recommendations: List[dict]
+
+
+class TeachingTurnResult(BaseModel):
+    """Everything a caller needs after one follow-up teaching turn (no grading)."""
+
+    decision: TeachingDecision
+    phase: ProblemPhase
+    hint_level: HintLevel
+    ended: bool                       # problem resolved/abandoned — stop the dialogue
+    redirect_to_submit: bool          # student pasted a final answer → use /api/attempt
+    tool_used: Optional[ToolName] = None
+    evidence: Optional[EvidenceRecord] = None
 
 
 def _grade(problem: Problem, attempt: StudentAttempt) -> Grade:
@@ -226,4 +241,135 @@ def run_tutor_turn(
         misconception=misconception,
         attempt_id=attempt_id,
         recommendations=recommendations,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Follow-up teaching turn — the multi-turn dialogue loop (no grading)
+# --------------------------------------------------------------------------- #
+def _carried_grade(state) -> Grade:
+    """Reconstruct the background verdict for a teaching turn from the last graded
+    attempt. Defaults to INCORRECT (the common teaching case) if none recorded."""
+    status = state.last_grade_status or GradeStatus.INCORRECT
+    return Grade(
+        is_correct=status == GradeStatus.CORRECT,
+        is_uncertain=status == GradeStatus.UNVERIFIABLE,
+        verifier_type="carried",
+        confidence=1.0,
+        reason=f"Original attempt was {status.value} (carried as background).",
+    )
+
+
+def _ended_result(decision: TeachingDecision, phase: ProblemPhase) -> TeachingTurnResult:
+    return TeachingTurnResult(
+        decision=decision,
+        phase=phase,
+        hint_level=decision.hint_level,
+        ended=True,
+        redirect_to_submit=False,
+    )
+
+
+def run_teaching_turn(
+    *,
+    problem: Problem,
+    student_message: str,
+    user_id: str,
+    agent: TutorAgentProtocol,
+    profile_store: ProfileStore,
+    teaching_state_store: TeachingStateStore,
+) -> TeachingTurnResult:
+    """Advance one follow-up teaching turn on a problem already in TEACHING.
+
+    Unlike `run_tutor_turn`, this does NOT run the verifier on the student's
+    message, does NOT create an attempt, and does NOT touch mastery. It carries
+    the original verdict as background, lets the agent make at most ONE tool call
+    and ONE teaching move, then advances + persists the per-problem teaching
+    state. The verifier remains the sole authority on the final answer: if the
+    student pastes a complete answer here, the agent flags `redirect_to_submit`
+    and the caller routes them to the formal `/api/attempt` path.
+    """
+    state = teaching_state_store.load(user_id, problem.id)
+
+    # A problem that's already done gets no further teaching.
+    if state.phase in (ProblemPhase.RESOLVED, ProblemPhase.ABANDONED):
+        return _ended_result(
+            TeachingDecision(
+                action=TutorAction.END_PROBLEM,
+                message="This problem is already wrapped up — pick a new one to keep going.",
+                reasoning=f"Problem already {state.phase.value}; teaching locked.",
+            ),
+            state.phase,
+        )
+
+    state.teach_turn_count += 1
+    carried = _carried_grade(state)
+    profile = profile_store.load(user_id, problem.course)
+    summary = _profile_summary(profile, problem)
+
+    # 1. First decision — the agent may finalize OR request one tool.
+    decision = agent.propose(
+        problem, student_message, carried, state, summary, allow_tools=True
+    )
+
+    # 2. At most one tool: run it, feed the structured evidence back, finalize.
+    evidence: Optional[EvidenceRecord] = None
+    if decision.tool_request is not None:
+        from .tools import run_tool
+
+        evidence = run_tool(decision.tool_request, problem, state.teach_turn_count)
+        decision = agent.propose(
+            problem,
+            student_message,
+            carried,
+            state,
+            summary,
+            allow_tools=False,
+            evidence=evidence,
+        )
+
+    # 3a. Pasted-answer redirect: this is NOT a teaching move — do not enforce or
+    #     advance one (which could escalate a hint or change phase). Persist the
+    #     context and hand off to the formal submit path with a fixed, safe action.
+    if decision.redirect_to_submit:
+        msg = decision.message or (
+            "That looks like a complete answer — submit it with the answer box so "
+            "I can check it."
+        )
+        if evidence is not None:
+            state.append_evidence(evidence)
+        state.append_transcript("student", student_message)
+        state.append_transcript("tutor", msg)
+        teaching_state_store.save(user_id, state)
+        return TeachingTurnResult(
+            decision=TeachingDecision(
+                action=TutorAction.ASK_CLARIFICATION, message=msg, redirect_to_submit=True
+            ),
+            phase=state.phase,
+            hint_level=state.hint_level,
+            ended=False,
+            redirect_to_submit=True,
+            tool_used=evidence.tool if evidence is not None else None,
+            evidence=evidence,
+        )
+
+    # 3b. Enforce the move against grade + state, then fold it into the state.
+    enforced = enforce(decision, carried, state)
+    state.advance(enforced, carried)
+
+    # 4. Persist bounded context: structured evidence + the two dialogue lines.
+    if evidence is not None:
+        state.append_evidence(evidence)
+    state.append_transcript("student", student_message)
+    state.append_transcript("tutor", enforced.message)
+    teaching_state_store.save(user_id, state)
+
+    return TeachingTurnResult(
+        decision=enforced,
+        phase=state.phase,
+        hint_level=enforced.hint_level,
+        ended=state.phase in (ProblemPhase.RESOLVED, ProblemPhase.ABANDONED),
+        redirect_to_submit=False,
+        tool_used=evidence.tool if evidence is not None else None,
+        evidence=evidence,
     )

@@ -9,9 +9,18 @@ about intermediate checks during Socratic dialogue.
 """
 from __future__ import annotations
 
+import logging
+
 from langchain_core.tools import tool
 
 from verifier import verify_answer
+
+from .state import EvidenceRecord, Problem, ToolName, ToolRequest
+
+logger = logging.getLogger(__name__)
+
+# Keep persisted tool findings short — we store a summary, never raw output.
+_RESULT_SUMMARY_CAP = 300
 
 
 @tool
@@ -61,3 +70,89 @@ def lookup_heuristic_tool(pattern: str) -> str:
 from .problem_retrieval import retrieve_teaching_example
 
 TUTOR_TOOLS = [verify_answer_tool, lookup_heuristic_tool, retrieve_teaching_example]
+
+
+# --------------------------------------------------------------------------- #
+# Deterministic dispatcher for the teaching-turn tool loop.
+#
+# The multi-turn teaching path (loop.run_teaching_turn) does NOT use the ReAct
+# `chat()` loop. Instead the agent emits a strict `ToolRequest`, and this pure
+# function runs the corresponding underlying implementation and normalizes the
+# outcome into a short, structured `EvidenceRecord`. No LLM summarization, no raw
+# scratchpad — the record is the only tool output that is ever persisted.
+# --------------------------------------------------------------------------- #
+def _clip(text: str, cap: int = _RESULT_SUMMARY_CAP) -> str:
+    text = " ".join((text or "").split())
+    return text if len(text) <= cap else text[: cap - 1].rstrip() + "…"
+
+
+def run_tool(req: ToolRequest, problem: Problem, turn: int) -> EvidenceRecord:
+    """Execute one requested tool and return a short structured evidence record.
+
+    Never raises for tool-internal failures — a failed tool becomes an evidence
+    record whose result explains the miss, so the second agent call can adapt.
+    """
+    try:
+        if req.tool == ToolName.VERIFY_STEP:
+            expected = (req.expected or "").strip()
+            result = verify_answer(
+                student_answer=req.expression or "",
+                official_answer=expected,
+                problem_context=problem.text or None,
+            )
+            if result.is_uncertain:
+                verdict = "UNCERTAIN"
+            else:
+                verdict = "CORRECT" if result.is_correct else "INCORRECT"
+            return EvidenceRecord(
+                tool=req.tool,
+                input=_clip(f"{req.expression} =? {expected}" if expected else f"{req.expression}"),
+                result=_clip(f"{verdict}: {result.reason}"),
+                turn=turn,
+            )
+
+        if req.tool == ToolName.LOOKUP_HEURISTIC:
+            from pattern_tools import get_heuristic
+
+            # get_heuristic is a LangChain @tool; call its underlying function.
+            _fn = getattr(get_heuristic, "func", get_heuristic)
+            text = _fn(req.pattern) or ""
+            summary = text or f"No heuristic template for pattern '{req.pattern}'."
+            return EvidenceRecord(
+                tool=req.tool,
+                input=_clip(req.pattern or ""),
+                result=_clip(summary),
+                turn=turn,
+            )
+
+        # RETRIEVE_EXAMPLE
+        from .problem_retrieval import retrieve_examples
+
+        # Pull a few, then drop the student's CURRENT problem — returning it would
+        # leak its own answer under the guise of a "similar" example.
+        candidates = retrieve_examples(
+            req.topic or "", req.error_type or None, course=problem.course, limit=4
+        )
+        records = [
+            r for r in candidates
+            if str(r.get("id", "")).split(":", 1)[0] != problem.id
+        ][:1]
+        if not records:
+            summary = f"No worked example found for topic '{req.topic}'."
+        else:
+            r = records[0]
+            summary = f"{r['source']}: Q: {r['question_text']} A: {r['final_answer'] or '(no answer)'}"
+        return EvidenceRecord(
+            tool=req.tool,
+            input=_clip(f"{req.topic}" + (f" / {req.error_type}" if req.error_type else "")),
+            result=_clip(summary),
+            turn=turn,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("run_tool(%s) failed: %s", req.tool.value, exc)
+        return EvidenceRecord(
+            tool=req.tool,
+            input=_clip(str(req.model_dump(exclude_none=True))),
+            result=f"tool unavailable ({type(exc).__name__})",
+            turn=turn,
+        )

@@ -19,9 +19,9 @@ repeat the same shallow hint forever.
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional, Set
+from typing import List, Literal, Optional, Set
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # --------------------------------------------------------------------------- #
@@ -106,6 +106,19 @@ class MisconceptionType(str, Enum):
     UNKNOWN = "unknown"
 
 
+class ToolName(str, Enum):
+    """The tools the tutor may request during a teaching turn.
+
+    Deliberately the SAME three that back the (orphaned) conversational loop —
+    the teaching path calls their pure implementations directly (see
+    `tools.run_tool`), not the LangChain tool objects.
+    """
+
+    VERIFY_STEP = "verify_step"          # symbolically check an intermediate step
+    LOOKUP_HEURISTIC = "lookup_heuristic"  # canonical formula/template for a pattern
+    RETRIEVE_EXAMPLE = "retrieve_example"  # a similar solved problem from the corpus
+
+
 # Map a fine-grained misconception to the coarse bucket the profile tracks
 # (concept | algebra | logic | careless). None means "don't record a bucket".
 MISCONCEPTION_TO_BUCKET = {
@@ -121,6 +134,12 @@ MISCONCEPTION_TO_BUCKET = {
 
 # Attempts required before the tutor is allowed to reveal the whole solution.
 SOLUTION_ATTEMPT_THRESHOLD = 3
+
+# Bounded per-problem memory for multi-turn teaching. Kept small on purpose:
+# enough context to stay coherent, never a full chat log.
+TRANSCRIPT_CAP = 8          # last N student/tutor messages retained
+EVIDENCE_CAP = 5            # last N structured tool-evidence records retained
+_TRANSCRIPT_TEXT_CAP = 600  # per-message character clamp before storing
 
 
 # --------------------------------------------------------------------------- #
@@ -176,13 +195,67 @@ class Grade(BaseModel):
         )
 
 
+class ToolRequest(BaseModel):
+    """A single, strictly-typed tool call the agent asks the orchestrator to run.
+
+    Only the fields for the chosen `tool` are meaningful; the validator enforces
+    that the required one(s) are present so we never dispatch a malformed call.
+    """
+
+    tool: ToolName
+    # verify_step
+    expression: Optional[str] = None  # the student's intermediate expression
+    expected: Optional[str] = None    # what it should equal (agent-derived; NOT the official final answer)
+    # lookup_heuristic
+    pattern: Optional[str] = None     # e.g. "chain_rule", "optimization"
+    # retrieve_example
+    topic: Optional[str] = None       # e.g. "derivatives"
+    error_type: Optional[str] = None  # optional bias, e.g. "chain_rule_omission"
+
+    @model_validator(mode="after")
+    def _require_fields_for_tool(self) -> "ToolRequest":
+        if self.tool == ToolName.VERIFY_STEP and not (self.expression or "").strip():
+            raise ValueError("verify_step requires 'expression'")
+        if self.tool == ToolName.LOOKUP_HEURISTIC and not (self.pattern or "").strip():
+            raise ValueError("lookup_heuristic requires 'pattern'")
+        if self.tool == ToolName.RETRIEVE_EXAMPLE and not (self.topic or "").strip():
+            raise ValueError("retrieve_example requires 'topic'")
+        return self
+
+
+class EvidenceRecord(BaseModel):
+    """The structured, short result of one tool call — the only tool output that
+    is ever persisted. No raw scratchpad, no verbose dumps."""
+
+    tool: ToolName
+    input: str    # normalized, human-readable summary of what was asked
+    result: str   # short summary of the finding (already truncated by the dispatcher)
+    turn: int     # the teach_turn_count when produced
+
+
+class TranscriptEntry(BaseModel):
+    """One line of the bounded multi-turn dialogue kept for context."""
+
+    role: Literal["student", "tutor"]
+    text: str
+
+
 class TeachingDecision(BaseModel):
     """A tutor's turn: what to do + what to say + how deep to go."""
 
+    # Defaults so a pure tool-request response (only `tool_request` set) validates
+    # without the model having to invent placeholder action/message text.
     action: TutorAction = TutorAction.ASK_CLARIFICATION
     message: str = ""
     hint_level: HintLevel = HintLevel.NONE
     diagnosed_misconception: Optional[MisconceptionType] = None
+    # If set on the FIRST teaching-turn call, the orchestrator runs this one tool,
+    # feeds the structured result back, and calls the agent once more to finalize.
+    tool_request: Optional[ToolRequest] = None
+    # Set when the student pasted a complete final answer into the chat: the
+    # teaching path must NOT grade it — the API tells the frontend to use the
+    # formal submit-attempt path instead.
+    redirect_to_submit: bool = False
     # Short, DISPLAYABLE rationale — never the model's hidden chain of thought.
     reasoning_summary: str = ""
     # Provenance filled in by enforce() when it overrides the agent. Internal.
@@ -209,6 +282,25 @@ class TeachingState(BaseModel):
     # True once any hint/concept/example was given before the problem resolved —
     # feeds the profile's hint-dependency signal.
     used_hint: bool = False
+    # Bounded multi-turn memory for the follow-up teaching dialogue.
+    teach_turn_count: int = 0
+    transcript: List[TranscriptEntry] = Field(default_factory=list)
+    evidence: List[EvidenceRecord] = Field(default_factory=list)
+
+    def append_transcript(self, role: str, text: str) -> None:
+        """Append a dialogue line, clamped in length and capped in count."""
+        clean = (text or "").strip()[:_TRANSCRIPT_TEXT_CAP]
+        if not clean:
+            return
+        self.transcript.append(TranscriptEntry(role=role, text=clean))
+        if len(self.transcript) > TRANSCRIPT_CAP:
+            self.transcript = self.transcript[-TRANSCRIPT_CAP:]
+
+    def append_evidence(self, record: EvidenceRecord) -> None:
+        """Append a structured tool-evidence record, capped in count."""
+        self.evidence.append(record)
+        if len(self.evidence) > EVIDENCE_CAP:
+            self.evidence = self.evidence[-EVIDENCE_CAP:]
 
     def register_attempt(self) -> None:
         """Call at the start of a turn, when a new answer arrives.
