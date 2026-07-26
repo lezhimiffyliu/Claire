@@ -135,12 +135,10 @@ SUMMARY.md
 usage.db
 api.log
 CLAUDE.md
-tests/test_usage.db
+test_usage.db
 .sessions/
 
-# Streamlit secrets (never commit!)
-.streamlit/secrets.toml
-
-# UW exam source data (raw PDFs, images, JSONs)
-uw_data/
-supabase/.temp/
+# UW exam source data (raw PDFs + extracted images/JSON) — large, kept out of git.
+# The data lives under data/uw/; only data/uw/README.md is tracked.
+data/uw/raw/
+data/uw/processed/

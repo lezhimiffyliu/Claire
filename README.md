@@ -64,114 +64,107 @@ Scan QR → snap photo of your work → instant grading:
 
 ## Tech Stack
 
+_What is actually wired today. The canonical grading/teaching path is the
+`claire_core` spine behind `POST /api/attempt`; the older stacks are quarantined
+under `legacy/` (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md))._
+
 | Layer | Tech |
 |-------|------|
-| **LLM Orchestration** | Native Anthropic SDK (no LangChain) |
-| **Models** | Claude Haiku → Sonnet → Opus (tiered routing) |
-| **Vision** | Gemini Flash (handwriting OCR) |
-| **Math Verification** | SymPy |
-| **API** | FastAPI + SQLite (rate limiting, thread persistence) |
+| **LLM orchestration** | LangChain + `langchain-anthropic` + LangGraph (canonical `claire_core` spine). Native Anthropic SDK in the legacy stacks. |
+| **Models** | Claude Sonnet for canonical grading/teaching; tiered Haiku→Sonnet→Opus routing in the legacy tutor pipeline. |
+| **Vision** | Gemini (handwriting extraction, `app/grading/vision_analyzer.py`) |
+| **Math verification** | SymPy — ground truth (`app/grading/verifier.py`) |
+| **API** | FastAPI, `uvicorn api:app` (`api.py` is the composition root) |
+| **Persistence** | Postgres (Neon in prod, local Postgres in dev, in-memory SQLite in tests) via SQLAlchemy 2.x + Alembic; local SQLite for usage/quota |
+| **Auth** | Clerk (canonical `/api/attempt`, RS256 JWT via JWKS); Supabase JWT in legacy `/chat` + mobile upload |
+| **Payments & quota** | Stripe checkout + usage quota (`app/integrations/`) |
 | **Frontend** | Vite + React 18 + Tailwind + Framer Motion |
-| **Math Rendering** | KaTeX |
-| **Auth & Storage** | Supabase (Google OAuth, image storage) |
-| **Deployment** | Heroku (API) |
+| **Math rendering** | KaTeX |
+| **Storage** | Supabase (handwriting image storage) |
+| **Deployment** | `Procfile: uvicorn api:app` (Heroku-style) |
 
 ---
 
 ## Architecture
 
+Full detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The canonical graded
+turn runs through the deterministic `claire_core` spine — **the LLM proposes a
+teaching action, a deterministic policy (`enforce()`) disposes.**
+
 ```
-Student message
+Frontend (web/) — ProblemPractice.jsx → attemptApi.js (Clerk token)
      │
      ▼
-┌─────────────────────────────────────────────────────────────┐
-│  tutor/pipeline.py — Main orchestration                     │
-├─────────────────────────────────────────────────────────────┤
-│  1. response_cache.py  → Check semantic cache (skip LLM?)   │
-│  2. classifier.py      → Haiku: intent + concept + language │
-│  3. retrieval.py       → Search teaching chunks (mock/pgvector) │
-│  4. strategist.py      → Decide: Sonnet or Opus?            │
-│  5. adapter.py         → Sonnet: generate response          │
-│     └─ OR teaching_planner.py → Opus: complex teaching      │
-└─────────────────────────────────────────────────────────────┘
+POST /api/attempt            (api.py) → claire_core.run_tutor_turn
+POST /api/attempt/continue   (api.py) → claire_core.run_teaching_turn
      │
      ▼
-  Claire response (say / ask_back / concept_card)
+  verify (app/grading/verifier.py — SymPy, GROUND TRUTH)
+    → load state / profile
+    → TutorAgent.propose        (claire_core/agent.py — the only LLM layer)
+    → state.enforce()           (claire_core/state.py — clamp to a legal action)
+    → classify → advance → persist (SQLAlchemy; anon ⇒ in-memory)
+    → recommend                 (app/learning/recommender_v2.py)
 ```
 
-### When does Opus activate?
+So the tutor structurally can't congratulate a wrong answer, dump the full solution
+on attempt one, or repeat a shallow hint. The whole loop is unit-testable with no
+LLM and no DB.
 
-| Trigger | Why |
-|---------|-----|
-| `check_answer` intent | Need to verify correctness |
-| `ask_next_step` intent | Need teaching path decision |
-| Low retrieval score | No good teaching chunks found |
-| Student confused 3+ times | Need better strategy |
-| Low classification confidence | Uncertain intent |
+This is the **one** teaching path. Full map in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
 ## Project Structure
 
 ```
-Claire/
-├── api.py                  # FastAPI backend (chat, mobile upload, recommendations)
-├── tutor/                  # Teaching pipeline (Phase 5)
-│   ├── pipeline.py         # Main orchestration
-│   ├── classifier.py       # Haiku: intent/concept classification
-│   ├── retrieval.py        # Teaching chunk search (mock embedding)
-│   ├── strategist.py       # Sonnet vs Opus routing
-│   ├── adapter.py          # Sonnet: response generation
-│   ├── teaching_planner.py # Task-based Socratic actions
-│   └── response_cache.py   # Semantic caching
-├── agent/                  # Native Anthropic SDK agent
-│   ├── claire_agent.py     # Multi-model orchestration
-│   ├── prompts.py          # System prompts
-│   └── teaching_tools.py   # Tool schemas + execution
-├── problems/               # 86 UW exam JSON files (Math 124/125/126)
-├── web/                    # Vite + React frontend
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── claire/     # TutorThread, WorkAreaCard, ClairePanel
-│   │   │   ├── dashboard/  # Dashboard, ProblemPractice
-│   │   │   └── onboarding/ # Diagnostic flow
-│   │   ├── context/        # AuthContext, ClaireContext
-│   │   └── api/            # chatApi, mobileUploadApi, supabaseApi
-│   └── package.json
-├── vision_analyzer.py      # Gemini Vision: handwriting extraction
-├── verifier.py             # SymPy: answer verification
-├── mobile_upload.py        # QR session management
-├── problem_loader.py       # Load problems from JSON
-└── Procfile                # Heroku deployment
+calculus/
+├── backend/                 # Python service — run everything from here
+│   ├── api.py               #   FastAPI app + composition root (uvicorn api:app)
+│   ├── claire_core/         #   ★ canonical, tested teaching spine (verify → propose → enforce → persist)
+│   ├── app/
+│   │   ├── auth/            #   Supabase JWT verification (canonical identity)
+│   │   ├── grading/        #   verifier (SymPy = ground truth), vision_analyzer, grader
+│   │   ├── content/        #   problem_loader, pattern_tools
+│   │   ├── teaching/       #   student profile, recommender, roadmap, remediation
+│   │   ├── integrations/   #   stripe_checkout, quota, mobile_upload
+│   │   └── persistence/    #   SQLAlchemy models + engine (Postgres/Neon)
+│   ├── alembic/             #   schema migrations
+│   ├── benchmarks/          #   teaching-eval harness + answer evaluator
+│   ├── problems/            #   curated UW exam problem JSON (loaded at runtime)
+│   └── tests/               #   pytest suite (all green)
+├── frontend/                # Vite + React (Dashboard, ProblemPractice, onboarding)
+├── data/uw/                 # UW exam source dataset (gitignored; see data/uw/README.md)
+├── scripts/                 # offline utilities (scripts/data/uw/ = the data pipeline)
+└── docs/ARCHITECTURE.md     # canonical request path + package map
 ```
+
+There are no parallel/legacy stacks and no compatibility shims — this is the single
+current application. Auth is **Supabase**; persistence is **Postgres/Neon + Alembic**.
 
 ---
 
 ## Run Locally
 
+**Backend** (one command to serve):
+
 ```bash
-git clone https://github.com/yourusername/Claire.git
-cd Claire
-
-# Backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# .env
-ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_API_KEY=...
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=...
-
-# Start API
+cd backend
+python -m venv venv && source venv/bin/activate   # first time
+pip install -r requirements.txt                   # first time
+# .env: ANTHROPIC_API_KEY, GOOGLE_API_KEY, SUPABASE_URL, SUPABASE_KEY, DATABASE_URL
 uvicorn api:app --reload --port 8000
+```
 
-# Frontend (new terminal)
-cd web
-npm install
+**Frontend** (one command to serve):
+
+```bash
+cd frontend
+npm install        # first time
 npm run dev
 ```
+
+Tests: `cd backend && pytest`.
 
 Open `http://localhost:5173`
 

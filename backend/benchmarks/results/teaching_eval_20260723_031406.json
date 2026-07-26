@@ -1,0 +1,942 @@
+{
+  "generated_at": "2026-07-23T03:14:06",
+  "rubric_version": "v1",
+  "mode": "scripted",
+  "tutor": "StubTutorAgent",
+  "judge": "StubJudge",
+  "num_scenarios": 12,
+  "total_turns": 31,
+  "terminal_phase_ok": 12,
+  "structural_gates": {
+    "illegal_action_count": 0,
+    "illegal_action_rate": 0.0,
+    "correct_confirm_violation_count": 0,
+    "extra_tool_call_count": 0,
+    "extra_tool_call_rate": 0.0,
+    "finalize_tool_not_cleared_count": 0,
+    "leak_count": 0,
+    "leak_rate": 0.0,
+    "all_pass": true
+  },
+  "quality_summary": {
+    "math_correctness": 4,
+    "pedagogical_appropriateness": 4,
+    "socratic_behavior": 4,
+    "repetition": 4,
+    "history_utilization": 4,
+    "answer_leakage": 4,
+    "overall": 4.0
+  },
+  "scenarios": [
+    {
+      "id": "wrong_then_right",
+      "persona": "A student who slips on the power rule, then self-corrects.",
+      "description": "First attempt wrong, second attempt correct \u2192 resolves.",
+      "num_turns": 2,
+      "expected_terminal_phase": "resolved",
+      "actual_terminal_phase": "resolved",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "2*x",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "submit",
+          "student": "3*x**2",
+          "action": "confirm_correct",
+          "hint_level": "none",
+          "phase": "resolved",
+          "tool_used": null,
+          "message": "That's correct \u2014 nice work. Let's move on."
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "correct_first_try",
+      "persona": "A confident student who nails it immediately.",
+      "description": "Already-correct first answer \u2192 only confirm/end is legal.",
+      "num_turns": 1,
+      "expected_terminal_phase": "resolved",
+      "actual_terminal_phase": "resolved",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "3*x**2",
+          "action": "confirm_correct",
+          "hint_level": "none",
+          "phase": "resolved",
+          "tool_used": null,
+          "message": "That's correct \u2014 nice work. Let's move on."
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "unverifiable_answer",
+      "persona": "A stuck student who types prose instead of math.",
+      "description": "Unparseable answer \u2192 only clarify/hint, never confirm/reveal.",
+      "num_turns": 1,
+      "expected_terminal_phase": "teaching",
+      "actual_terminal_phase": "teaching",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "no idea",
+          "action": "ask_clarification",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "I couldn't fully read your work \u2014 can you walk me through your steps?"
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "repeated_misconception",
+      "persona": "A student who keeps forgetting the chain rule's inner derivative.",
+      "description": "Chain-rule omission surfaced and taught, not revealed.",
+      "num_turns": 2,
+      "expected_terminal_phase": "teaching",
+      "actual_terminal_phase": "teaching",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "cos(x**2)",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "reply",
+          "student": "so it's just cos of x squared?",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "You dropped the derivative of the inside. What is d/dx of x^2?"
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "direct_answer_request",
+      "persona": "An impatient student who asks for the answer outright.",
+      "description": "Explicit request for the answer must NOT leak it.",
+      "num_turns": 2,
+      "expected_terminal_phase": "teaching",
+      "actual_terminal_phase": "teaching",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "2*x",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "reply",
+          "student": "just tell me the answer please",
+          "action": "give_hint",
+          "hint_level": "nudge",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "I won't hand it over, but here's the rule: bring the exponent down and reduce it by one. What does that give for x^3?"
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "repeated_hint_escalation",
+      "persona": "A student who stays stuck, forcing hints to go deeper each turn.",
+      "description": "A repeated equal-depth hint is escalated up the ladder by enforce.",
+      "num_turns": 3,
+      "expected_terminal_phase": "teaching",
+      "actual_terminal_phase": "teaching",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "2*x",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "reply",
+          "student": "still stuck",
+          "action": "give_hint",
+          "hint_level": "nudge",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "Think about the power rule."
+        },
+        {
+          "index": 2,
+          "kind": "reply",
+          "student": "still stuck",
+          "action": "give_hint",
+          "hint_level": "concept",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "Think about the power rule."
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "long_transcript_pressure",
+      "persona": "A student in a long back-and-forth that stresses the bounded transcript.",
+      "description": "Many follow-ups \u2192 transcript stays bounded, no leak across turns.",
+      "num_turns": 11,
+      "expected_terminal_phase": "teaching",
+      "actual_terminal_phase": "teaching",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "cos(x**2)",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "reply",
+          "student": "hmm, message 0",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 2,
+          "kind": "reply",
+          "student": "hmm, message 1",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 3,
+          "kind": "reply",
+          "student": "hmm, message 2",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 4,
+          "kind": "reply",
+          "student": "hmm, message 3",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 5,
+          "kind": "reply",
+          "student": "hmm, message 4",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 6,
+          "kind": "reply",
+          "student": "hmm, message 5",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 7,
+          "kind": "reply",
+          "student": "hmm, message 6",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 8,
+          "kind": "reply",
+          "student": "hmm, message 7",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 9,
+          "kind": "reply",
+          "student": "hmm, message 8",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 10,
+          "kind": "reply",
+          "student": "hmm, message 9",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "cross_session_history",
+      "persona": "A returning student whose mastery must persist across sessions.",
+      "description": "Two graded attempts across fresh sessions accumulate in the profile.",
+      "num_turns": 2,
+      "expected_terminal_phase": "teaching",
+      "actual_terminal_phase": "teaching",
+      "terminal_phase_ok": true,
+      "cross_session_ok": true,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "2*x",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "submit",
+          "student": "2*x",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "tool_path_verify_step",
+      "persona": "A student who proposes an intermediate step worth verifying.",
+      "description": "Grade first, then a teaching reply that runs exactly one tool.",
+      "num_turns": 2,
+      "expected_terminal_phase": "teaching",
+      "actual_terminal_phase": "teaching",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "cos(x**2)",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "reply",
+          "student": "I think the derivative of the inside is 2x",
+          "action": "give_hint",
+          "hint_level": "next_step",
+          "phase": "teaching",
+          "tool_used": "verify_step",
+          "message": "Good \u2014 the inner derivative is 2x. Now multiply it by cos of the inside. What do you get?"
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "optimization_wrong_then_right",
+      "persona": "A student who confuses perimeter with area, then corrects.",
+      "description": "Numeric-answer problem: wrong number, then the right one.",
+      "num_turns": 2,
+      "expected_terminal_phase": "resolved",
+      "actual_terminal_phase": "resolved",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "24",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "submit",
+          "student": "36",
+          "action": "confirm_correct",
+          "hint_level": "none",
+          "phase": "resolved",
+          "tool_used": null,
+          "message": "That's correct \u2014 nice work. Let's move on."
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "integration_correct_first",
+      "persona": "A student comfortable with definite integrals.",
+      "description": "Correct definite-integral value on the first try.",
+      "num_turns": 1,
+      "expected_terminal_phase": "resolved",
+      "actual_terminal_phase": "resolved",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "9",
+          "action": "confirm_correct",
+          "hint_level": "none",
+          "phase": "resolved",
+          "tool_used": null,
+          "message": "That's correct \u2014 nice work. Let's move on."
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "integration_stuck_then_taught",
+      "persona": "A student unsure about the fundamental theorem's evaluation step.",
+      "description": "Conceptual question answered Socratically, no value revealed.",
+      "num_turns": 2,
+      "expected_terminal_phase": "teaching",
+      "actual_terminal_phase": "teaching",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "6",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "reply",
+          "student": "do I plug in the bounds before or after?",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "Find the antiderivative first, THEN evaluate it at the bounds. What's an antiderivative of 2x?"
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    }
+  ]
+}

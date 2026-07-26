@@ -1,0 +1,222 @@
+{
+  "generated_at": "2026-07-24T04:28:55",
+  "rubric_version": "v1",
+  "mode": "scripted",
+  "tutor": "StubTutorAgent",
+  "judge": "StubJudge",
+  "num_scenarios": 3,
+  "total_turns": 4,
+  "terminal_phase_ok": 3,
+  "structural_gates": {
+    "illegal_action_count": 0,
+    "illegal_action_rate": 0.0,
+    "correct_confirm_violation_count": 0,
+    "extra_tool_call_count": 0,
+    "extra_tool_call_rate": 0.0,
+    "finalize_tool_not_cleared_count": 0,
+    "leak_count": 0,
+    "leak_rate": 0.0,
+    "all_pass": true
+  },
+  "quality_summary": {
+    "math_correctness": 4,
+    "pedagogical_appropriateness": 4,
+    "socratic_behavior": 4,
+    "repetition": 4,
+    "history_utilization": 4,
+    "answer_leakage": 4,
+    "overall": 4.0
+  },
+  "scenarios": [
+    {
+      "id": "wrong_then_right",
+      "persona": "A student who slips on the power rule, then self-corrects.",
+      "description": "First attempt wrong, second attempt correct \u2192 resolves.",
+      "num_turns": 2,
+      "expected_terminal_phase": "resolved",
+      "actual_terminal_phase": "resolved",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "2*x",
+          "action": "identify_error",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "That isn't right yet. Let's find where it went off track."
+        },
+        {
+          "index": 1,
+          "kind": "submit",
+          "student": "3*x**2",
+          "action": "confirm_correct",
+          "hint_level": "none",
+          "phase": "resolved",
+          "tool_used": null,
+          "message": "That's correct \u2014 nice work. Let's move on."
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "correct_first_try",
+      "persona": "A confident student who nails it immediately.",
+      "description": "Already-correct first answer \u2192 only confirm/end is legal.",
+      "num_turns": 1,
+      "expected_terminal_phase": "resolved",
+      "actual_terminal_phase": "resolved",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "3*x**2",
+          "action": "confirm_correct",
+          "hint_level": "none",
+          "phase": "resolved",
+          "tool_used": null,
+          "message": "That's correct \u2014 nice work. Let's move on."
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    },
+    {
+      "id": "unverifiable_answer",
+      "persona": "A stuck student who types prose instead of math.",
+      "description": "Unparseable answer \u2192 only clarify/hint, never confirm/reveal.",
+      "num_turns": 1,
+      "expected_terminal_phase": "teaching",
+      "actual_terminal_phase": "teaching",
+      "terminal_phase_ok": true,
+      "cross_session_ok": null,
+      "leak": false,
+      "leak_reason": "no leak detected",
+      "structural": {
+        "illegal_action": 0,
+        "correct_confirm_violation": 0,
+        "extra_tool_calls": 0,
+        "finalize_tool_not_cleared": 0
+      },
+      "structural_pass": true,
+      "turns": [
+        {
+          "index": 0,
+          "kind": "submit",
+          "student": "no idea",
+          "action": "ask_clarification",
+          "hint_level": "none",
+          "phase": "teaching",
+          "tool_used": null,
+          "message": "I couldn't fully read your work \u2014 can you walk me through your steps?"
+        }
+      ],
+      "judge": {
+        "rubric_version": "v1",
+        "math_correctness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "pedagogical_appropriateness": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "socratic_behavior": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "repetition": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "history_utilization": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "answer_leakage": {
+          "score": 4,
+          "evidence": "stub judge (no LLM)"
+        },
+        "overall": 4.0,
+        "notes": "StubJudge deterministic verdict."
+      }
+    }
+  ]
+}
