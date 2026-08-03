@@ -129,18 +129,24 @@ cython_debug/
 .pypirc
 
 # Claire project - personal/runtime files
-LEARNING_NOTES.md
-ARCHITECTURE_UPDATE.md
-SUMMARY.md
+# NOTE: anchored to repo root with a leading slash so these do NOT match
+# same-named files nested under docs/, backend/, etc.
+/LEARNING_NOTES.md
+/ARCHITECTURE_UPDATE.md
+/SUMMARY.md
+/CLAUDE.md
 usage.db
 api.log
-CLAUDE.md
-tests/test_usage.db
+test_usage.db
 .sessions/
 
-# Streamlit secrets (never commit!)
-.streamlit/secrets.toml
+# Generated eval scorecards (deterministic output of the teaching_eval harness)
+backend/benchmarks/results/
 
-# UW exam source data (raw PDFs, images, JSONs)
-uw_data/
-supabase/.temp/
+# Internal roadmap doc — kept local, not published in the repo.
+docs/AGENT_DEPTH_ROADMAP.md
+
+# UW exam source data (raw PDFs + extracted images/JSON) — large, kept out of git.
+# The data lives under data/uw/; only data/uw/README.md is tracked.
+data/uw/raw/
+data/uw/processed/
